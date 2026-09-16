@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>متابعة الحضور</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #faf6ef;
+    --card: #ffffff;
+    --ink: #2c231b;
+    --muted: #8a7d6c;
+    --accent: #c67139;
+    --accent-dark: #a85a29;
+    --border: #e7ddcc;
+    --good: #2f7a4f;
+    --bad: #b3432f;
+    --warn: #b8860b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  nav { display: flex; gap: 8px; }
+  nav button {
+    background: rgba(255,255,255,0.18);
+    border: none;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  nav button.active { background: #fff; color: var(--accent-dark); font-weight: 600; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input[type=text], input[type=date], input[type=file] {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border); }
+  th { background: #f3ead9; color: var(--accent-dark); }
+  .status-late { color: var(--warn); font-weight: 600; }
+  .status-absent { color: var(--bad); font-weight: 600; }
+  .status-ok { color: var(--good); }
+  .summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+  .summary .pill {
+    background: #f3ead9;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .muted { color: var(--muted); font-size: 13px; }
+  .msg { padding: 10px 14px; border-radius: 8px; margin-top: 10px; font-size: 14px; }
+  .msg.ok { background: #e7f5eb; color: var(--good); }
+  .msg.err { background: #fbe9e6; color: var(--bad); }
+  .settings-toggle { background: none; border: none; color: #fff; cursor: pointer; font-size: 13px; text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>متابعة الحضور</h1>
+  <nav>
+    <button id="tab-import" class="active">الاستيراد</button>
+    <button id="tab-dashboard">لوحة اليوم</button>
+  </nav>
+  <button class="settings-toggle" id="settings-toggle">الإعدادات</button>
+</header>
+
+<main>
+  <div class="card" id="settings-card" style="display:none">
+    <h3>إعدادات الاتصال بالشيت</h3>
+    <div class="row">
+      <div>
+        <label>رابط Apps Script (exec)</label>
+        <input type="text" id="cfg-url" style="width:420px" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <div>
+        <label>التوكن (SHARED_SECRET)</label>
+        <input type="text" id="cfg-token" style="width:200px">
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="cfg-save">حفظ</button>
+      <span class="muted" id="cfg-status"></span>
+    </div>
+  </div>
+
+  <section id="view-import">
+    <div class="card">
+      <h3>استيراد ملف اليوم</h3>
+      <p class="muted">اختر ملف Excel المصدَّر من نظام حضوري (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
+      <input type="file" id="file-input" accept=".xlsx,.xls">
+      <div class="row" style="margin-top:14px">
+        <div>
+          <label>التاريخ</label>
+          <input type="text" id="imp-date" style="width:130px" placeholder="YYYY-MM-DD">
+        </div>
+        <div>
+          <label>بداية الدوام</label>
+          <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
+        </div>
+        <div>
+          <label>نهاية الدوام</label>
+          <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
+        </div>
+        <div>
+          <label>تسمية الفترة</label>
+          <input type="text" id="imp-sched-label" style="width:100px" value="صيفي">
+        </div>
+      </div>
+      <div id="preview-wrap" style="margin-top:16px; display:none">
+        <p class="muted" id="preview-summary"></p>
+        <div style="max-height:320px; overflow:auto">
+          <table id="preview-table"><thead></thead><tbody></tbody></table>
+        </div>
+        <button class="primary" id="btn-confirm-import" style="margin-top:14px">تأكيد الاستيراد وإرسال للشيت</button>
+      </div>
+      <div id="import-msg"></div>
+    </div>
+  </section>
+
+  <section id="view-dashboard" style="display:none">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>التاريخ</label>
+          <input type="date" id="dash-date">
+        </div>
+        <button class="primary" id="btn-refresh-dash" style="align-self:flex-end">تحديث</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="summary" id="dash-summary"></div>
+      <div style="max-height:480px; overflow:auto">
+        <table id="dash-table">
+          <thead>
+            <tr><th>الرقم</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th><th>الساعات</th><th>التأخير (د)</th><th>الحالة</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="dash-msg"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const CONFIG_KEY = 'hather_v2_config';
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch (e) { return {}; }
+}
+function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+
+async function callApi(action, payload) {
+  const cfg = loadConfig();
+  if (!cfg.url) throw new Error('الرجاء ضبط رابط Apps Script من الإعدادات أولاً');
+  const body = Object.assign({ action, token: cfg.token || '' }, payload || {});
+  const res = await fetch(cfg.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'فشل الطلب');
+  return json;
+}
+
+// ---------- Settings ----------
+const settingsCard = document.getElementById('settings-card');
+document.getElementById('settings-toggle').onclick = () => {
+  settingsCard.style.display = settingsCard.style.display === 'none' ? 'block' : 'none';
+  const cfg = loadConfig();
+  document.getElementById('cfg-url').value = cfg.url || '';
+  document.getElementById('cfg-token').value = cfg.token || '';
+};
+document.getElementById('cfg-save').onclick = () => {
+  saveConfig({ url: document.getElementById('cfg-url').value.trim(), token: document.getElementById('cfg-token').value.trim() });
+  document.getElementById('cfg-status').textContent = 'تم الحفظ ✔';
+};
+
+// ---------- Tabs ----------
+const tabImport = document.getElementById('tab-import');
+const tabDashboard = document.getElementById('tab-dashboard');
+const viewImport = document.getElementById('view-import');
+const viewDashboard = document.getElementById('view-dashboard');
+tabImport.onclick = () => { tabImport.classList.add('active'); tabDashboard.classList.remove('active'); viewImport.style.display = ''; viewDashboard.style.display = 'none'; };
+tabDashboard.onclick = () => {
+  tabDashboard.classList.add('active'); tabImport.classList.remove('active');
+  viewDashboard.style.display = ''; viewImport.style.display = 'none';
+  if (!document.getElementById('dash-date').value) document.getElementById('dash-date').value = todayISO();
+  refreshDashboard();
+};
+
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// ---------- Import ----------
+let parsedRows = []; // [{civil, name, checkIn, checkOut}]
+
+function detectDateFromFilename(name) {
+  const m = name.match(/\((\d{4}-\d{2}-\d{2})\)/);
+  return m ? m[1] : '';
+}
+
+function normalizeTimeString(v) {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim();
+  if (!s || s === '-' || s === '-:--') return '';
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?/);
+  if (!m) return '';
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const ap = m[3] ? m[3].toUpperCase() : null;
+  if (ap) return `${String(h).padStart(2, '0')}:${min} ${ap}`;
+  // بدون AM/PM: افتراض تنسيق 24 ساعة كما تُصدّره حضوري أحياناً
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
+}
+
+function findCol(headers, includesText) {
+  return headers.findIndex((h) => String(h || '').includes(includesText));
+}
+
+document.getElementById('file-input').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  document.getElementById('import-msg').innerHTML = '';
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+  let headerRowIdx = -1, headers = [];
+  for (let i = 0; i < Math.min(grid.length, 10); i++) {
+    const row = grid[i].map(String);
+    if (row.some((c) => c.includes('السجل المدني'))) { headerRowIdx = i; headers = row; break; }
+  }
+  if (headerRowIdx === -1) {
+    document.getElementById('import-msg').innerHTML = '<div class="msg err">تعذّر إيجاد عمود "السجل المدني" في الملف.</div>';
+    return;
+  }
+  const civilCol = findCol(headers, 'السجل المدني');
+  const nameCol = findCol(headers, 'اسم');
+  const inCol = headers.findIndex((h) => h.includes('حضور'));
+  const outCol = headers.findIndex((h) => h.includes('انصراف'));
+
+  parsedRows = [];
+  for (let i = headerRowIdx + 1; i < grid.length; i++) {
+    const row = grid[i];
+    const civil = String(row[civilCol] || '').trim();
+    if (!/^\d{5,}$/.test(civil)) continue;
+    parsedRows.push({
+      civil,
+      name: nameCol >= 0 ? String(row[nameCol] || '') : '',
+      checkIn: normalizeTimeString(row[inCol]),
+      checkOut: normalizeTimeString(row[outCol]),
+    });
+  }
+
+  document.getElementById('imp-date').value = detectDateFromFilename(file.name) || todayISO();
+
+  const tbody = document.querySelector('#preview-table tbody');
+  const thead = document.querySelector('#preview-table thead');
+  thead.innerHTML = '<tr><th>السجل المدني</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th></tr>';
+  tbody.innerHTML = parsedRows.map((r) => `<tr><td>${r.civil}</td><td>${r.name}</td><td>${r.checkIn || '—'}</td><td>${r.checkOut || '—'}</td></tr>`).join('');
+  document.getElementById('preview-summary').textContent = `تم العثور على ${parsedRows.length} صفاً.`;
+  document.getElementById('preview-wrap').style.display = 'block';
+});
+
+document.getElementById('btn-confirm-import').addEventListener('click', async () => {
+  const date = document.getElementById('imp-date').value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    document.getElementById('import-msg').innerHTML = '<div class="msg err">التاريخ غير صحيح (YYYY-MM-DD).</div>';
+    return;
+  }
+  const btn = document.getElementById('btn-confirm-import');
+  btn.disabled = true;
+  btn.textContent = 'جارٍ الإرسال...';
+  try {
+    const res = await callApi('importDay', {
+      date,
+      fileName: document.getElementById('file-input').files[0]?.name || '',
+      schedStart: document.getElementById('imp-sched-start').value.trim(),
+      schedEnd: document.getElementById('imp-sched-end').value.trim(),
+      schedLabel: document.getElementById('imp-sched-label').value.trim(),
+      rows: parsedRows,
+    });
+    document.getElementById('import-msg').innerHTML = `<div class="msg ok">تم الاستيراد: ${res.presentCount} حاضر، ${res.absentCount} غائب.</div>`;
+  } catch (err) {
+    document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'تأكيد الاستيراد وإرسال للشيت';
+  }
+});
+
+// ---------- Dashboard ----------
+document.getElementById('btn-refresh-dash').addEventListener('click', refreshDashboard);
+document.getElementById('dash-date').addEventListener('change', refreshDashboard);
+
+async function refreshDashboard() {
+  const date = document.getElementById('dash-date').value;
+  if (!date) return;
+  const msgEl = document.getElementById('dash-msg');
+  msgEl.innerHTML = '';
+  try {
+    const [teachersRes, dayRes] = await Promise.all([
+      callApi('getTeachers', {}),
+      callApi('getDay', { date }),
+    ]);
+    const attendanceByCivil = {};
+    dayRes.attendance.forEach((r) => (attendanceByCivil[String(r.civil)] = r));
+    const absenceByCivil = {};
+    dayRes.absence.forEach((r) => (absenceByCivil[String(r.civil)] = r));
+
+    const teachers = teachersRes.teachers.slice().sort((a, b) => Number(a.num) - Number(b.num));
+    let present = 0, absent = 0, late = 0;
+    const tbody = document.querySelector('#dash-table tbody');
+    tbody.innerHTML = teachers.map((t) => {
+      const civil = String(t.civil);
+      const att = attendanceByCivil[civil];
+      const abs = absenceByCivil[civil];
+      if (att) {
+        present++;
+        const isLate = Number(att.lateMinutes) > 0;
+        if (isLate) late++;
+        return `<tr><td>${t.num}</td><td>${t.name}</td><td>${att.checkIn || '—'}</td><td>${att.checkOut || '—'}</td><td>${att.hoursRaw || '—'}</td><td>${att.lateMinutes || 0}</td><td class="${isLate ? 'status-late' : 'status-ok'}">${isLate ? 'متأخر' : 'حاضر'}</td></tr>`;
+      }
+      if (abs) {
+        absent++;
+        return `<tr><td>${t.num}</td><td>${t.name}</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="status-absent">غائب${abs.reason ? ' (' + abs.reason + ')' : ''}</td></tr>`;
+      }
+      return `<tr><td>${t.num}</td><td>${t.name}</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="muted">لا توجد بيانات</td></tr>`;
+    }).join('');
+
+    document.getElementById('dash-summary').innerHTML = `
+      <span class="pill">إجمالي المعلمين: ${teachers.length}</span>
+      <span class="pill">حاضر: ${present}</span>
+      <span class="pill">غائب: ${absent}</span>
+      <span class="pill">متأخر: ${late}</span>
+    `;
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+// init
+if (!loadConfig().url) settingsCard.style.display = 'block';
+</script>
+</body>
+</html>

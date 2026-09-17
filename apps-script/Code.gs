@@ -54,6 +54,9 @@ function handleRequest_(payload) {
         case 'getAnalytics':
           out = handleGetAnalytics_(payload);
           break;
+        case 'listImports':
+          out = handleListImports_();
+          break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
           break;
@@ -505,6 +508,40 @@ function handleGetAnalytics_(payload) {
   }
 
   return { ok: true, from: from, to: to, dailyTrend: dailyTrend, latenessSeverity: latenessSeverity, absenceReasons: absenceReasons };
+}
+
+// سجل كل الاستيرادات مع عدد الحاضرين/الغائبين لكل تاريخ — لشاشة التقارير
+function handleListImports_() {
+  var imports = sheetToObjects_(getSheet_(SHEET_IMPORTS));
+  var attendance = sheetToObjects_(getSheet_(SHEET_ATTENDANCE));
+  var absence = sheetToObjects_(getSheet_(SHEET_ABSENCE));
+
+  var presentCountByDate = {};
+  attendance.forEach(function (r) {
+    var d = normalizeDate_(r.date);
+    presentCountByDate[d] = (presentCountByDate[d] || 0) + 1;
+  });
+  var absentCountByDate = {};
+  absence.forEach(function (r) {
+    var d = normalizeDate_(r.date);
+    absentCountByDate[d] = (absentCountByDate[d] || 0) + 1;
+  });
+
+  var list = imports.map(function (r) {
+    var d = normalizeDate_(r.date);
+    return {
+      date: d,
+      importedAt: r.importedAt,
+      fileName: r.fileName,
+      schedStart: r.schedStart,
+      schedEnd: r.schedEnd,
+      schedLabel: r.schedLabel,
+      presentCount: presentCountByDate[d] || 0,
+      absentCount: absentCountByDate[d] || 0,
+    };
+  });
+  list.sort(function (a, b) { return b.date.localeCompare(a.date); });
+  return { ok: true, list: list };
 }
 
 function handleUpdateAbsence_(payload) {

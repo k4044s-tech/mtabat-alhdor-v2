@@ -438,18 +438,35 @@ function loadConfig() {
 }
 function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
 
-async function callApi(action, payload) {
-  const cfg = loadConfig();
-  if (!cfg.url) throw new Error('الرجاء ضبط رابط Apps Script من الإعدادات أولاً');
-  const body = Object.assign({ action, token: cfg.token || '' }, payload || {});
+async function callApiOnce_(cfg, body) {
   const res = await fetch(cfg.url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw new Error('استجابة غير متوقعة من الخادم (قد تكون هفوة مؤقتة من Google)');
+  }
   if (!json.ok) throw new Error(json.error || 'فشل الطلب');
   return json;
+}
+
+// Apps Script يهفو أحياناً (استجابة HTML بدل JSON) خصوصاً بعد نشر جديد — نعيد المحاولة
+// مرة واحدة تلقائياً قبل إظهار الخطأ للمستخدم.
+async function callApi(action, payload) {
+  const cfg = loadConfig();
+  if (!cfg.url) throw new Error('الرجاء ضبط رابط Apps Script من الإعدادات أولاً');
+  const body = Object.assign({ action, token: cfg.token || '' }, payload || {});
+  try {
+    return await callApiOnce_(cfg, body);
+  } catch (err) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return await callApiOnce_(cfg, body);
+  }
 }
 
 // قائمة المعلمين نادراً ما تتغيّر — نجلبها مرة واحدة فقط لكل جلسة صفحة بدل تكرار الطلب في كل تحديث

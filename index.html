@@ -403,6 +403,13 @@ async function callApi(action, payload) {
   return json;
 }
 
+// قائمة المعلمين نادراً ما تتغيّر — نجلبها مرة واحدة فقط لكل جلسة صفحة بدل تكرار الطلب في كل تحديث
+let teachersCache = null;
+async function getTeachersCached() {
+  if (!teachersCache) teachersCache = await callApi('getTeachers', {});
+  return teachersCache;
+}
+
 function todayISO() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -611,7 +618,7 @@ async function refreshDashboard() {
   msgEl.innerHTML = '';
   try {
     const [teachersRes, dayRes] = await Promise.all([
-      callApi('getTeachers', {}),
+      getTeachersCached(),
       callApi('getDay', { date }),
     ]);
     const attendanceByCivil = {};
@@ -916,7 +923,7 @@ async function printOfficialReport(dateArg, errorElId) {
   const date = dateArg || document.getElementById('dash-date').value;
   const cfg = loadConfig();
   try {
-    const [teachersRes, dayRes] = await Promise.all([callApi('getTeachers', {}), callApi('getDay', { date })]);
+    const [teachersRes, dayRes] = await Promise.all([getTeachersCached(), callApi('getDay', { date })]);
     const attendanceByCivil = {};
     dayRes.attendance.forEach((r) => (attendanceByCivil[String(r.civil)] = r));
     const absenceByCivil = {};

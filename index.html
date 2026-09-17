@@ -133,6 +133,31 @@
   .msg.ok { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
   .msg.err { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
 
+  /* معالج الاستيراد */
+  .stepper { display: flex; gap: 8px; margin-bottom: 16px; }
+  .stepper .step {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; color: var(--muted); font-weight: 500;
+  }
+  .stepper .step .step-num {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--muted);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11.5px; flex-shrink: 0;
+  }
+  .stepper .step.active { color: var(--ink); border-color: var(--ink); }
+  .stepper .step.active .step-num { background: var(--accent); color: var(--accent-fg); }
+  .stepper .step.done .step-num { background: var(--good); color: #fff; }
+  .dropzone {
+    border: 1px dashed var(--border); border-radius: 10px; background: var(--accent-soft);
+    text-align: center; padding: 28px 16px; transition: border-color .12s ease, background-color .12s ease;
+  }
+  .dropzone.dragover { border-color: var(--ink); background: #f0f0f1; }
+  .dropzone-icon {
+    width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 18px; color: var(--muted);
+  }
+  .dropzone-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+
   /* لوحة اليوم */
   .school-name { font-size: 12.5px; color: var(--muted); }
   .dash-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 2px 0 14px; }
@@ -222,37 +247,55 @@
       </section>
 
       <section id="view-import" style="display:none">
-        <div class="card">
-          <h3>استيراد ملف اليوم</h3>
-          <p class="muted">اختر ملف Excel المصدَّر من نظام حضوري (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
-          <input type="file" id="file-input" accept=".xlsx,.xls">
-          <div class="row" style="margin-top:14px">
-            <div>
-              <label>التاريخ</label>
-              <input type="text" id="imp-date" style="width:130px" placeholder="YYYY-MM-DD">
-            </div>
-            <div>
-              <label>بداية الدوام</label>
-              <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
-            </div>
-            <div>
-              <label>نهاية الدوام</label>
-              <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
-            </div>
-            <div>
-              <label>تسمية الفترة</label>
-              <input type="text" id="imp-sched-label" style="width:100px" value="صيفي">
-            </div>
-          </div>
-          <div id="preview-wrap" style="margin-top:16px; display:none">
-            <p class="muted" id="preview-summary"></p>
-            <div style="max-height:320px; overflow:auto">
-              <table id="preview-table"><thead></thead><tbody></tbody></table>
-            </div>
-            <button class="primary" id="btn-confirm-import" style="margin-top:14px">تأكيد الاستيراد وإرسال للشيت</button>
-          </div>
-          <div id="import-msg"></div>
+        <div class="stepper" id="import-stepper">
+          <div class="step" data-step="1"><span class="step-num">١</span><span>اختيار الملف</span></div>
+          <div class="step" data-step="2"><span class="step-num">٢</span><span>الفحص والمطابقة</span></div>
+          <div class="step" data-step="3"><span class="step-num">٣</span><span>الحفظ</span></div>
         </div>
+
+        <div class="row" style="align-items:flex-start">
+          <div class="card" style="flex:1 1 320px">
+            <h3 style="margin-top:0">١ · ملف البصمة</h3>
+            <p class="muted">اختر ملف Excel المصدَّر من جهاز البصمة (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
+            <div class="dropzone" id="dropzone">
+              <div class="dropzone-icon">⬆</div>
+              <div class="dropzone-title">اختر ملفاً من الجهاز</div>
+              <div class="muted" style="margin-bottom:12px">xlsx · xls</div>
+              <button class="primary" id="btn-pick-file">اختيار ملف البصمة</button>
+              <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+            </div>
+            <div class="row" style="margin-top:14px">
+              <div>
+                <label>تاريخ اليوم في الملف</label>
+                <input type="text" id="imp-date" style="width:130px" placeholder="YYYY-MM-DD">
+              </div>
+              <div>
+                <label>بداية الدوام</label>
+                <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
+              </div>
+              <div>
+                <label>نهاية الدوام</label>
+                <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
+              </div>
+              <div>
+                <label>تسمية الفترة</label>
+                <input type="text" id="imp-sched-label" style="width:100px" value="صيفي">
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="flex:1 1 320px">
+            <h3 style="margin-top:0">٢ · نتيجة الفحص</h3>
+            <p class="muted" id="preview-summary">اختر ملفاً ليُفحص هنا قبل الحفظ.</p>
+            <div id="preview-wrap" style="display:none">
+              <div style="max-height:320px; overflow:auto">
+                <table id="preview-table"><thead></thead><tbody></tbody></table>
+              </div>
+              <button class="primary" id="btn-confirm-import" style="margin-top:14px; width:100%">٣ · حفظ في الشيت</button>
+            </div>
+          </div>
+        </div>
+        <div id="import-msg"></div>
       </section>
 
       <section id="view-absence" style="display:none">
@@ -626,10 +669,38 @@ function findCol(headers, includesText) {
   return headers.findIndex((h) => String(h || '').includes(includesText));
 }
 
-document.getElementById('file-input').addEventListener('change', async (ev) => {
+let currentImportFileName = '';
+
+function setImportStep(n) {
+  document.querySelectorAll('#import-stepper .step').forEach((el) => {
+    const s = Number(el.dataset.step);
+    el.classList.toggle('done', s < n);
+    el.classList.toggle('active', s === n);
+  });
+}
+
+document.getElementById('btn-pick-file').addEventListener('click', () => document.getElementById('file-input').click());
+
+const dropzone = document.getElementById('dropzone');
+['dragenter', 'dragover'].forEach((evt) => {
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach((evt) => {
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+});
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+});
+
+document.getElementById('file-input').addEventListener('change', (ev) => {
   const file = ev.target.files[0];
-  if (!file) return;
+  if (file) processImportFile(file);
+});
+
+async function processImportFile(file) {
   document.getElementById('import-msg').innerHTML = '';
+  currentImportFileName = file.name;
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -668,9 +739,10 @@ document.getElementById('file-input').addEventListener('change', async (ev) => {
   const thead = document.querySelector('#preview-table thead');
   thead.innerHTML = '<tr><th>السجل المدني</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th></tr>';
   tbody.innerHTML = parsedRows.map((r) => `<tr><td>${r.civil}</td><td>${r.name}</td><td>${r.checkIn || '—'}</td><td>${r.checkOut || '—'}</td></tr>`).join('');
-  document.getElementById('preview-summary').textContent = `تم العثور على ${parsedRows.length} صفاً.`;
+  document.getElementById('preview-summary').textContent = `تم العثور على ${parsedRows.length} صفاً — راجع البيانات ثم احفظ.`;
   document.getElementById('preview-wrap').style.display = 'block';
-});
+  setImportStep(2);
+}
 
 document.getElementById('btn-confirm-import').addEventListener('click', async () => {
   const date = document.getElementById('imp-date').value.trim();
@@ -681,10 +753,11 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
   const btn = document.getElementById('btn-confirm-import');
   btn.disabled = true;
   btn.textContent = 'جارٍ الإرسال...';
+  setImportStep(3);
   try {
     const res = await callApi('importDay', {
       date,
-      fileName: document.getElementById('file-input').files[0]?.name || '',
+      fileName: currentImportFileName,
       schedStart: document.getElementById('imp-sched-start').value.trim(),
       schedEnd: document.getElementById('imp-sched-end').value.trim(),
       schedLabel: document.getElementById('imp-sched-label').value.trim(),
@@ -694,9 +767,10 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
     if (document.getElementById('dash-date').value === date) refreshDashboard();
   } catch (err) {
     document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    setImportStep(2);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'تأكيد الاستيراد وإرسال للشيت';
+    btn.textContent = '٣ · حفظ في الشيت';
   }
 });
 
@@ -1214,6 +1288,7 @@ async function refreshPenalties() {
 }
 
 // init
+setImportStep(1);
 document.getElementById('dash-date').value = todayISO();
 document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
 if (!loadConfig().url) {

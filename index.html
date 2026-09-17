@@ -168,6 +168,25 @@
   .leaderboard-row .lb-name { flex: 1; }
   .leaderboard-row .lb-value { font-weight: 600; color: var(--bad); }
 
+  /* الإعدادات: فترات الدوام + العطل + نهاية الأسبوع */
+  .day-toggle {
+    background: #fff; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted);
+  }
+  .day-toggle.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .period-card {
+    flex: 1 1 220px; border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fafafa;
+  }
+  .period-card .period-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .period-card .period-label-input { font-weight: 600; font-size: 13.5px; border: none; background: none; padding: 0; width: 100px; }
+  .period-card label { margin-top: 8px; }
+  .holiday-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .holiday-row:last-child { border-bottom: none; }
+  .holiday-row .h-label { flex: 1; font-weight: 500; }
+  .holiday-row .h-range { color: var(--muted); }
+
   /* معالج الاستيراد */
   .stepper { display: flex; gap: 8px; margin-bottom: 16px; }
   .stepper .step {
@@ -395,6 +414,35 @@
             <span class="muted" id="cfg-status"></span>
           </div>
         </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">أيام نهاية الأسبوع</h3>
+          <p class="muted">لا يُسجَّل غياب في هذه الأيام عند عدم ظهور المعلم بملف الاستيراد.</p>
+          <div class="row" id="weekend-days-row"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">تقويم العطل والإجازات</h3>
+          <p class="muted">أيام هذا التقويم أيضاً لا يُحسب فيها غياب.</p>
+          <div id="holidays-list"></div>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="holiday-label" placeholder="اسم الإجازة" style="width:180px">
+            <input type="date" id="holiday-from">
+            <input type="date" id="holiday-to">
+            <button class="ghost" id="btn-add-holiday">+ إضافة إجازة</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">فترات الدوام</h3>
+          <p class="muted">تُطبَّق تلقائياً على الاستيراد حسب تاريخ الملف؛ حدّد مدى تاريخي لكل فترة (اختياري)، أو اجعل واحدة افتراضية للتواريخ خارج أي مدى.</p>
+          <div class="row" id="periods-row" style="align-items:stretch"></div>
+          <button class="ghost" id="btn-add-period" style="margin-top:10px">+ إضافة فترة</button>
+        </div>
+        <div class="row">
+          <button class="primary" id="btn-save-schedule">حفظ إعدادات الدوام والعطل</button>
+          <span class="muted" id="schedule-status"></span>
+        </div>
       </section>
 
       <section id="view-summary" style="display:none">
@@ -409,6 +457,7 @@
               <input type="date" id="sum-to">
             </div>
             <button class="primary" id="btn-refresh-summary" style="align-self:flex-end">تحديث</button>
+            <button class="ghost" id="btn-export-summary-excel" style="align-self:flex-end">تصدير Excel</button>
           </div>
         </div>
         <div class="summary" id="sum-totals"></div>
@@ -468,8 +517,27 @@
         </div>
 
         <div class="card">
-          <h3 style="margin-top:0">شدة التأخير</h3>
-          <div class="summary" id="an-severity"></div>
+          <h3 style="margin-top:0">خريطة الفترة</h3>
+          <p class="muted">كل مربع يوم مستورَد — الأغمق يعني مخالفات أكثر (غياب/تأخير/بدون بصمة).</p>
+          <div class="chart-legend">
+            <span><i style="background:#f4f4f5;border:1px solid #e4e4e7"></i> منتظم</span>
+            <span><i style="background:#fca5a5"></i> بسيط</span>
+            <span><i style="background:#ef4444"></i> متوسط</span>
+            <span><i style="background:#7f1d1d"></i> شديد</span>
+          </div>
+          <div id="an-heatmap"></div>
+        </div>
+
+        <div class="row" style="align-items:stretch">
+          <div class="card" style="flex:2 1 320px">
+            <h3 style="margin-top:0">نمط أيام الأسبوع</h3>
+            <p class="muted">متوسط المخالفات (غياب+تأخير+انصراف مبكر) لكل يوم من أيام الأسبوع خلال الفترة.</p>
+            <div id="an-weekday-pattern"></div>
+          </div>
+          <div class="card" style="flex:1 1 200px">
+            <h4>شدة التأخير</h4>
+            <div class="summary" id="an-severity"></div>
+          </div>
         </div>
         <div class="card">
           <h3 style="margin-top:0">أكثر أسباب الغياب</h3>
@@ -530,6 +598,8 @@
           <div class="row">
             <button class="primary" id="btn-refresh-penalties">عرض الكشف</button>
             <button class="ghost no-print" id="btn-print-penalties"><span class="icon" data-icon="printer"></span> طباعة</button>
+            <button class="ghost no-print" id="btn-export-penalties-excel">تصدير Excel</button>
+            <button class="ghost no-print" id="btn-print-circular">طباعة تعميم المتأخرين</button>
           </div>
           <div style="max-height:400px; overflow:auto; margin-top:12px">
             <table id="penalties-table">
@@ -673,6 +743,7 @@ function showTab(name) {
     document.getElementById('cfg-school').value = cfg.schoolName || '';
     document.getElementById('cfg-admin').value = cfg.adminName || '';
     document.getElementById('cfg-principal').value = cfg.principalName || '';
+    loadScheduleSettings();
   }
   if (name === 'summary') {
     if (!document.getElementById('sum-from').value) {
@@ -816,7 +887,12 @@ async function processImportFile(file) {
     });
   }
 
-  document.getElementById('imp-date').value = detectDateFromFilename(file.name) || todayISO();
+  const importDate = detectDateFromFilename(file.name) || todayISO();
+  document.getElementById('imp-date').value = importDate;
+  const sched = resolveScheduleForDateClient(importDate);
+  document.getElementById('imp-sched-start').value = sched.workStart || '';
+  document.getElementById('imp-sched-end').value = sched.workEnd || '';
+  document.getElementById('imp-sched-label').value = sched.label || '';
 
   const tbody = document.querySelector('#preview-table tbody');
   const thead = document.querySelector('#preview-table thead');
@@ -1002,9 +1078,22 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
 
 // ---------- الملخص والترتيب ----------
 document.getElementById('btn-refresh-summary').addEventListener('click', refreshSummary);
+document.getElementById('btn-export-summary-excel').addEventListener('click', () => {
+  if (!lastSummaryList.length) return;
+  const rows = lastSummaryList.map((e) => ({
+    'الرقم': e.num, 'الاسم': e.name, 'حضور': e.presentDays, 'غياب': e.absenceDays,
+    'بعذر': e.excused, 'بدون عذر': e.unexcused, 'غير مصنف': e.unclassified,
+    'أيام التأخير': e.lateDays, 'دقائق التأخير': e.lateMinutes, 'انصراف مبكر': e.earlyDays,
+    'المخالفات': e.violations,
+  }));
+  const from = document.getElementById('sum-from').value;
+  const to = document.getElementById('sum-to').value;
+  exportRowsToExcel(`الملخص_والترتيب_${from}_${to}.xlsx`, 'الملخص', rows);
+});
 document.getElementById('sum-from').addEventListener('change', refreshSummary);
 document.getElementById('sum-to').addEventListener('change', refreshSummary);
 
+let lastSummaryList = [];
 async function refreshSummary() {
   const from = document.getElementById('sum-from').value;
   const to = document.getElementById('sum-to').value;
@@ -1013,6 +1102,7 @@ async function refreshSummary() {
   msgEl.innerHTML = '';
   try {
     const res = await callApi('getMonthlySummary', { from, to });
+    lastSummaryList = res.list;
     const tbody = document.querySelector('#summary-table tbody');
     tbody.innerHTML = res.list.map((e, i) => `
       <tr>
@@ -1085,6 +1175,69 @@ function renderTrendChart(dailyTrend) {
   </svg>`;
 }
 
+function severityBucket(d) {
+  const score = d.absent * 3 + d.late + d.early + d.noCheckout;
+  if (score <= 0) return 0;
+  if (score <= 2) return 1;
+  if (score <= 5) return 2;
+  return 3;
+}
+const HEATMAP_COLORS = ['#f4f4f5', '#fca5a5', '#ef4444', '#7f1d1d'];
+
+function renderHeatmap(dailyTrend, from, to) {
+  if (!dailyTrend.length) return '<p class="muted" style="padding:10px 0">لا توجد بيانات في هذه الفترة.</p>';
+  const byDate = {};
+  dailyTrend.forEach((d) => { byDate[d.date] = d; });
+  const start = isoToLocalDate(from);
+  const end = isoToLocalDate(to);
+  // نبدأ الشبكة من بداية أسبوع أول تاريخ (السبت) حتى تصطف الأعمدة كتقويم حقيقي
+  const gridStart = new Date(start);
+  gridStart.setDate(gridStart.getDate() - ((gridStart.getDay() + 1) % 7));
+  const cells = [];
+  for (let d = new Date(gridStart); d <= end; d.setDate(d.getDate() + 1)) {
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    cells.push({ iso, inRange: d >= start && d <= end, data: byDate[iso] });
+  }
+  const cell = 15, gap = 3;
+  const weeks = Math.ceil(cells.length / 7);
+  const w = weeks * (cell + gap);
+  const h = 7 * (cell + gap);
+  let rects = '';
+  cells.forEach((c, i) => {
+    const col = Math.floor(i / 7);
+    const row = i % 7;
+    const x = col * (cell + gap);
+    const y = row * (cell + gap);
+    let fill = '#fff';
+    let title = c.iso;
+    if (c.inRange) {
+      if (c.data) {
+        fill = HEATMAP_COLORS[severityBucket(c.data)];
+        title = `${c.iso} — حاضر:${c.data.present} غياب:${c.data.absent} تأخر:${c.data.late}`;
+      } else {
+        fill = '#fafafa';
+        title = `${c.iso} — لا يوجد استيراد`;
+      }
+    }
+    rects += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="3" fill="${fill}" stroke="#e4e4e7"><title>${title}</title></rect>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px;height:auto">${rects}</svg>`;
+}
+
+function renderWeekdayPattern(dailyTrend) {
+  if (!dailyTrend.length) return '<p class="muted">لا توجد بيانات في هذه الفترة.</p>';
+  const buckets = [0, 0, 0, 0, 0, 0, 0];
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  dailyTrend.forEach((d) => {
+    const wd = isoToLocalDate(d.date).getDay();
+    buckets[wd] += d.absent + d.late + d.early;
+    counts[wd]++;
+  });
+  const avgs = buckets.map((b, i) => (counts[i] ? b / counts[i] : 0));
+  const max = Math.max(0.01, ...avgs);
+  return WEEKDAYS_AR.map((name, i) => barRow(name, Math.round(avgs[i] * 10) / 10, max)).join('');
+}
+
 function renderLeaderboard(containerId, list, key, unit) {
   const top = list.filter((e) => e[key] > 0).slice(0, 5);
   const el = document.getElementById(containerId);
@@ -1120,6 +1273,8 @@ async function refreshAnalytics() {
     ]);
 
     document.getElementById('an-chart').innerHTML = renderTrendChart(res.dailyTrend);
+    document.getElementById('an-heatmap').innerHTML = renderHeatmap(res.dailyTrend, from, to);
+    document.getElementById('an-weekday-pattern').innerHTML = renderWeekdayPattern(res.dailyTrend);
 
     const byViolations = summaryRes.list.slice();
     renderLeaderboard('top-absent', byViolations.slice().sort((a, b) => b.absenceDays - a.absenceDays), 'absenceDays', ' يوم');
@@ -1424,6 +1579,7 @@ async function refreshEmployeeReport() {
 document.getElementById('btn-refresh-penalties').addEventListener('click', refreshPenalties);
 document.getElementById('btn-print-penalties').addEventListener('click', () => window.print());
 
+let lastPenaltiesList = [];
 async function refreshPenalties() {
   const from = document.getElementById('er-from').value;
   const to = document.getElementById('er-to').value;
@@ -1435,6 +1591,7 @@ async function refreshPenalties() {
   msgEl.innerHTML = '';
   try {
     const res = await callApi('getAnnualPenalties', { from, to });
+    lastPenaltiesList = res.list;
     document.getElementById('penalties-empty').style.display = res.list.length ? 'none' : 'block';
     document.querySelector('#penalties-table tbody').innerHTML = res.list.map((e) => `
       <tr>
@@ -1448,6 +1605,195 @@ async function refreshPenalties() {
   }
 }
 
+function exportRowsToExcel(filename, sheetName, rows) {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+document.getElementById('btn-export-penalties-excel').addEventListener('click', () => {
+  if (!lastPenaltiesList.length) return;
+  const rows = lastPenaltiesList.map((e) => ({
+    'الرقم': e.num, 'الاسم': e.name, 'إجمالي دقائق التأخير': e.totalLateMinutes,
+    'الإجراء الواجب': e.action, 'ملاحظة': e.note, 'أيام الحسم': e.deductionDays,
+  }));
+  const from = document.getElementById('er-from').value;
+  const to = document.getElementById('er-to').value;
+  exportRowsToExcel(`كشف_الجزاءات_${from}_${to}.xlsx`, 'الجزاءات', rows);
+});
+
+document.getElementById('btn-print-circular').addEventListener('click', () => {
+  const from = document.getElementById('er-from').value;
+  const to = document.getElementById('er-to').value;
+  const cfg = loadConfig();
+  const eligible = lastPenaltiesList.filter((e) => e.totalLateMinutes >= 420); // من وصل لدرجة "لفت نظر" فأعلى
+  const rowsHtml = eligible.length
+    ? eligible.map((e, i) => `<tr><td>${i + 1}</td><td>${e.name}</td><td>${e.totalLateMinutes}</td><td>${e.action}</td><td>${e.deductionDays || '—'}</td></tr>`).join('')
+    : '<tr><td colspan="5">لا يوجد من بلغ درجة "لفت نظر" فأعلى خلال هذه الفترة.</td></tr>';
+  const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><style>
+    body{font-family:Arial,sans-serif;padding:30px;color:#111}
+    h1{font-size:18px;text-align:center;margin-bottom:4px}
+    .sub{text-align:center;color:#555;margin-bottom:24px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border:1px solid #999;padding:8px;text-align:center}
+    th{background:#eee}
+    .sign{margin-top:60px;display:flex;justify-content:space-between;font-size:13px}
+  </style></head><body>
+    <h1>تعميم بأسماء المتأخرين</h1>
+    <div class="sub">${escapeHtml(cfg.schoolName || '')} — من ${from} إلى ${to}</div>
+    <p>وفق نموذج بيان دقائق التأخير الصادر عن الإدارة العامة للتعليم (مرفق ٦)، يُحاط علماً بأسماء المعلمين الذين تجاوز تراكم تأخيرهم الحد المستوجب للفت النظر خلال الفترة أعلاه:</p>
+    <table><thead><tr><th>م</th><th>الاسم</th><th>إجمالي دقائق التأخير</th><th>الإجراء</th><th>أيام الحسم</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <div class="sign"><div>معدّ التعميم: ....................</div><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div></div>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 300);
+});
+
+// ---------- إعدادات الدوام والعطل ----------
+const WEEKDAY_NAMES = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+let currentSettings = { schedulePeriods: [], defaultPeriodId: '', weekendDays: [5, 6], holidays: [] };
+
+async function loadScheduleSettings() {
+  try {
+    const res = await callApi('getSettings', {});
+    currentSettings = res.settings;
+    if (!currentSettings.schedulePeriods || !currentSettings.schedulePeriods.length) {
+      currentSettings.schedulePeriods = [
+        { id: 'summer', label: 'صيفي', workStart: '6:45', workEnd: '12:30', dateFrom: '', dateTo: '' },
+        { id: 'winter', label: 'شتوي', workStart: '7:00', workEnd: '12:45', dateFrom: '', dateTo: '' },
+        { id: 'ramadan', label: 'رمضان', workStart: '9:30', workEnd: '13:00', dateFrom: '', dateTo: '' },
+      ];
+      currentSettings.defaultPeriodId = 'summer';
+    }
+  } catch (err) {
+    document.getElementById('schedule-status').textContent = 'خطأ: ' + err.message;
+    currentSettings.schedulePeriods = [
+      { id: 'summer', label: 'صيفي', workStart: '6:45', workEnd: '12:30', dateFrom: '', dateTo: '' },
+      { id: 'winter', label: 'شتوي', workStart: '7:00', workEnd: '12:45', dateFrom: '', dateTo: '' },
+      { id: 'ramadan', label: 'رمضان', workStart: '9:30', workEnd: '13:00', dateFrom: '', dateTo: '' },
+    ];
+    currentSettings.defaultPeriodId = 'summer';
+  }
+  renderWeekendDays();
+  renderPeriods();
+  renderHolidays();
+}
+
+function renderWeekendDays() {
+  const el = document.getElementById('weekend-days-row');
+  el.innerHTML = WEEKDAY_NAMES.map((name, i) => `<button type="button" class="day-toggle ${currentSettings.weekendDays.includes(i) ? 'active' : ''}" data-day="${i}">${name}</button>`).join('');
+  el.querySelectorAll('.day-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const day = Number(btn.dataset.day);
+      const idx = currentSettings.weekendDays.indexOf(day);
+      if (idx >= 0) currentSettings.weekendDays.splice(idx, 1);
+      else currentSettings.weekendDays.push(day);
+      renderWeekendDays();
+    });
+  });
+}
+
+function renderPeriods() {
+  const el = document.getElementById('periods-row');
+  el.innerHTML = currentSettings.schedulePeriods.map((p, i) => `
+    <div class="period-card" data-index="${i}">
+      <div class="period-head">
+        <input type="text" class="period-label-input p-label" value="${p.label || ''}" placeholder="اسم الفترة">
+        <button type="button" class="small btn-del-period" style="background:var(--bad)">حذف</button>
+      </div>
+      <label>بداية الدوام</label>
+      <input type="text" class="p-start" value="${p.workStart || ''}" style="width:100%">
+      <label>نهاية الدوام</label>
+      <input type="text" class="p-end" value="${p.workEnd || ''}" style="width:100%">
+      <label>من تاريخ (اختياري)</label>
+      <input type="date" class="p-from" value="${p.dateFrom || ''}" style="width:100%">
+      <label>إلى تاريخ (اختياري)</label>
+      <input type="date" class="p-to" value="${p.dateTo || ''}" style="width:100%">
+      <label style="display:flex; align-items:center; gap:6px; margin-top:10px; cursor:pointer">
+        <input type="radio" name="default-period" class="p-default" ${currentSettings.defaultPeriodId === p.id ? 'checked' : ''}>
+        اجعلها الافتراضية
+      </label>
+    </div>`).join('');
+
+  el.querySelectorAll('.period-card').forEach((card) => {
+    const i = Number(card.dataset.index);
+    card.querySelector('.p-label').addEventListener('input', (e) => { currentSettings.schedulePeriods[i].label = e.target.value; });
+    card.querySelector('.p-start').addEventListener('input', (e) => { currentSettings.schedulePeriods[i].workStart = e.target.value; });
+    card.querySelector('.p-end').addEventListener('input', (e) => { currentSettings.schedulePeriods[i].workEnd = e.target.value; });
+    card.querySelector('.p-from').addEventListener('input', (e) => { currentSettings.schedulePeriods[i].dateFrom = e.target.value; });
+    card.querySelector('.p-to').addEventListener('input', (e) => { currentSettings.schedulePeriods[i].dateTo = e.target.value; });
+    card.querySelector('.p-default').addEventListener('change', () => { currentSettings.defaultPeriodId = currentSettings.schedulePeriods[i].id; });
+    card.querySelector('.btn-del-period').addEventListener('click', () => {
+      currentSettings.schedulePeriods.splice(i, 1);
+      renderPeriods();
+    });
+  });
+}
+
+document.getElementById('btn-add-period').addEventListener('click', () => {
+  const id = 'p' + Date.now();
+  currentSettings.schedulePeriods.push({ id, label: 'فترة جديدة', workStart: '', workEnd: '', dateFrom: '', dateTo: '' });
+  renderPeriods();
+});
+
+function renderHolidays() {
+  const el = document.getElementById('holidays-list');
+  const list = currentSettings.holidays || [];
+  el.innerHTML = list.length
+    ? list.map((h, i) => `
+      <div class="holiday-row" data-index="${i}">
+        <span class="h-label">${h.label}</span>
+        <span class="h-range">${h.from} → ${h.to}</span>
+        <button type="button" class="small btn-del-holiday" style="background:var(--bad)">حذف</button>
+      </div>`).join('')
+    : '<p class="muted">لم تُسجَّل إجازات بعد.</p>';
+  el.querySelectorAll('.btn-del-holiday').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentSettings.holidays.splice(Number(btn.closest('.holiday-row').dataset.index), 1);
+      renderHolidays();
+    });
+  });
+}
+
+document.getElementById('btn-add-holiday').addEventListener('click', () => {
+  const label = document.getElementById('holiday-label').value.trim();
+  const from = document.getElementById('holiday-from').value;
+  const to = document.getElementById('holiday-to').value;
+  if (!label || !from || !to) return;
+  currentSettings.holidays = currentSettings.holidays || [];
+  currentSettings.holidays.push({ id: 'h' + Date.now(), label, from, to });
+  document.getElementById('holiday-label').value = '';
+  document.getElementById('holiday-from').value = '';
+  document.getElementById('holiday-to').value = '';
+  renderHolidays();
+});
+
+document.getElementById('btn-save-schedule').addEventListener('click', async () => {
+  const statusEl = document.getElementById('schedule-status');
+  statusEl.textContent = 'جارٍ الحفظ...';
+  try {
+    await callApi('saveSettings', { settings: currentSettings });
+    statusEl.textContent = 'تم الحفظ ✔';
+  } catch (err) {
+    statusEl.textContent = 'خطأ: ' + err.message;
+  }
+});
+
+// يطابق منطق resolveScheduleForDate في الخادم لتعبئة حقول الاستيراد تلقائياً
+function resolveScheduleForDateClient(dateISO) {
+  const periods = currentSettings.schedulePeriods || [];
+  let match = null;
+  periods.forEach((p) => {
+    if (p.dateFrom && p.dateTo && dateISO >= p.dateFrom && dateISO <= p.dateTo) match = p;
+  });
+  if (!match) match = periods.filter((p) => p.id === currentSettings.defaultPeriodId)[0] || periods[0];
+  return match || { workStart: '6:45', workEnd: '12:30', label: '' };
+}
+
 // init
 mountIcons();
 setImportStep(1);
@@ -1458,6 +1804,7 @@ if (!loadConfig().url) {
 } else {
   showTab('dashboard');
   refreshDashboard();
+  loadScheduleSettings();
 }
 </script>
 </body>

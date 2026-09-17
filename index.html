@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>متابعة الحضور</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
@@ -30,9 +33,12 @@
     margin: 0;
     background: var(--bg);
     color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-family: "IBM Plex Sans Arabic", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
+    font-size: 14px;
   }
+  .icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .icon svg { display: block; }
   .app { display: flex; min-height: 100vh; align-items: stretch; }
   .sidebar {
     width: 240px;
@@ -56,9 +62,15 @@
     padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13.5px; color: var(--muted); text-align: right;
     transition: background-color .12s ease, color .12s ease;
   }
-  .side-nav button .icon { width: 18px; text-align: center; font-size: 14px; opacity: .8; }
+  .side-nav button .icon { width: 18px; opacity: .65; }
   .side-nav button:hover { background: var(--accent-soft); color: var(--ink); }
-  .side-nav button.active { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .side-nav button:hover .icon { opacity: 1; }
+  .side-nav button.active { background: var(--accent-soft); color: var(--ink); font-weight: 600; position: relative; }
+  .side-nav button.active .icon { opacity: 1; }
+  .side-nav button.active::before {
+    content: ''; position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 16px; border-radius: 3px; background: var(--accent);
+  }
   .side-nav button.placeholder { color: #a1a1aa; }
   .sidebar-foot { font-size: 11px; color: var(--muted); padding: 10px 6px 0; border-top: 1px solid var(--border); margin-top: 12px; }
 
@@ -68,13 +80,13 @@
   .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 20px;
-    margin-bottom: 14px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
   }
-  .card h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-  .card h4 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .card h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .card h4 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 10px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   label { font-size: 12.5px; color: var(--muted); display: block; margin-bottom: 5px; font-weight: 500; }
   input[type=text], input[type=date], input[type=file], select {
@@ -95,6 +107,7 @@
   td input[type=text], td select { padding: 4px 6px; font-size: 12px; width: 100%; }
   button { font-family: inherit; }
   button.primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     background: var(--accent);
     color: var(--accent-fg);
     border: 1px solid var(--accent);
@@ -103,16 +116,19 @@
     cursor: pointer;
     font-size: 13.5px;
     font-weight: 500;
-    transition: opacity .12s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: opacity .12s ease, transform .08s ease;
   }
   button.primary:hover { opacity: .88; }
+  button.primary:active { transform: scale(0.98); }
   button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
   button.ghost {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     background: #fff; border: 1px solid var(--border); border-radius: 6px;
     padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--ink); font-weight: 500;
-    transition: background-color .12s ease;
+    transition: background-color .12s ease, border-color .12s ease;
   }
-  button.ghost:hover { background: var(--accent-soft); }
+  button.ghost:hover { background: var(--accent-soft); border-color: #d4d4d8; }
   button.small {
     background: #fff; color: var(--ink); border: 1px solid var(--border);
     padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
@@ -211,20 +227,20 @@
 <div class="app">
   <aside class="sidebar no-print">
     <div class="brand">
-      <div class="brand-badge">📋</div>
+      <div class="brand-badge"><span class="icon" data-icon="brand"></span></div>
       <div>
         <div class="brand-title">متابعة الحضور</div>
         <div class="brand-sub" id="sync-indicator">متزامن مع الشيت</div>
       </div>
     </div>
     <nav class="side-nav" id="side-nav">
-      <button data-tab="dashboard"><span class="icon">📅</span><span>لوحة اليوم</span></button>
-      <button data-tab="import"><span class="icon">⬆️</span><span>الاستيراد</span></button>
-      <button data-tab="summary" class="placeholder"><span class="icon">📊</span><span>الملخص والترتيب</span></button>
-      <button data-tab="analytics" class="placeholder"><span class="icon">📈</span><span>التحليلات</span></button>
-      <button data-tab="absence"><span class="icon">📋</span><span>سجل الغياب</span></button>
-      <button data-tab="reports" class="placeholder"><span class="icon">📄</span><span>التقارير</span></button>
-      <button data-tab="settings"><span class="icon">⚙️</span><span>الإعدادات</span></button>
+      <button data-tab="dashboard"><span class="icon" data-icon="calendar"></span><span>لوحة اليوم</span></button>
+      <button data-tab="import"><span class="icon" data-icon="upload"></span><span>الاستيراد</span></button>
+      <button data-tab="summary" class="placeholder"><span class="icon" data-icon="barChart"></span><span>الملخص والترتيب</span></button>
+      <button data-tab="analytics" class="placeholder"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
+      <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب</span></button>
+      <button data-tab="reports" class="placeholder"><span class="icon" data-icon="fileText"></span><span>التقارير</span></button>
+      <button data-tab="settings"><span class="icon" data-icon="settings"></span><span>الإعدادات</span></button>
     </nav>
     <div class="sidebar-foot">البيانات محفوظة في Google Sheet مشترك</div>
   </aside>
@@ -241,12 +257,12 @@
           <div class="day-label" id="day-label">—</div>
           <button class="nav-arrow" id="btn-next-day">التالي ▶</button>
           <input type="date" id="dash-date">
-          <button class="ghost" id="btn-print">🖶 طباعة الكشف الرسمي</button>
+          <button class="ghost" id="btn-print"><span class="icon" data-icon="printer"></span> طباعة الكشف الرسمي</button>
         </div>
         <div class="summary" id="dash-summary"></div>
         <div class="card" id="dash-empty" style="display:none">
           <div class="empty-state">
-            <div class="icon-circle">⬆️</div>
+            <div class="icon-circle"><span class="icon" data-icon="upload"></span></div>
             <h3>لا توجد بيانات لهذا اليوم</h3>
             <p class="muted">لم يُستورد ملف البصمة لهذا التاريخ بعد.</p>
             <button class="primary" id="btn-goto-import">استيراد ملف اليوم</button>
@@ -277,7 +293,7 @@
             <h3 style="margin-top:0">١ · ملف البصمة</h3>
             <p class="muted">اختر ملف Excel المصدَّر من جهاز البصمة (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
             <div class="dropzone" id="dropzone">
-              <div class="dropzone-icon">⬆</div>
+              <div class="dropzone-icon"><span class="icon" data-icon="upload"></span></div>
               <div class="dropzone-title">اختر ملفاً من الجهاز</div>
               <div class="muted" style="margin-bottom:12px">xlsx · xls</div>
               <button class="primary" id="btn-pick-file">اختيار ملف البصمة</button>
@@ -489,7 +505,7 @@
               <input type="date" id="er-to">
             </div>
             <button class="primary" id="btn-refresh-employee-report" style="align-self:flex-end">عرض التقرير</button>
-            <button class="ghost no-print" id="btn-print-employee-report" style="align-self:flex-end">🖶 طباعة</button>
+            <button class="ghost no-print" id="btn-print-employee-report" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة</button>
           </div>
         </div>
         <div class="summary" id="er-totals"></div>
@@ -513,7 +529,7 @@
           <p class="muted">وفق الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦) — يظهر فقط من تجاوز تراكم تأخيره ٣٠ دقيقة خلال الفترة المحددة أعلاه في "من/إلى تاريخ".</p>
           <div class="row">
             <button class="primary" id="btn-refresh-penalties">عرض الكشف</button>
-            <button class="ghost no-print" id="btn-print-penalties">🖶 طباعة</button>
+            <button class="ghost no-print" id="btn-print-penalties"><span class="icon" data-icon="printer"></span> طباعة</button>
           </div>
           <div style="max-height:400px; overflow:auto; margin-top:12px">
             <table id="penalties-table">
@@ -548,6 +564,26 @@
 </div>
 
 <script>
+// أيقونات خطية بسيطة (بنمط Lucide) بدل الإيموجي — currentColor يرث لون النص المحيط
+const ICON_STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS = {
+  brand: `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>`,
+  calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>`,
+  upload: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  barChart: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>`,
+  trendingUp: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`,
+  listChecks: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="m3 7 3 3 3-3"/><path d="M6 10V5"/><path d="m3 17 3 3 3-3"/><path d="M6 20v-5"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>`,
+  fileText: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  settings: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  printer: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" ${ICON_STROKE}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`,
+};
+function mountIcons() {
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    const name = el.dataset.icon;
+    if (ICONS[name]) el.innerHTML = ICONS[name];
+  });
+}
+
 const CONFIG_KEY = 'hather_v2_config';
 function loadConfig() {
   try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch (e) { return {}; }
@@ -1413,6 +1449,7 @@ async function refreshPenalties() {
 }
 
 // init
+mountIcons();
 setImportStep(1);
 document.getElementById('dash-date').value = todayISO();
 document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';

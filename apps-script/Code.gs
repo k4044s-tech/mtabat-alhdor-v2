@@ -113,6 +113,41 @@ function sheetToObjects_(sheet) {
   return rows;
 }
 
+// أسرع من sheetToObjects_ للبحث عن تاريخ واحد فقط: يقرأ عمود التاريخ وحده أولاً (رخيص)
+// بدل كل الأعمدة، ثم يقرأ فقط النطاق المحصور بين أول وآخر صف مطابق. يفيد كثيراً مع
+// نمو الشيت لأن sheetToObjects_ تقرأ كل الصفوف والأعمدة في كل استدعاء.
+function getRowsForDate_(sheet, date) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var dateCol = headers.indexOf('date') + 1;
+  if (dateCol === 0) return sheetToObjects_(sheet).filter(function (r) { return normalizeDate_(r.date) === date; });
+
+  var dateValues = sheet.getRange(2, dateCol, lastRow - 1, 1).getValues();
+  var matchRows = [];
+  for (var i = 0; i < dateValues.length; i++) {
+    if (normalizeDate_(dateValues[i][0]) === date) matchRows.push(i + 2);
+  }
+  if (!matchRows.length) return [];
+
+  var minRow = matchRows[0];
+  var maxRow = matchRows[matchRows.length - 1];
+  var block = sheet.getRange(minRow, 1, maxRow - minRow + 1, lastCol).getValues();
+  var matchSet = {};
+  matchRows.forEach(function (r) { matchSet[r] = true; });
+
+  var out = [];
+  for (var i = 0; i < block.length; i++) {
+    var rowNum = minRow + i;
+    if (!matchSet[rowNum]) continue;
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) obj[headers[j]] = formatCellForOutput_(headers[j], block[i][j]);
+    out.push(obj);
+  }
+  return out;
+}
+
 function normalizeDate_(v) {
   if (isDateValue_(v)) {
     return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -220,23 +255,23 @@ function handleDeleteDay_(payload) {
 }
 
 function handleGetTeachers_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('teachers_v1');
+  if (cached) return JSON.parse(cached);
+
   var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS)).filter(function (t) {
     return isActive_(t.active);
   });
-  return { ok: true, teachers: teachers };
+  var result = { ok: true, teachers: teachers };
+  cache.put('teachers_v1', JSON.stringify(result), 300); // 5 دقائق — الروستر نادراً ما يتغيّر
+  return result;
 }
 
 function handleGetDay_(payload) {
   var date = String(payload.date);
-  var attendance = sheetToObjects_(getSheet_(SHEET_ATTENDANCE)).filter(function (r) {
-    return normalizeDate_(r.date) === date;
-  });
-  var absence = sheetToObjects_(getSheet_(SHEET_ABSENCE)).filter(function (r) {
-    return normalizeDate_(r.date) === date;
-  });
-  var importInfo = sheetToObjects_(getSheet_(SHEET_IMPORTS)).filter(function (r) {
-    return normalizeDate_(r.date) === date;
-  })[0] || null;
+  var attendance = getRowsForDate_(getSheet_(SHEET_ATTENDANCE), date);
+  var absence = getRowsForDate_(getSheet_(SHEET_ABSENCE), date);
+  var importInfo = getRowsForDate_(getSheet_(SHEET_IMPORTS), date)[0] || null;
   return { ok: true, date: date, attendance: attendance, absence: absence, importInfo: importInfo };
 }
 
@@ -260,8 +295,8 @@ function handleImportDay_(payload) {
 
     // نحتفظ بتصنيف/سبب/ملاحظة الغياب اليدوية الموجودة مسبقاً لهذا التاريخ عند إعادة الاستيراد
     var existingAbsenceByCivil = {};
-    sheetToObjects_(getSheet_(SHEET_ABSENCE)).forEach(function (a) {
-      if (normalizeDate_(a.date) === date) existingAbsenceByCivil[String(a.civil)] = a;
+    getRowsForDate_(getSheet_(SHEET_ABSENCE), date).forEach(function (a) {
+      existingAbsenceByCivil[String(a.civil)] = a;
     });
 
     var schedStartMin = parseTimeToMinutes_(schedStart);

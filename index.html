@@ -361,6 +361,43 @@
       </section>
       <section id="view-reports" style="display:none">
         <div class="card">
+          <h3 style="margin-top:0">تقرير الغياب والتأخر والانصراف</h3>
+          <div class="row">
+            <div>
+              <label>الموظف</label>
+              <select id="er-employee" style="width:220px">
+                <option value="">جميع الموظفين</option>
+              </select>
+            </div>
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="er-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="er-to">
+            </div>
+            <button class="primary" id="btn-refresh-employee-report" style="align-self:flex-end">عرض التقرير</button>
+            <button class="ghost no-print" id="btn-print-employee-report" style="align-self:flex-end">🖶 طباعة</button>
+          </div>
+        </div>
+        <div class="summary" id="er-totals"></div>
+        <div class="card" id="er-results">
+          <h4>الغياب</h4>
+          <table id="er-absence-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr></thead><tbody></tbody></table>
+          <p class="muted" id="er-absence-empty" style="display:none">لا يوجد غياب في هذه الفترة.</p>
+
+          <h4 style="margin-top:22px">التأخير</h4>
+          <table id="er-late-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr></thead><tbody></tbody></table>
+          <p class="muted" id="er-late-empty" style="display:none">لا يوجد تأخير في هذه الفترة.</p>
+
+          <h4 style="margin-top:22px">الانصراف المبكر</h4>
+          <table id="er-early-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr></thead><tbody></tbody></table>
+          <p class="muted" id="er-early-empty" style="display:none">لا يوجد انصراف مبكر في هذه الفترة.</p>
+        </div>
+        <div id="employee-report-msg"></div>
+
+        <div class="card">
           <div class="row">
             <h3 style="margin:0">سجل الاستيرادات</h3>
             <button class="ghost" id="btn-refresh-reports">تحديث</button>
@@ -472,7 +509,15 @@ function showTab(name) {
     }
     refreshAnalytics();
   }
-  if (name === 'reports') refreshReports();
+  if (name === 'reports') {
+    refreshReports();
+    populateEmployeeSelect();
+    if (!document.getElementById('er-from').value) {
+      const d = new Date();
+      document.getElementById('er-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      document.getElementById('er-to').value = todayISO();
+    }
+  }
 }
 document.querySelectorAll('#side-nav button').forEach((btn) => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
@@ -1003,6 +1048,75 @@ setInterval(() => {
   const fn = AUTO_REFRESHERS[currentTab];
   if (fn) fn();
 }, 60000);
+
+// ---------- تقرير الغياب والتأخر والانصراف (موظف واحد أو الكل) ----------
+let employeeSelectPopulated = false;
+async function populateEmployeeSelect() {
+  if (employeeSelectPopulated) return;
+  try {
+    const res = await getTeachersCached();
+    const sel = document.getElementById('er-employee');
+    const teachers = res.teachers.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
+    teachers.forEach((t) => {
+      const opt = document.createElement('option');
+      opt.value = String(t.civil);
+      opt.textContent = t.name;
+      sel.appendChild(opt);
+    });
+    employeeSelectPopulated = true;
+  } catch (err) {
+    document.getElementById('employee-report-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+document.getElementById('btn-refresh-employee-report').addEventListener('click', refreshEmployeeReport);
+document.getElementById('btn-print-employee-report').addEventListener('click', () => window.print());
+
+async function refreshEmployeeReport() {
+  const from = document.getElementById('er-from').value;
+  const to = document.getElementById('er-to').value;
+  const civil = document.getElementById('er-employee').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('employee-report-msg');
+  msgEl.innerHTML = '';
+  try {
+    const res = await callApi('getEmployeeReport', { from, to, civil });
+    const showName = !civil;
+
+    document.getElementById('er-totals').innerHTML = `
+      <span class="pill">أيام الحضور: ${res.totals.presentDays}</span>
+      <span class="pill">أيام الغياب: ${res.totals.absenceDays}</span>
+      <span class="pill">أيام التأخير: ${res.totals.lateDays} (${res.totals.lateMinutesTotal} د)</span>
+      <span class="pill">أيام الانصراف المبكر: ${res.totals.earlyDays} (${res.totals.earlyMinutesTotal} د)</span>
+    `;
+
+    document.getElementById('er-absence-empty').style.display = res.absenceEvents.length ? 'none' : 'block';
+    document.querySelector('#er-absence-table tbody').innerHTML = res.absenceEvents.map((e) => `
+      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.classification || '—'}</td><td>${e.reason || '—'}</td><td>${e.note || '—'}</td></tr>
+    `).join('');
+    document.querySelector('#er-absence-table thead').innerHTML = showName
+      ? '<tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr>'
+      : '<tr><th>التاريخ</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr>';
+
+    document.getElementById('er-late-empty').style.display = res.lateEvents.length ? 'none' : 'block';
+    document.querySelector('#er-late-table tbody').innerHTML = res.lateEvents.map((e) => `
+      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.checkIn || '—'}</td><td class="status-late">${e.lateMinutes}</td></tr>
+    `).join('');
+    document.querySelector('#er-late-table thead').innerHTML = showName
+      ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr>'
+      : '<tr><th>التاريخ</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr>';
+
+    document.getElementById('er-early-empty').style.display = res.earlyEvents.length ? 'none' : 'block';
+    document.querySelector('#er-early-table tbody').innerHTML = res.earlyEvents.map((e) => `
+      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.checkOut || '—'}</td><td class="status-late">${e.earlyMinutes}</td></tr>
+    `).join('');
+    document.querySelector('#er-early-table thead').innerHTML = showName
+      ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>'
+      : '<tr><th>التاريخ</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
 
 // init
 document.getElementById('dash-date').value = todayISO();

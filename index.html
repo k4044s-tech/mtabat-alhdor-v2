@@ -174,6 +174,64 @@
   .msg { padding: 10px 14px; border-radius: 6px; margin-top: 10px; font-size: 13.5px; border: 1px solid transparent; }
   .msg.ok { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
   .msg.err { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
+  .msg-loading {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 2px; font-size: 13px; color: var(--muted);
+  }
+  .msg-loading::before {
+    content: ''; width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--border); border-top-color: var(--ink); animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- بطاقات مؤشرات (KPI) أعلى الشاشات ---------- */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .kpi-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+  .kpi-card .kpi-label { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .kpi-card .kpi-value { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 6px; }
+  .kpi-card .kpi-delta { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+  .kpi-card .kpi-delta.up { color: var(--good); }
+  .kpi-card .kpi-delta.down { color: var(--bad); }
+  .kpi-card .kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+  /* ---------- شريط تقدّم مصغّر داخل الجداول (نسبة الحضور) ---------- */
+  .rate-cell { display: flex; align-items: center; gap: 7px; min-width: 90px; }
+  .rate-cell .rate-track { flex: 1; height: 6px; border-radius: 3px; background: var(--accent-soft); overflow: hidden; }
+  .rate-cell .rate-fill { height: 100%; border-radius: 3px; background: var(--good); }
+  .rate-cell .rate-fill.mid { background: var(--warn); }
+  .rate-cell .rate-fill.low { background: var(--bad); }
+  .rate-cell .rate-text { font-size: 11.5px; color: var(--muted); width: 34px; flex-shrink: 0; text-align: left; }
+  tr.row-flag td { background: var(--bad-soft); }
+
+  /* ---------- تحديد جماعي + إجراءات دفعة واحدة ---------- */
+  .bulk-bar {
+    display: none; align-items: center; gap: 10px; background: var(--accent); color: var(--accent-fg);
+    border-radius: 8px; padding: 9px 14px; margin-bottom: 12px; font-size: 13px; flex-wrap: wrap;
+  }
+  .bulk-bar.show { display: flex; }
+  .bulk-bar select, .bulk-bar button { font-size: 12.5px; }
+  .bulk-bar .bulk-count { font-weight: 600; }
+  .bulk-bar button.ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); }
+  .bulk-bar button.ghost:hover { background: rgba(255,255,255,.22); }
+
+  /* ---------- تبديل عرض (جدول/تجميع) ---------- */
+  .view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .view-toggle button {
+    background: #fff; border: none; padding: 6px 13px; font-size: 12.5px; cursor: pointer; color: var(--muted); font-weight: 500;
+  }
+  .view-toggle button + button { border-right: 1px solid var(--border); }
+  .view-toggle button.active { background: var(--accent); color: var(--accent-fg); }
+  .teacher-group { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .teacher-group-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px;
+    background: #fafafa; cursor: pointer; font-size: 13px;
+  }
+  .teacher-group-head:hover { background: var(--accent-soft); }
+  .teacher-group-head .tg-name { font-weight: 600; }
+  .teacher-group-head .tg-count { background: var(--bad-soft); color: var(--bad); border-radius: 999px; padding: 2px 9px; font-size: 11.5px; font-weight: 600; }
+  .teacher-group-body { display: none; padding: 4px 14px 10px; }
+  .teacher-group.open .teacher-group-body { display: block; }
+  .teacher-group.open .tg-chevron { transform: rotate(180deg); }
+  .tg-chevron { transition: transform .15s ease; }
 
   /* التحليلات: مخطط + قوائم الأكثر */
   .chart-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
@@ -470,9 +528,26 @@
               <input type="date" id="abs-to">
             </div>
             <button class="primary" id="btn-refresh-absence" style="align-self:flex-end">تحديث</button>
+            <div class="view-toggle" style="align-self:flex-end">
+              <button type="button" class="active" data-absview="table">جدول</button>
+              <button type="button" data-absview="grouped">تجميع حسب المعلّم</button>
+            </div>
           </div>
         </div>
-        <div class="card">
+
+        <div class="kpi-row" id="abs-kpis"></div>
+
+        <div class="card" id="abs-table-view">
+          <div class="bulk-bar no-print" id="abs-bulk-bar">
+            <span class="bulk-count"><span id="abs-bulk-count">0</span> محدّد</span>
+            <select id="abs-bulk-classification">
+              <option value="">تصنيف جماعي…</option>
+              <option value="بعذر">بعذر</option>
+              <option value="بدون عذر">بدون عذر</option>
+            </select>
+            <button class="ghost" id="btn-bulk-apply">تطبيق</button>
+            <button class="ghost" id="btn-bulk-clear">إلغاء التحديد</button>
+          </div>
           <div class="table-toolbar no-print">
             <input type="search" id="abs-search" placeholder="ابحث بالاسم…">
             <button type="button" class="filter-chip active" data-cls="">الكل</button>
@@ -485,7 +560,7 @@
           <div style="max-height:520px; overflow:auto">
             <table id="absence-table">
               <thead>
-                <tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th></tr>
+                <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -493,6 +568,11 @@
           <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
           <p class="muted" id="absence-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
           <div id="absence-msg"></div>
+        </div>
+
+        <div class="card" id="abs-grouped-view" style="display:none">
+          <div id="abs-grouped-list"></div>
+          <p class="muted" id="abs-grouped-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
         </div>
       </section>
 
@@ -591,6 +671,7 @@
                   <th class="sortable" data-key="num">الرقم<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="name">الاسم<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="presentDays">حضور<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="attendanceRate">نسبة الحضور<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="absenceDays">غياب<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="excused">بعذر<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="unexcused">بدون عذر<span class="sort-arrow">▾</span></th>
@@ -622,6 +703,8 @@
             <button class="primary" id="btn-refresh-analytics" style="align-self:flex-end">تحديث</button>
           </div>
         </div>
+        <div class="kpi-row" id="an-kpis"></div>
+
         <div class="card">
           <h3 style="margin-top:0">الاتجاه اليومي</h3>
           <div class="chart-legend">
@@ -747,13 +830,14 @@
             <h3 style="margin:0">سجل الاستيرادات</h3>
             <button class="ghost" id="btn-refresh-reports">تحديث</button>
           </div>
-          <div class="table-toolbar no-print" style="margin-top:12px">
+          <div class="kpi-row" id="reports-kpis" style="margin-top:12px"></div>
+          <div class="table-toolbar no-print">
             <input type="search" id="reports-search" placeholder="ابحث بالتاريخ أو اسم الملف…">
           </div>
           <div style="max-height:560px; overflow:auto; margin-top:6px">
             <table id="reports-table">
               <thead>
-                <tr><th>التاريخ</th><th>وقت الاستيراد</th><th>الملف</th><th>الفترة</th><th>حاضر</th><th>غائب</th><th></th><th></th></tr>
+                <tr><th>التاريخ</th><th>وقت الاستيراد</th><th>الملف</th><th>الفترة</th><th>حاضر</th><th>غائب</th><th>نسبة الحضور</th><th></th><th></th></tr>
               </thead>
               <tbody></tbody>
             </table>
@@ -1345,20 +1429,43 @@ const ABSENCE_REASONS = [
 
 let lastAbsenceRows = [];
 let absClassFilter = '';
+let absSelectedIds = new Set();
+let absViewMode = 'table';
+
 async function refreshAbsence() {
   const from = document.getElementById('abs-from').value;
   const to = document.getElementById('abs-to').value;
   if (!from || !to) return;
   const msgEl = document.getElementById('absence-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل الغياب…</div>';
   try {
     const res = await callApi('getAbsenceRange', { from, to });
     lastAbsenceRows = res.rows;
+    absSelectedIds.clear();
     document.getElementById('absence-empty').style.display = res.rows.length ? 'none' : 'block';
+    renderAbsenceKpis();
     renderAbsenceTable();
+    renderAbsenceGrouped();
+    updateBulkBar();
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+function renderAbsenceKpis() {
+  const total = lastAbsenceRows.length;
+  const unclassified = lastAbsenceRows.filter((r) => !r.classification).length;
+  const byTeacher = {};
+  lastAbsenceRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + 1; });
+  const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
+  const excused = lastAbsenceRows.filter((r) => r.classification === 'بعذر').length;
+  document.getElementById('abs-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي أيام الغياب</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">بحاجة تصنيف</div><div class="kpi-value" style="color:${unclassified ? 'var(--bad)' : 'inherit'}">${unclassified}</div></div>
+    <div class="kpi-card"><div class="kpi-label">غياب بعذر</div><div class="kpi-value">${excused}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر غياباً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' أيام' : ''}</div></div>
+  `;
 }
 
 function renderAbsenceTable() {
@@ -1374,8 +1481,10 @@ function renderAbsenceTable() {
     const classOptions = CLASSIFICATIONS.map((c) => `<option value="${escapeHtml(c)}" ${c === (r.classification || '') ? 'selected' : ''}>${escapeHtml(c) || '—'}</option>`).join('');
     const reasonList = r.reason && !ABSENCE_REASONS.includes(r.reason) ? [r.reason, ...ABSENCE_REASONS] : ABSENCE_REASONS;
     const reasonOptions = ['', ...reasonList].map((rs) => `<option value="${escapeHtml(rs)}" ${rs === (r.reason || '') ? 'selected' : ''}>${escapeHtml(rs) || '— بدون سبب محدد —'}</option>`).join('');
+    const checked = absSelectedIds.has(String(r.id)) ? 'checked' : '';
     return `
       <tr data-id="${escapeHtml(r.id)}">
+        <td><input type="checkbox" class="abs-row-check" ${checked}></td>
         <td>${escapeHtml(r.date)}</td>
         <td>${escapeHtml(r.name)}</td>
         <td><select class="f-classification">${classOptions}</select></td>
@@ -1385,7 +1494,58 @@ function renderAbsenceTable() {
       </tr>`;
   }).join('');
   document.getElementById('absence-search-empty').style.display = (lastAbsenceRows.length && !rows.length) ? 'block' : 'none';
+  document.getElementById('abs-select-all').checked = rows.length > 0 && rows.every((r) => absSelectedIds.has(String(r.id)));
 }
+
+// ---------- عرض "تجميع حسب المعلّم" ----------
+function renderAbsenceGrouped() {
+  const listEl = document.getElementById('abs-grouped-list');
+  const byCivil = {};
+  lastAbsenceRows.forEach((r) => {
+    const key = String(r.civil);
+    if (!byCivil[key]) byCivil[key] = { name: r.name, rows: [] };
+    byCivil[key].rows.push(r);
+  });
+  const groups = Object.values(byCivil).sort((a, b) => b.rows.length - a.rows.length);
+  document.getElementById('abs-grouped-empty').style.display = groups.length ? 'none' : 'block';
+  listEl.innerHTML = groups.map((g, i) => `
+    <div class="teacher-group" data-idx="${i}">
+      <div class="teacher-group-head">
+        <span class="tg-name">${escapeHtml(g.name)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="tg-count">${g.rows.length} أيام</span>
+          <span class="tg-chevron">▾</span>
+        </span>
+      </div>
+      <div class="teacher-group-body">
+        <table style="font-size:12.5px">
+          <thead><tr><th>التاريخ</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr></thead>
+          <tbody>
+            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+              <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.classification) || '—'}</td><td>${escapeHtml(r.reason) || '—'}</td><td>${escapeHtml(r.note) || '—'}</td></tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `).join('');
+}
+document.getElementById('abs-grouped-list').addEventListener('click', (ev) => {
+  const head = ev.target.closest('.teacher-group-head');
+  if (!head) return;
+  head.closest('.teacher-group').classList.toggle('open');
+});
+
+document.querySelectorAll('#view-absence .view-toggle button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#view-absence .view-toggle button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    absViewMode = btn.dataset.absview;
+    document.getElementById('abs-table-view').style.display = absViewMode === 'table' ? 'block' : 'none';
+    document.getElementById('abs-grouped-view').style.display = absViewMode === 'grouped' ? 'block' : 'none';
+  });
+});
+
 document.getElementById('abs-search').addEventListener('input', renderAbsenceTable);
 document.querySelectorAll('#view-absence .filter-chip').forEach((chip) => {
   chip.addEventListener('click', () => {
@@ -1405,6 +1565,60 @@ document.getElementById('btn-export-absence-excel').addEventListener('click', ()
   exportRowsToExcel(`سجل_الغياب_${from}_${to}.xlsx`, 'الغياب', rows);
 });
 
+// ---------- تحديد جماعي وتصنيف دفعة واحدة ----------
+function updateBulkBar() {
+  const bar = document.getElementById('abs-bulk-bar');
+  const n = absSelectedIds.size;
+  document.getElementById('abs-bulk-count').textContent = n;
+  bar.classList.toggle('show', n > 0);
+}
+document.querySelector('#absence-table tbody').addEventListener('change', (ev) => {
+  if (!ev.target.classList.contains('abs-row-check')) return;
+  const id = ev.target.closest('tr').dataset.id;
+  if (ev.target.checked) absSelectedIds.add(id); else absSelectedIds.delete(id);
+  updateBulkBar();
+  document.getElementById('abs-select-all').checked = [...document.querySelectorAll('#absence-table .abs-row-check')].every((c) => c.checked);
+});
+document.getElementById('abs-select-all').addEventListener('change', (ev) => {
+  document.querySelectorAll('#absence-table tbody tr').forEach((tr) => {
+    const cb = tr.querySelector('.abs-row-check');
+    cb.checked = ev.target.checked;
+    if (ev.target.checked) absSelectedIds.add(tr.dataset.id); else absSelectedIds.delete(tr.dataset.id);
+  });
+  updateBulkBar();
+});
+document.getElementById('btn-bulk-clear').addEventListener('click', () => {
+  absSelectedIds.clear();
+  renderAbsenceTable();
+  updateBulkBar();
+});
+document.getElementById('btn-bulk-apply').addEventListener('click', async () => {
+  const classification = document.getElementById('abs-bulk-classification').value;
+  if (!classification || !absSelectedIds.size) return;
+  const btn = document.getElementById('btn-bulk-apply');
+  btn.disabled = true;
+  btn.textContent = 'جارٍ التطبيق…';
+  const ids = [...absSelectedIds];
+  try {
+    for (const id of ids) {
+      const rec = lastAbsenceRows.find((r) => String(r.id) === id);
+      if (!rec) continue;
+      await callApi('updateAbsence', { id, classification, reason: rec.reason || '', note: rec.note || '' });
+      rec.classification = classification;
+    }
+    absSelectedIds.clear();
+    renderAbsenceKpis();
+    renderAbsenceTable();
+    renderAbsenceGrouped();
+    updateBulkBar();
+  } catch (err) {
+    document.getElementById('absence-msg').innerHTML = `<div class="msg err">خطأ أثناء التطبيق الجماعي: ${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'تطبيق';
+  }
+});
+
 document.querySelector('#absence-table tbody').addEventListener('click', async (ev) => {
   if (!ev.target.classList.contains('btn-save-absence')) return;
   const tr = ev.target.closest('tr');
@@ -1419,6 +1633,7 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
     await callApi('updateAbsence', { id, classification, reason, note });
     const rec = lastAbsenceRows.find((r) => String(r.id) === id);
     if (rec) { rec.classification = classification; rec.reason = reason; rec.note = note; }
+    renderAbsenceKpis();
     btn.textContent = 'تم ✔';
     setTimeout(() => { btn.textContent = 'حفظ'; btn.disabled = false; }, 1500);
   } catch (err) {
@@ -1428,12 +1643,13 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
   }
 });
 
+
 // ---------- الملخص والترتيب ----------
 document.getElementById('btn-refresh-summary').addEventListener('click', refreshSummary);
 document.getElementById('btn-export-summary-excel').addEventListener('click', () => {
   if (!lastSummaryList.length) return;
   const rows = lastSummaryList.map((e) => ({
-    'الرقم': e.num, 'الاسم': e.name, 'حضور': e.presentDays, 'غياب': e.absenceDays,
+    'الرقم': e.num, 'الاسم': e.name, 'حضور': e.presentDays, 'نسبة الحضور': e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '', 'غياب': e.absenceDays,
     'بعذر': e.excused, 'بدون عذر': e.unexcused, 'غير مصنف': e.unclassified,
     'أيام التأخير': e.lateDays, 'دقائق التأخير': e.lateMinutes, 'انصراف مبكر': e.earlyDays,
     'المخالفات': e.violations,
@@ -1453,7 +1669,7 @@ async function refreshSummary() {
   const to = document.getElementById('sum-to').value;
   if (!from || !to) return;
   const msgEl = document.getElementById('summary-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل الملخص…</div>';
   try {
     const res = await callApi('getMonthlySummary', { from, to });
     lastSummaryList = res.list;
@@ -1465,6 +1681,7 @@ async function refreshSummary() {
       <span class="pill">أيام التأخير: ${t.lateDays}</span>
       <span class="pill">أيام الانصراف المبكر: ${t.earlyDays}</span>
     `;
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
@@ -1480,9 +1697,9 @@ function renderSummaryTable() {
   });
   const tbody = document.querySelector('#summary-table tbody');
   tbody.innerHTML = rows.map((e, i) => `
-      <tr>
+      <tr class="${e.violations >= 5 ? 'row-flag' : ''}">
         <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
-        <td>${e.presentDays}</td><td>${e.absenceDays}</td>
+        <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}</td><td>${e.absenceDays}</td>
         <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
         <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
         <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
@@ -1638,13 +1855,14 @@ async function refreshAnalytics() {
   const to = document.getElementById('an-to').value;
   if (!from || !to) return;
   const msgEl = document.getElementById('analytics-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل التحليلات…</div>';
   try {
     const [res, summaryRes] = await Promise.all([
       callApi('getAnalytics', { from, to }),
       callApi('getMonthlySummary', { from, to }),
     ]);
 
+    renderAnalyticsKpis(res);
     document.getElementById('an-chart').innerHTML = renderTrendChart(res.dailyTrend);
     document.getElementById('an-heatmap').innerHTML = renderHeatmap(res.dailyTrend, from, to);
     document.getElementById('an-weekday-pattern').innerHTML = renderWeekdayPattern(res.dailyTrend);
@@ -1672,9 +1890,32 @@ async function refreshAnalytics() {
         <td>${d.date}</td><td>${d.present}</td><td>${d.absent}</td>
         <td>${d.late}</td><td>${d.early}</td><td>${d.noCheckout}</td>
       </tr>`).join('') || '<tr><td colspan="6" class="muted">لا توجد بيانات في هذه الفترة</td></tr>';
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+function renderAnalyticsKpis(res) {
+  const pct = res.attendanceRate != null ? Math.round(res.attendanceRate * 100) : null;
+  const prev = res.previousPeriod || {};
+  const prevPct = prev.attendanceRate != null ? Math.round(prev.attendanceRate * 100) : null;
+  let deltaHtml = '';
+  if (pct != null && prevPct != null) {
+    const diff = pct - prevPct;
+    const up = diff >= 0;
+    deltaHtml = `<span class="kpi-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(diff)}%</span>`;
+  }
+  document.getElementById('an-kpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">نسبة الحضور العامة</div>
+      <div class="kpi-value">${pct != null ? pct + '%' : '—'} ${deltaHtml}</div>
+      <div class="kpi-sub">مقارنة بالفترة السابقة${prevPct != null ? ' (' + prevPct + '%)' : ''}</div>
+    </div>
+    <div class="kpi-card"><div class="kpi-label">إجمالي أيام الحضور</div><div class="kpi-value">${res.totalPresent}</div></div>
+    <div class="kpi-card"><div class="kpi-label">إجمالي أيام الغياب</div><div class="kpi-value">${res.totalAbsent}</div></div>
+    <div class="kpi-card"><div class="kpi-label">عدد أيام الفترة المسجّلة</div><div class="kpi-value">${res.dailyTrend.length}</div></div>
+  `;
 }
 
 // ---------- طباعة الكشف الرسمي (نموذج وزارة التعليم) ----------
@@ -1695,6 +1936,13 @@ function toArabicAmPmTime(str) {
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// شريط تقدّم مصغّر لعرض نسبة مئوية (نسبة الحضور) داخل خلية جدول
+function renderRateCell(rate) {
+  if (rate === null || rate === undefined || isNaN(rate)) return '<span class="muted">—</span>';
+  const pct = Math.round(rate * 100);
+  const cls = pct >= 90 ? '' : pct >= 75 ? 'mid' : 'low';
+  return `<div class="rate-cell"><div class="rate-track"><div class="rate-fill ${cls}" style="width:${Math.min(100, Math.max(0, pct))}%"></div></div><span class="rate-text">${pct}%</span></div>`;
 }
 const MOE_REPORT_STYLE = `
   * { box-sizing: border-box; }
@@ -1822,15 +2070,31 @@ document.getElementById('btn-refresh-reports').addEventListener('click', refresh
 
 async function refreshReports() {
   const msgEl = document.getElementById('reports-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل الاستيرادات…</div>';
   try {
     const res = await callApi('listImports', {});
     lastReportsList = res.list;
     document.getElementById('reports-empty').style.display = res.list.length ? 'none' : 'block';
+    renderReportsKpis();
     renderReportsTable();
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
+}
+
+function renderReportsKpis() {
+  const el = document.getElementById('reports-kpis');
+  if (!lastReportsList.length) { el.innerHTML = ''; return; }
+  const totalPresent = lastReportsList.reduce((s, r) => s + (r.presentCount || 0), 0);
+  const totalAbsent = lastReportsList.reduce((s, r) => s + (r.absentCount || 0), 0);
+  const avgRate = totalPresent + totalAbsent ? totalPresent / (totalPresent + totalAbsent) : null;
+  const lastDate = lastReportsList.reduce((max, r) => (r.date > max ? r.date : max), lastReportsList[0].date);
+  el.innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">عدد الأيام المستوردة</div><div class="kpi-value">${lastReportsList.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">متوسط نسبة الحضور</div><div class="kpi-value">${avgRate != null ? Math.round(avgRate * 100) + '%' : '—'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">آخر استيراد</div><div class="kpi-value" style="font-size:16px">${escapeHtml(lastDate)}</div></div>
+  `;
 }
 
 let lastReportsList = [];
@@ -1838,7 +2102,10 @@ function renderReportsTable() {
   const q = document.getElementById('reports-search').value.trim().toLowerCase();
   const rows = lastReportsList.filter((r) => !q || String(r.date).includes(q) || String(r.fileName || '').toLowerCase().includes(q));
   const tbody = document.querySelector('#reports-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = rows.map((r) => {
+    const total = (r.presentCount || 0) + (r.absentCount || 0);
+    const rate = total ? r.presentCount / total : null;
+    return `
       <tr data-date="${escapeHtml(r.date)}">
         <td>${escapeHtml(r.date)}</td>
         <td>${r.importedAt ? escapeHtml(String(r.importedAt).replace('T', ' ').slice(0, 16)) : '—'}</td>
@@ -1846,9 +2113,11 @@ function renderReportsTable() {
         <td>${escapeHtml(r.schedLabel) || '—'} (${escapeHtml(r.schedStart) || '—'}–${escapeHtml(r.schedEnd) || '—'})</td>
         <td>${r.presentCount}</td>
         <td>${r.absentCount}</td>
+        <td>${renderRateCell(rate)}</td>
         <td><button class="small btn-reprint">إعادة الطباعة</button></td>
         <td><button class="small btn-delete-import" style="background:var(--bad)">حذف</button></td>
-      </tr>`).join('');
+      </tr>`;
+  }).join('');
   document.getElementById('reports-search-empty').style.display = (lastReportsList.length && !rows.length) ? 'block' : 'none';
 }
 document.getElementById('reports-search').addEventListener('input', renderReportsTable);
@@ -1918,7 +2187,7 @@ async function refreshEmployeeReport() {
   const civil = document.getElementById('er-employee').value;
   if (!from || !to) return;
   const msgEl = document.getElementById('employee-report-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
   try {
     const res = await callApi('getEmployeeReport', { from, to, civil });
     const showName = !civil;
@@ -1953,6 +2222,7 @@ async function refreshEmployeeReport() {
     document.querySelector('#er-early-table thead').innerHTML = showName
       ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>'
       : '<tr><th>التاريخ</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>';
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
@@ -1971,7 +2241,7 @@ async function refreshPenalties() {
     return;
   }
   const msgEl = document.getElementById('penalties-msg');
-  msgEl.innerHTML = '';
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
   try {
     const res = await callApi('getAnnualPenalties', { from, to });
     lastPenaltiesList = res.list;
@@ -1983,6 +2253,7 @@ async function refreshPenalties() {
         <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
         <td>${e.deductionDays || '—'}</td>
       </tr>`).join('');
+    msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }

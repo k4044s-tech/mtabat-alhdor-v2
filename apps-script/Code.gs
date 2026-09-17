@@ -9,6 +9,20 @@ var SHEET_TEACHERS = 'المعلمون';
 var SHEET_ATTENDANCE = 'الحضور';
 var SHEET_ABSENCE = 'الغياب';
 var SHEET_IMPORTS = 'الاستيرادات';
+var SHEET_SETTINGS = 'الإعدادات';
+
+var DEFAULT_SCHEDULE_PERIODS = [
+  { id: 'summer', label: 'صيفي', workStart: '6:45', workEnd: '12:30', dateFrom: '', dateTo: '' },
+  { id: 'winter', label: 'شتوي', workStart: '7:00', workEnd: '12:45', dateFrom: '', dateTo: '' },
+  { id: 'ramadan', label: 'رمضان', workStart: '9:30', workEnd: '13:00', dateFrom: '', dateTo: '' },
+];
+var DEFAULT_SETTINGS = {
+  schedulePeriods: DEFAULT_SCHEDULE_PERIODS,
+  defaultPeriodId: 'summer',
+  weekendDays: [5, 6],
+  holidays: [],
+};
+var WEEKDAY_AR_ = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function doPost(e) {
   var payload = JSON.parse(e.postData.contents);
@@ -62,6 +76,12 @@ function handleRequest_(payload) {
           break;
         case 'getAnnualPenalties':
           out = handleGetAnnualPenalties_(payload);
+          break;
+        case 'getSettings':
+          out = { ok: true, settings: getSettingsObj_() };
+          break;
+        case 'saveSettings':
+          out = handleSaveSettings_(payload);
           break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
@@ -351,11 +371,13 @@ function handleImportDay_(payload) {
       });
     });
 
+    var skipAbsenceMarking = isNonWorkingDay_(date, getSettingsObj_());
     var absenceRecords = [];
     teachers.forEach(function (t) {
       if (!isActive_(t.active)) return;
       var civil = String(t.civil);
       if (presentCivils[civil]) return;
+      if (skipAbsenceMarking) return; // يوم عطلة/نهاية أسبوع: لا نُسجّل غياباً لمن لم يظهر بالملف
       var existing = existingAbsenceByCivil[civil];
       absenceRecords.push({
         id: date + '__' + civil,
@@ -720,4 +742,80 @@ function handleUpdateAbsence_(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------------------------------------------------------- */
+/* الإعدادات: فترات الدوام المتعددة + تقويم العطل             */
+/* ---------------------------------------------------------- */
+
+function getSettingsObj_() {
+  var sheet = getSheet_(SHEET_SETTINGS);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === 'app_settings') {
+      try {
+        var parsed = JSON.parse(data[i][1]);
+        return Object.assign({}, DEFAULT_SETTINGS, parsed);
+      } catch (e) {
+        return DEFAULT_SETTINGS;
+      }
+    }
+  }
+  return DEFAULT_SETTINGS;
+}
+
+function handleSaveSettings_(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var settings = payload.settings || {};
+    var sheet = getSheet_(SHEET_SETTINGS);
+    var data = sheet.getDataRange().getValues();
+    var targetRow = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === 'app_settings') { targetRow = i + 1; break; }
+    }
+    var row = ['app_settings', JSON.stringify(settings), Date.now()];
+    if (targetRow === -1) {
+      sheet.appendRow(row);
+    } else {
+      sheet.getRange(targetRow, 1, 1, 3).setValues([row]);
+    }
+    return { ok: true, settings: settings };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// يطابق تاريخاً بفترة الدوام السارية عليه (آخر تطابق بمدى تاريخي يتفوّق، يسمح باستثناء)،
+// وإلا يستخدم الفترة الافتراضية المحدَّدة في الإعدادات
+function resolveScheduleForDate_(dateISO, settings) {
+  var periods = settings.schedulePeriods || [];
+  var match = null;
+  for (var i = 0; i < periods.length; i++) {
+    var p = periods[i];
+    if (!p.dateFrom || !p.dateTo) continue;
+    if (dateISO >= p.dateFrom && dateISO <= p.dateTo) match = p;
+  }
+  if (!match) {
+    var defId = settings.defaultPeriodId || '';
+    match = periods.filter(function (p) { return p.id === defId; })[0] || periods[0] || DEFAULT_SCHEDULE_PERIODS[0];
+  }
+  return { workStart: match.workStart, workEnd: match.workEnd, label: match.label || '', id: match.id || '' };
+}
+
+function isNonWorkingDay_(dateISO, settings) {
+  var holidays = settings.holidays || [];
+  for (var i = 0; i < holidays.length; i++) {
+    var h = holidays[i];
+    if (h.from && h.to && dateISO >= h.from && dateISO <= h.to) return true;
+  }
+  var weekend = settings.weekendDays || DEFAULT_SETTINGS.weekendDays;
+  var wd = isoToWeekday_(dateISO);
+  return weekend.indexOf(wd) !== -1;
+}
+
+function isoToWeekday_(dateISO) {
+  var parts = dateISO.split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]).getDay();
 }

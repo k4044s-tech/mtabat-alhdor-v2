@@ -359,7 +359,24 @@
         </div>
         <div id="analytics-msg"></div>
       </section>
-      <section id="view-reports" style="display:none"><div class="card placeholder-card">التقارير — قريباً</div></section>
+      <section id="view-reports" style="display:none">
+        <div class="card">
+          <div class="row">
+            <h3 style="margin:0">سجل الاستيرادات</h3>
+            <button class="ghost" id="btn-refresh-reports">تحديث</button>
+          </div>
+          <div style="max-height:560px; overflow:auto; margin-top:10px">
+            <table id="reports-table">
+              <thead>
+                <tr><th>التاريخ</th><th>وقت الاستيراد</th><th>الملف</th><th>الفترة</th><th>حاضر</th><th>غائب</th><th></th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="reports-empty" style="display:none">لا توجد استيرادات بعد.</p>
+          <div id="reports-msg"></div>
+        </div>
+      </section>
 
     </div>
   </main>
@@ -446,6 +463,7 @@ function showTab(name) {
     }
     refreshAnalytics();
   }
+  if (name === 'reports') refreshReports();
 }
 document.querySelectorAll('#side-nav button').forEach((btn) => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
@@ -892,8 +910,8 @@ function buildMinistryReportHtml({ schoolName, adminName, dateISO, presentRows, 
   return { style: MOE_REPORT_STYLE + '\n' + vars, body: `<div class="moe-report">${header}${table}</div>` };
 }
 
-async function printOfficialReport() {
-  const date = document.getElementById('dash-date').value;
+async function printOfficialReport(dateArg, errorElId) {
+  const date = dateArg || document.getElementById('dash-date').value;
   const cfg = loadConfig();
   try {
     const [teachersRes, dayRes] = await Promise.all([callApi('getTeachers', {}), callApi('getDay', { date })]);
@@ -914,9 +932,54 @@ async function printOfficialReport() {
     win.focus();
     setTimeout(() => win.print(), 300);
   } catch (err) {
-    document.getElementById('dash-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${err.message}</div>`;
+    document.getElementById(errorElId || 'dash-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${err.message}</div>`;
   }
 }
+
+// ---------- التقارير (سجل الاستيرادات) ----------
+document.getElementById('btn-refresh-reports').addEventListener('click', refreshReports);
+
+async function refreshReports() {
+  const msgEl = document.getElementById('reports-msg');
+  msgEl.innerHTML = '';
+  try {
+    const res = await callApi('listImports', {});
+    document.getElementById('reports-empty').style.display = res.list.length ? 'none' : 'block';
+    const tbody = document.querySelector('#reports-table tbody');
+    tbody.innerHTML = res.list.map((r) => `
+      <tr data-date="${r.date}">
+        <td>${r.date}</td>
+        <td>${r.importedAt ? String(r.importedAt).replace('T', ' ').slice(0, 16) : '—'}</td>
+        <td>${r.fileName || '—'}</td>
+        <td>${r.schedLabel || '—'} (${r.schedStart || '—'}–${r.schedEnd || '—'})</td>
+        <td>${r.presentCount}</td>
+        <td>${r.absentCount}</td>
+        <td><button class="small btn-reprint">إعادة الطباعة</button></td>
+        <td><button class="small btn-delete-import" style="background:var(--bad)">حذف</button></td>
+      </tr>`).join('');
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+document.getElementById('reports-table').addEventListener('click', async (ev) => {
+  const tr = ev.target.closest('tr');
+  if (!tr) return;
+  const date = tr.dataset.date;
+  if (ev.target.classList.contains('btn-reprint')) {
+    printOfficialReport(date, 'reports-msg');
+  } else if (ev.target.classList.contains('btn-delete-import')) {
+    if (!confirm(`حذف كل بيانات ${date} (الحضور والغياب والاستيراد)؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+    ev.target.disabled = true;
+    try {
+      await callApi('deleteDay', { date });
+      await refreshReports();
+    } catch (err) {
+      document.getElementById('reports-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+      ev.target.disabled = false;
+    }
+  }
+});
 
 // init
 document.getElementById('dash-date').value = todayISO();

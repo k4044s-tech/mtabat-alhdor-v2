@@ -60,6 +60,9 @@ function handleRequest_(payload) {
         case 'getEmployeeReport':
           out = handleGetEmployeeReport_(payload);
           break;
+        case 'getAnnualPenalties':
+          out = handleGetAnnualPenalties_(payload);
+          break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
           break;
@@ -583,6 +586,64 @@ function handleListImports_() {
 }
 
 // تقرير الغياب والتأخر والانصراف المبكر — لموظف واحد (civil) أو لجميع الموظفين (civil فارغ)
+// جدول التدرج الرسمي (مرفق ٦ — بيان بعدد دقائق التأخير) لوزارة التعليم:
+// كل حد تراكمي لدقائق التأخير خلال العام يقابله إجراء تصعيدي، ومن حد ٤٢٠ دقيقة
+// فأعلى يعادل عدد أيام غياب تُحسم (بمعدّل يوم واحد لكل ٤٢٠ دقيقة تراكمية).
+var LATE_ACTION_TIERS = [
+  { minMinutes: 1680, action: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين)', note: 'مع إرفاق كافة الإجراءات السابقة ورفع الغياب للحسم' },
+  { minMinutes: 840, action: 'مساءلة ولفت نظر', note: 'يعادل يومان للحسم' },
+  { minMinutes: 420, action: 'لفت نظر', note: 'يعادل يوم للحسم' },
+  { minMinutes: 240, action: 'تعهد خطي (٢)', note: 'للمرة الثانية' },
+  { minMinutes: 120, action: 'تعهد خطي (١)', note: '' },
+  { minMinutes: 60, action: 'تعهد خطي', note: '' },
+  { minMinutes: 30, action: 'تنبيه شفوي', note: '' },
+];
+
+function lateActionTier_(cumulativeMinutes) {
+  for (var i = 0; i < LATE_ACTION_TIERS.length; i++) {
+    if (cumulativeMinutes >= LATE_ACTION_TIERS[i].minMinutes) return LATE_ACTION_TIERS[i];
+  }
+  return null;
+}
+
+// كشف الجزاءات السنوية: تراكم دقائق التأخير لكل معلّم خلال فترة، والإجراء الرسمي المقابل
+// (المرفق رقم ٦ الصادر عن الإدارة العامة للتعليم) + أيام الحسم المعادلة
+function handleGetAnnualPenalties_(payload) {
+  var from = String(payload.from);
+  var to = String(payload.to);
+
+  var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS)).filter(function (t) { return isActive_(t.active); });
+  var daily = sheetToObjects_(getSheet_(SHEET_ATTENDANCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+
+  var lateByCivil = {};
+  daily.forEach(function (r) {
+    var civil = String(r.civil);
+    var mins = Number(r.lateMinutes) || 0;
+    if (mins <= 0) return;
+    lateByCivil[civil] = (lateByCivil[civil] || 0) + mins;
+  });
+
+  var list = teachers.map(function (t) {
+    var civil = String(t.civil);
+    var totalLateMinutes = lateByCivil[civil] || 0;
+    var tier = lateActionTier_(totalLateMinutes);
+    return {
+      civil: civil, num: t.num, name: t.name,
+      totalLateMinutes: totalLateMinutes,
+      action: tier ? tier.action : '—',
+      note: tier ? tier.note : '',
+      deductionDays: totalLateMinutes >= 420 ? Math.round(totalLateMinutes / 420) : 0,
+    };
+  }).filter(function (e) { return e.totalLateMinutes > 0; });
+
+  list.sort(function (a, b) { return b.totalLateMinutes - a.totalLateMinutes; });
+
+  return { ok: true, from: from, to: to, list: list };
+}
+
 function handleGetEmployeeReport_(payload) {
   var from = String(payload.from);
   var to = String(payload.to);

@@ -241,11 +241,6 @@
           </div>
         </div>
         <div class="card">
-          <datalist id="reason-suggestions">
-            <option value="إجازة اضطرارية">
-            <option value="إجازة مرضية">
-            <option value="إجازة مرافقة مريض">
-          </datalist>
           <div style="max-height:520px; overflow:auto">
             <table id="absence-table">
               <thead>
@@ -740,6 +735,13 @@ async function refreshDashboard() {
 document.getElementById('btn-refresh-absence').addEventListener('click', refreshAbsence);
 
 const CLASSIFICATIONS = ['', 'بعذر', 'بدون عذر'];
+// أنواع الإجازات الرسمية المعتمدة في نظام الموارد البشرية الحكومي
+const ABSENCE_REASONS = [
+  'الإجازة العادية', 'الإجازة الاضطرارية', 'الإجازة المرضية', 'إجازة مرافقة مريض',
+  'الإجازة الدراسية', 'إجازة الامتحان الدراسي', 'الإجازة الاستثنائية', 'إجازة الوفاة',
+  'إجازة الوضع / الولادة', 'إجازة الأمومة / رعاية المولود', 'إجازة الأبوة',
+  'إجازة المشاركة الوطنية', 'إجازة التعويض',
+];
 
 async function refreshAbsence() {
   const from = document.getElementById('abs-from').value;
@@ -752,13 +754,15 @@ async function refreshAbsence() {
     const tbody = document.querySelector('#absence-table tbody');
     document.getElementById('absence-empty').style.display = res.rows.length ? 'none' : 'block';
     tbody.innerHTML = res.rows.map((r) => {
-      const options = CLASSIFICATIONS.map((c) => `<option value="${c}" ${c === (r.classification || '') ? 'selected' : ''}>${c || '—'}</option>`).join('');
+      const classOptions = CLASSIFICATIONS.map((c) => `<option value="${c}" ${c === (r.classification || '') ? 'selected' : ''}>${c || '—'}</option>`).join('');
+      const reasonList = r.reason && !ABSENCE_REASONS.includes(r.reason) ? [r.reason, ...ABSENCE_REASONS] : ABSENCE_REASONS;
+      const reasonOptions = ['', ...reasonList].map((rs) => `<option value="${rs}" ${rs === (r.reason || '') ? 'selected' : ''}>${rs || '— بدون سبب محدد —'}</option>`).join('');
       return `
         <tr data-id="${r.id}">
           <td>${r.date}</td>
           <td>${r.name}</td>
-          <td><select class="f-classification">${options}</select></td>
-          <td><input class="f-reason" type="text" list="reason-suggestions" value="${(r.reason || '').replace(/"/g, '&quot;')}"></td>
+          <td><select class="f-classification">${classOptions}</select></td>
+          <td><select class="f-reason">${reasonOptions}</select></td>
           <td><input class="f-note" type="text" value="${(r.note || '').replace(/"/g, '&quot;')}"></td>
           <td><button class="small btn-save-absence">حفظ</button></td>
         </tr>`;

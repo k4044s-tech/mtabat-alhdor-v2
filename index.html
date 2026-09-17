@@ -424,7 +424,9 @@ function formatDayLabel(iso) {
 
 // ---------- Tabs ----------
 const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'reports', 'settings'];
+let currentTab = 'dashboard';
 function showTab(name) {
+  currentTab = name;
   TAB_IDS.forEach((id) => {
     document.getElementById('view-' + id).style.display = id === name ? '' : 'none';
   });
@@ -980,6 +982,20 @@ document.getElementById('reports-table').addEventListener('click', async (ev) =>
     }
   }
 });
+
+// تحديث دوري تلقائي للشاشة المفتوحة حالياً (كل دقيقة، فقط إذا كانت النافذة ظاهرة)
+const AUTO_REFRESHERS = {
+  dashboard: refreshDashboard,
+  absence: refreshAbsence,
+  summary: refreshSummary,
+  analytics: refreshAnalytics,
+  reports: refreshReports,
+};
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  const fn = AUTO_REFRESHERS[currentTab];
+  if (fn) fn();
+}, 60000);
 
 // init
 document.getElementById('dash-date').value = todayISO();

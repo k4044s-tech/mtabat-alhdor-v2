@@ -857,7 +857,7 @@ function moeRowHtml(r, isLateStart) {
     <td class="moe-name"><bdi>${escapeHtml(r.name)}</bdi></td>
     <td><bdi>${escapeHtml(r.civil || '—')}</bdi></td>
     <td class="${r.lateMinutes > 0 ? 'moe-late-cell' : ''}"><bdi>${toArabicAmPmTime(r.checkIn) || '—'}</bdi></td>
-    <td><bdi>${r.noCheckout ? '—' : (toArabicAmPmTime(r.checkOut) || '—')}</bdi></td>
+    <td><bdi>${String(r.noCheckout) === 'true' ? '—' : (toArabicAmPmTime(r.checkOut) || '—')}</bdi></td>
     <td><bdi>${escapeHtml(r.hoursRaw) || '—'}</bdi></td>
   </tr>`;
 }

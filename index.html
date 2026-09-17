@@ -133,6 +133,25 @@
   .msg.ok { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
   .msg.err { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
 
+  /* التحليلات: مخطط + قوائم الأكثر */
+  .chart-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  .chart-legend span { display: flex; align-items: center; gap: 5px; }
+  .chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+  #an-chart svg rect { transition: opacity .1s ease; }
+  #an-chart svg rect:hover { opacity: 0.75; }
+  .leaderboard-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border);
+    cursor: pointer; font-size: 13px;
+  }
+  .leaderboard-row:last-child { border-bottom: none; }
+  .leaderboard-row:hover .lb-name { text-decoration: underline; }
+  .leaderboard-row .lb-rank {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+  .leaderboard-row .lb-name { flex: 1; }
+  .leaderboard-row .lb-value { font-weight: 600; color: var(--bad); }
+
   /* معالج الاستيراد */
   .stepper { display: flex; gap: 8px; margin-bottom: 16px; }
   .stepper .step {
@@ -408,6 +427,31 @@
           </div>
         </div>
         <div class="card">
+          <h3 style="margin-top:0">الاتجاه اليومي</h3>
+          <div class="chart-legend">
+            <span><i style="background:#16a34a"></i> حاضر</span>
+            <span><i style="background:#dc2626"></i> غياب</span>
+            <span><i style="background:#d97706"></i> تأخر</span>
+          </div>
+          <div id="an-chart"></div>
+        </div>
+
+        <div class="row" style="align-items:stretch">
+          <div class="card leaderboard" style="flex:1 1 220px">
+            <h4>الأكثر غياباً</h4>
+            <div id="top-absent"></div>
+          </div>
+          <div class="card leaderboard" style="flex:1 1 220px">
+            <h4>الأكثر تأخراً</h4>
+            <div id="top-late"></div>
+          </div>
+          <div class="card leaderboard" style="flex:1 1 220px">
+            <h4>الأكثر انصرافاً مبكراً</h4>
+            <div id="top-early"></div>
+          </div>
+        </div>
+
+        <div class="card">
           <h3 style="margin-top:0">شدة التأخير</h3>
           <div class="summary" id="an-severity"></div>
         </div>
@@ -416,8 +460,8 @@
           <div id="an-reasons"></div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">الاتجاه اليومي</h3>
-          <div style="max-height:400px; overflow:auto">
+          <h3 style="margin-top:0">تفصيل الاتجاه اليومي</h3>
+          <div style="max-height:320px; overflow:auto">
             <table id="an-trend-table">
               <thead><tr><th>التاريخ</th><th>حاضر</th><th>غائب</th><th>متأخر</th><th>انصراف مبكر</th><th>بدون بصمة انصراف</th></tr></thead>
               <tbody></tbody>
@@ -612,12 +656,15 @@ function showTab(name) {
   }
   if (name === 'reports') {
     refreshReports();
-    populateEmployeeSelect();
-    if (!document.getElementById('er-from').value) {
-      const d = new Date();
-      document.getElementById('er-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      document.getElementById('er-to').value = todayISO();
-    }
+    populateEmployeeSelect().then(() => {
+      if (!document.getElementById('er-from').value) {
+        const d = new Date();
+        document.getElementById('er-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+        document.getElementById('er-to').value = todayISO();
+      }
+      refreshEmployeeReport();
+      refreshPenalties();
+    });
   }
 }
 document.querySelectorAll('#side-nav button').forEach((btn) => {
@@ -853,6 +900,8 @@ async function refreshDashboard() {
 
 // ---------- Absence log ----------
 document.getElementById('btn-refresh-absence').addEventListener('click', refreshAbsence);
+document.getElementById('abs-from').addEventListener('change', refreshAbsence);
+document.getElementById('abs-to').addEventListener('change', refreshAbsence);
 
 const CLASSIFICATIONS = ['', 'بعذر', 'بدون عذر'];
 // أنواع الإجازات الرسمية المعتمدة في نظام الموارد البشرية الحكومي
@@ -917,6 +966,8 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
 
 // ---------- الملخص والترتيب ----------
 document.getElementById('btn-refresh-summary').addEventListener('click', refreshSummary);
+document.getElementById('sum-from').addEventListener('change', refreshSummary);
+document.getElementById('sum-to').addEventListener('change', refreshSummary);
 
 async function refreshSummary() {
   const from = document.getElementById('sum-from').value;
@@ -949,6 +1000,8 @@ async function refreshSummary() {
 
 // ---------- التحليلات ----------
 document.getElementById('btn-refresh-analytics').addEventListener('click', refreshAnalytics);
+document.getElementById('an-from').addEventListener('change', refreshAnalytics);
+document.getElementById('an-to').addEventListener('change', refreshAnalytics);
 
 function barRow(label, value, max) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -959,6 +1012,65 @@ function barRow(label, value, max) {
   </div>`;
 }
 
+function renderTrendChart(dailyTrend) {
+  if (!dailyTrend.length) return '<p class="muted" style="padding:20px 0">لا توجد بيانات في هذه الفترة.</p>';
+  const w = 760, h = 200, padL = 6, padR = 6, padB = 22, padT = 6;
+  const maxVal = Math.max(1, ...dailyTrend.map((d) => Math.max(d.present, d.absent, d.late)));
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+  const groupW = plotW / dailyTrend.length;
+  const series = [
+    { key: 'present', color: '#16a34a' },
+    { key: 'absent', color: '#dc2626' },
+    { key: 'late', color: '#d97706' },
+  ];
+  const barW = Math.max(1.5, (groupW - 4) / series.length);
+  let bars = '';
+  dailyTrend.forEach((d, i) => {
+    const x0 = padL + i * groupW + 2;
+    series.forEach((s, si) => {
+      const val = d[s.key];
+      const bh = (val / maxVal) * plotH;
+      const x = x0 + si * barW;
+      const y = padT + plotH - bh;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" fill="${s.color}" rx="1"><title>${d.date} — ${s.key}: ${val}</title></rect>`;
+    });
+  });
+  const step = Math.max(1, Math.ceil(dailyTrend.length / 10));
+  let labels = '';
+  dailyTrend.forEach((d, i) => {
+    if (i % step !== 0) return;
+    const x = padL + i * groupW + groupW / 2;
+    labels += `<text x="${x.toFixed(1)}" y="${h - 6}" font-size="9" text-anchor="middle" fill="#a1a1aa">${d.date.slice(5)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:200px" preserveAspectRatio="none">
+    <line x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}" stroke="#e4e4e7" stroke-width="1"/>
+    ${bars}${labels}
+  </svg>`;
+}
+
+function renderLeaderboard(containerId, list, key, unit) {
+  const top = list.filter((e) => e[key] > 0).slice(0, 5);
+  const el = document.getElementById(containerId);
+  if (!top.length) {
+    el.innerHTML = '<p class="muted">لا توجد بيانات في هذه الفترة.</p>';
+    return;
+  }
+  el.innerHTML = top.map((e, i) => `
+    <div class="leaderboard-row" data-civil="${e.civil}">
+      <span class="lb-rank">${i + 1}</span>
+      <span class="lb-name">${e.name}</span>
+      <span class="lb-value">${e[key]}${unit}</span>
+    </div>`).join('');
+  el.querySelectorAll('.leaderboard-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      showTab('reports');
+      document.getElementById('er-employee').value = row.dataset.civil;
+      refreshEmployeeReport();
+    });
+  });
+}
+
 async function refreshAnalytics() {
   const from = document.getElementById('an-from').value;
   const to = document.getElementById('an-to').value;
@@ -966,7 +1078,17 @@ async function refreshAnalytics() {
   const msgEl = document.getElementById('analytics-msg');
   msgEl.innerHTML = '';
   try {
-    const res = await callApi('getAnalytics', { from, to });
+    const [res, summaryRes] = await Promise.all([
+      callApi('getAnalytics', { from, to }),
+      callApi('getMonthlySummary', { from, to }),
+    ]);
+
+    document.getElementById('an-chart').innerHTML = renderTrendChart(res.dailyTrend);
+
+    const byViolations = summaryRes.list.slice();
+    renderLeaderboard('top-absent', byViolations.slice().sort((a, b) => b.absenceDays - a.absenceDays), 'absenceDays', ' يوم');
+    renderLeaderboard('top-late', byViolations.slice().sort((a, b) => b.lateDays - a.lateDays), 'lateDays', ' يوم');
+    renderLeaderboard('top-early', byViolations.slice().sort((a, b) => b.earlyDays - a.earlyDays), 'earlyDays', ' يوم');
 
     const sev = res.latenessSeverity;
     document.getElementById('an-severity').innerHTML = `
@@ -1211,6 +1333,9 @@ async function populateEmployeeSelect() {
 }
 
 document.getElementById('btn-refresh-employee-report').addEventListener('click', refreshEmployeeReport);
+document.getElementById('er-from').addEventListener('change', () => { refreshEmployeeReport(); refreshPenalties(); });
+document.getElementById('er-to').addEventListener('change', () => { refreshEmployeeReport(); refreshPenalties(); });
+document.getElementById('er-employee').addEventListener('change', refreshEmployeeReport);
 document.getElementById('btn-print-employee-report').addEventListener('click', () => window.print());
 
 async function refreshEmployeeReport() {

@@ -122,6 +122,11 @@
   }
   .empty-state h3 { margin: 0 0 6px; font-size: 18px; }
   .placeholder-card { text-align: center; padding: 60px 16px; color: var(--muted); }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+  .bar-row .bar-label { width: 170px; flex-shrink: 0; text-align: left; }
+  .bar-row .bar-track { flex: 1; background: var(--accent-soft); border-radius: 6px; height: 16px; overflow: hidden; }
+  .bar-row .bar-fill { background: var(--accent); height: 100%; border-radius: 6px; }
+  .bar-row .bar-value { width: 34px; text-align: right; flex-shrink: 0; font-weight: 600; }
 
   @media print {
     .sidebar, .day-nav, .no-print { display: none !important; }
@@ -321,7 +326,39 @@
           <div id="summary-msg"></div>
         </div>
       </section>
-      <section id="view-analytics" style="display:none"><div class="card placeholder-card">التحليلات — قريباً</div></section>
+      <section id="view-analytics" style="display:none">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="an-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="an-to">
+            </div>
+            <button class="primary" id="btn-refresh-analytics" style="align-self:flex-end">تحديث</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">شدة التأخير</h3>
+          <div class="summary" id="an-severity"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">أكثر أسباب الغياب</h3>
+          <div id="an-reasons"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">الاتجاه اليومي</h3>
+          <div style="max-height:400px; overflow:auto">
+            <table id="an-trend-table">
+              <thead><tr><th>التاريخ</th><th>حاضر</th><th>غائب</th><th>متأخر</th><th>انصراف مبكر</th><th>بدون بصمة انصراف</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="analytics-msg"></div>
+      </section>
       <section id="view-reports" style="display:none"><div class="card placeholder-card">التقارير — قريباً</div></section>
 
     </div>
@@ -400,6 +437,14 @@ function showTab(name) {
       document.getElementById('sum-to').value = todayISO();
     }
     refreshSummary();
+  }
+  if (name === 'analytics') {
+    if (!document.getElementById('an-from').value) {
+      const d = new Date();
+      document.getElementById('an-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      document.getElementById('an-to').value = todayISO();
+    }
+    refreshAnalytics();
   }
 }
 document.querySelectorAll('#side-nav button').forEach((btn) => {
@@ -684,6 +729,50 @@ async function refreshSummary() {
       <span class="pill">أيام التأخير: ${t.lateDays}</span>
       <span class="pill">أيام الانصراف المبكر: ${t.earlyDays}</span>
     `;
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+// ---------- التحليلات ----------
+document.getElementById('btn-refresh-analytics').addEventListener('click', refreshAnalytics);
+
+function barRow(label, value, max) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return `<div class="bar-row">
+    <div class="bar-label">${escapeHtml(label)}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <div class="bar-value">${value}</div>
+  </div>`;
+}
+
+async function refreshAnalytics() {
+  const from = document.getElementById('an-from').value;
+  const to = document.getElementById('an-to').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('analytics-msg');
+  msgEl.innerHTML = '';
+  try {
+    const res = await callApi('getAnalytics', { from, to });
+
+    const sev = res.latenessSeverity;
+    document.getElementById('an-severity').innerHTML = `
+      <span class="pill">بسيط: ${sev['بسيط'] || 0}</span>
+      <span class="pill">متوسط: ${sev['متوسط'] || 0}</span>
+      <span class="pill">كبير: ${sev['كبير'] || 0}</span>
+    `;
+
+    const maxReason = Math.max(1, ...res.absenceReasons.map((r) => r.value));
+    document.getElementById('an-reasons').innerHTML = res.absenceReasons.length
+      ? res.absenceReasons.map((r) => barRow(r.label, r.value, maxReason)).join('')
+      : '<p class="muted">لا توجد بيانات غياب في هذه الفترة.</p>';
+
+    const tbody = document.querySelector('#an-trend-table tbody');
+    tbody.innerHTML = res.dailyTrend.map((d) => `
+      <tr>
+        <td>${d.date}</td><td>${d.present}</td><td>${d.absent}</td>
+        <td>${d.late}</td><td>${d.early}</td><td>${d.noCheckout}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">لا توجد بيانات في هذه الفترة</td></tr>';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
   }

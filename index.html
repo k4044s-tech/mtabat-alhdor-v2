@@ -398,6 +398,23 @@
         <div id="employee-report-msg"></div>
 
         <div class="card">
+          <h3 style="margin-top:0">كشف الجزاءات السنوية (تراكم دقائق التأخير)</h3>
+          <p class="muted">وفق الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦) — يظهر فقط من تجاوز تراكم تأخيره ٣٠ دقيقة خلال الفترة المحددة أعلاه في "من/إلى تاريخ".</p>
+          <div class="row">
+            <button class="primary" id="btn-refresh-penalties">عرض الكشف</button>
+            <button class="ghost no-print" id="btn-print-penalties">🖶 طباعة</button>
+          </div>
+          <div style="max-height:400px; overflow:auto; margin-top:12px">
+            <table id="penalties-table">
+              <thead><tr><th>الرقم</th><th>الاسم</th><th>إجمالي دقائق التأخير</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم المعادلة</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="penalties-empty" style="display:none">لا يوجد من تجاوز ٣٠ دقيقة تأخير تراكمي في هذه الفترة.</p>
+          <div id="penalties-msg"></div>
+        </div>
+
+        <div class="card">
           <div class="row">
             <h3 style="margin:0">سجل الاستيرادات</h3>
             <button class="ghost" id="btn-refresh-reports">تحديث</button>
@@ -1113,6 +1130,34 @@ async function refreshEmployeeReport() {
     document.querySelector('#er-early-table thead').innerHTML = showName
       ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>'
       : '<tr><th>التاريخ</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+// ---------- كشف الجزاءات السنوية ----------
+document.getElementById('btn-refresh-penalties').addEventListener('click', refreshPenalties);
+document.getElementById('btn-print-penalties').addEventListener('click', () => window.print());
+
+async function refreshPenalties() {
+  const from = document.getElementById('er-from').value;
+  const to = document.getElementById('er-to').value;
+  if (!from || !to) {
+    document.getElementById('penalties-msg').innerHTML = '<div class="msg err">حدّد "من/إلى تاريخ" أعلاه أولاً.</div>';
+    return;
+  }
+  const msgEl = document.getElementById('penalties-msg');
+  msgEl.innerHTML = '';
+  try {
+    const res = await callApi('getAnnualPenalties', { from, to });
+    document.getElementById('penalties-empty').style.display = res.list.length ? 'none' : 'block';
+    document.querySelector('#penalties-table tbody').innerHTML = res.list.map((e) => `
+      <tr>
+        <td>${e.num}</td><td>${e.name}</td>
+        <td class="status-late">${e.totalLateMinutes}</td>
+        <td>${e.action}</td><td>${e.note || '—'}</td>
+        <td>${e.deductionDays || '—'}</td>
+      </tr>`).join('');
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
   }

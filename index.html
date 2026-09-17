@@ -71,7 +71,29 @@
     content: ''; position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
     width: 3px; height: 16px; border-radius: 3px; background: var(--accent);
   }
-  .side-nav button.placeholder { color: #a1a1aa; }
+  .nav-badge {
+    margin-inline-start: auto; background: var(--bad); color: #fff; font-size: 10.5px; font-weight: 700;
+    min-width: 17px; height: 17px; border-radius: 999px; display: inline-flex; align-items: center;
+    justify-content: center; padding: 0 4px; line-height: 1;
+  }
+  .side-nav-search { position: relative; margin-bottom: 10px; }
+  .side-nav-search input {
+    width: 100%; padding: 7px 30px 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12.5px; background: var(--accent-soft); font-family: inherit;
+  }
+  .side-nav-search .icon { position: absolute; top: 50%; right: 9px; transform: translateY(-50%); color: var(--muted); width: 14px; }
+  .side-nav-search-results {
+    position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.08); max-height: 220px; overflow: auto; z-index: 40; display: none;
+  }
+  .side-nav-search-results.show { display: block; }
+  .side-nav-search-results button {
+    display: block; width: 100%; text-align: right; background: none; border: none; padding: 8px 10px;
+    font-size: 12.5px; cursor: pointer; color: var(--ink); border-bottom: 1px solid var(--border);
+  }
+  .side-nav-search-results button:last-child { border-bottom: none; }
+  .side-nav-search-results button:hover { background: var(--accent-soft); }
+  .side-nav-search-results .snr-empty { padding: 10px; font-size: 12px; color: var(--muted); }
   .sidebar-foot { font-size: 11px; color: var(--muted); padding: 10px 6px 0; border-top: 1px solid var(--border); margin-top: 12px; }
 
   main.content { flex: 1; padding: 28px 32px 60px; min-width: 0; background: #fafafa; }
@@ -137,7 +159,11 @@
   button.small:disabled { opacity: 0.5; cursor: not-allowed; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border); }
-  th { background: transparent; color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); }
+  th { background: #fff; color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: var(--ink); }
+  th.sortable .sort-arrow { font-size: 9px; margin-inline-start: 3px; opacity: .5; }
+  th.sortable.sort-active .sort-arrow { opacity: 1; }
   tbody tr:hover { background: #fafafa; }
   .status-late { color: var(--warn); font-weight: 600; }
   .status-absent { color: var(--bad); font-weight: 600; }
@@ -240,10 +266,72 @@
     .sidebar, .day-nav, .no-print { display: none !important; }
     main.content { padding: 0; background: #fff; }
   }
+
+  /* ---------- بطاقات "بحاجة إلى متابعة" (لوحة اليوم) ---------- */
+  .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .insight-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .insight-card.tone-ok { border-color: #bbf7d0; background: var(--good-soft); }
+  .insight-card.tone-warn { border-color: #fde68a; background: var(--warn-soft); }
+  .insight-card.tone-bad { border-color: #fecaca; background: var(--bad-soft); }
+  .insight-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .insight-head .icon { width: 15px; }
+  .insight-value { font-size: 21px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .insight-list { font-size: 12.5px; color: var(--ink); display: flex; flex-direction: column; gap: 4px; }
+  .insight-list .il-row { display: flex; justify-content: space-between; gap: 8px; }
+  .insight-list .il-row span:last-child { color: var(--muted); flex-shrink: 0; }
+  .insight-more { background: none; border: none; padding: 0; margin-top: 4px; font-size: 11.5px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+  .insight-card .insight-cta { background: none; border: none; padding: 0; margin-top: 6px; font-size: 12px; color: var(--ink); font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+  /* ---------- شريط بحث/فلاتر فوق الجداول ---------- */
+  .table-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .table-toolbar input[type=search] { min-width: 180px; flex: 1 1 180px; }
+  .filter-chip {
+    background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 6px 13px;
+    font-size: 12.5px; cursor: pointer; font-weight: 500; color: var(--muted); white-space: nowrap;
+  }
+  .filter-chip:hover { border-color: #d4d4d8; }
+  .filter-chip.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .toolbar-spacer { flex: 1 1 auto; min-width: 0; }
+
+  /* ---------- شريط علوي وقائمة جانبية للجوال ---------- */
+  .topbar { display: none; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 25; }
+  .topbar .hamburger {
+    background: none; border: 1px solid var(--border); border-radius: 6px; width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; color: var(--ink);
+  }
+  .topbar .topbar-title { font-weight: 600; font-size: 13.5px; flex: 1; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 29; }
+
+  @media (max-width: 860px) {
+    .topbar { display: flex; }
+    .app { display: block; }
+    .sidebar {
+      position: fixed; top: 0; bottom: 0; right: 0; width: 78vw; max-width: 280px; z-index: 30;
+      transform: translateX(100%); transition: transform .2s ease; box-shadow: -8px 0 24px rgba(0,0,0,.14);
+      overflow-y: auto;
+    }
+    .app.sidebar-open .sidebar { transform: translateX(0); }
+    .app.sidebar-open .sidebar-overlay { display: block; }
+    main.content { padding: 14px 12px 70px; }
+    .content-inner { max-width: 100%; }
+    .day-nav { flex-direction: column; align-items: stretch; }
+    .day-nav .day-label { order: -1; }
+    table { font-size: 12px; }
+    th, td { padding: 7px 6px; }
+    .insight-grid { grid-template-columns: 1fr; }
+    .card { padding: 16px; }
+  }
 </style>
 </head>
 <body>
-<div class="app">
+<div class="topbar no-print">
+  <button class="hamburger" id="btn-open-sidebar" aria-label="فتح القائمة">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+  </button>
+  <div class="topbar-title" id="topbar-title">متابعة الحضور</div>
+</div>
+<div class="sidebar-overlay no-print" id="sidebar-overlay"></div>
+<div class="app" id="app-shell">
   <aside class="sidebar no-print">
     <div class="brand">
       <div class="brand-badge"><span class="icon" data-icon="brand"></span></div>
@@ -252,13 +340,18 @@
         <div class="brand-sub" id="sync-indicator">متزامن مع الشيت</div>
       </div>
     </div>
+    <div class="side-nav-search">
+      <input type="text" id="teacher-search" placeholder="ابحث عن معلّم بالاسم أو السجل المدني…" autocomplete="off">
+      <span class="icon" data-icon="search"></span>
+      <div class="side-nav-search-results" id="teacher-search-results"></div>
+    </div>
     <nav class="side-nav" id="side-nav">
       <button data-tab="dashboard"><span class="icon" data-icon="calendar"></span><span>لوحة اليوم</span></button>
       <button data-tab="import"><span class="icon" data-icon="upload"></span><span>الاستيراد</span></button>
-      <button data-tab="summary" class="placeholder"><span class="icon" data-icon="barChart"></span><span>الملخص والترتيب</span></button>
-      <button data-tab="analytics" class="placeholder"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
-      <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب</span></button>
-      <button data-tab="reports" class="placeholder"><span class="icon" data-icon="fileText"></span><span>التقارير</span></button>
+      <button data-tab="summary"><span class="icon" data-icon="barChart"></span><span>الملخص والترتيب</span></button>
+      <button data-tab="analytics"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
+      <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
+      <button data-tab="reports"><span class="icon" data-icon="fileText"></span><span>التقارير</span></button>
       <button data-tab="settings"><span class="icon" data-icon="settings"></span><span>الإعدادات</span></button>
     </nav>
     <div class="sidebar-foot">البيانات محفوظة في Google Sheet مشترك</div>
@@ -271,6 +364,9 @@
         <div class="school-name" id="dash-school-name">مدرسة</div>
         <div class="dash-title">لوحة اليوم</div>
         <div class="duty-banner" id="duty-banner"></div>
+
+        <div class="insight-grid no-print" id="dash-insights"></div>
+
         <div class="day-nav no-print">
           <button class="nav-arrow" id="btn-prev-day">◀ السابق</button>
           <div class="day-label" id="day-label">—</div>
@@ -288,6 +384,15 @@
           </div>
         </div>
         <div class="card" id="dash-table-card" style="display:none">
+          <div class="table-toolbar no-print">
+            <input type="search" id="dash-search" placeholder="ابحث بالاسم أو الرقم…">
+            <button type="button" class="filter-chip active" data-status="">الكل</button>
+            <button type="button" class="filter-chip" data-status="present">حاضر</button>
+            <button type="button" class="filter-chip" data-status="late">متأخر</button>
+            <button type="button" class="filter-chip" data-status="absent">غائب</button>
+            <div class="toolbar-spacer"></div>
+            <button class="ghost" id="btn-export-dash-excel">تصدير Excel</button>
+          </div>
           <div style="max-height:480px; overflow:auto">
             <table id="dash-table">
               <thead>
@@ -296,6 +401,7 @@
               <tbody></tbody>
             </table>
           </div>
+          <p class="muted" id="dash-search-empty" style="display:none; padding:14px 0 0">لا نتائج مطابقة.</p>
         </div>
         <div id="dash-msg"></div>
       </section>
@@ -367,6 +473,15 @@
           </div>
         </div>
         <div class="card">
+          <div class="table-toolbar no-print">
+            <input type="search" id="abs-search" placeholder="ابحث بالاسم…">
+            <button type="button" class="filter-chip active" data-cls="">الكل</button>
+            <button type="button" class="filter-chip" data-cls="__unclassified">بحاجة تصنيف</button>
+            <button type="button" class="filter-chip" data-cls="بعذر">بعذر</button>
+            <button type="button" class="filter-chip" data-cls="بدون عذر">بدون عذر</button>
+            <div class="toolbar-spacer"></div>
+            <button class="ghost" id="btn-export-absence-excel">تصدير Excel</button>
+          </div>
           <div style="max-height:520px; overflow:auto">
             <table id="absence-table">
               <thead>
@@ -376,6 +491,7 @@
             </table>
           </div>
           <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
+          <p class="muted" id="absence-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
           <div id="absence-msg"></div>
         </div>
       </section>
@@ -462,18 +578,33 @@
         </div>
         <div class="summary" id="sum-totals"></div>
         <div class="card">
+          <div class="table-toolbar no-print">
+            <input type="search" id="sum-search" placeholder="ابحث بالاسم…">
+            <div class="toolbar-spacer"></div>
+            <span class="muted" style="font-size:12px">انقر عنوان العمود للفرز</span>
+          </div>
           <div style="max-height:560px; overflow:auto">
             <table id="summary-table">
               <thead>
                 <tr>
-                  <th>#</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>غياب</th>
-                  <th>بعذر</th><th>بدون عذر</th><th>غير مصنف</th>
-                  <th>تأخير (أيام)</th><th>دقائق التأخير</th><th>انصراف مبكر (أيام)</th><th>المخالفات</th>
+                  <th>#</th>
+                  <th class="sortable" data-key="num">الرقم<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="name">الاسم<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="presentDays">حضور<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="absenceDays">غياب<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="excused">بعذر<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="unexcused">بدون عذر<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="unclassified">غير مصنف<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="lateDays">تأخير (أيام)<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="lateMinutes">دقائق التأخير<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="earlyDays">انصراف مبكر (أيام)<span class="sort-arrow">▾</span></th>
+                  <th class="sortable sort-active" data-key="violations">المخالفات<span class="sort-arrow">▾</span></th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
+          <p class="muted" id="summary-search-empty" style="display:none; padding-top:10px">لا نتائج مطابقة.</p>
           <div id="summary-msg"></div>
         </div>
       </section>
@@ -616,7 +747,10 @@
             <h3 style="margin:0">سجل الاستيرادات</h3>
             <button class="ghost" id="btn-refresh-reports">تحديث</button>
           </div>
-          <div style="max-height:560px; overflow:auto; margin-top:10px">
+          <div class="table-toolbar no-print" style="margin-top:12px">
+            <input type="search" id="reports-search" placeholder="ابحث بالتاريخ أو اسم الملف…">
+          </div>
+          <div style="max-height:560px; overflow:auto; margin-top:6px">
             <table id="reports-table">
               <thead>
                 <tr><th>التاريخ</th><th>وقت الاستيراد</th><th>الملف</th><th>الفترة</th><th>حاضر</th><th>غائب</th><th></th><th></th></tr>
@@ -625,6 +759,7 @@
             </table>
           </div>
           <p class="muted" id="reports-empty" style="display:none">لا توجد استيرادات بعد.</p>
+          <p class="muted" id="reports-search-empty" style="display:none">لا نتائج مطابقة.</p>
           <div id="reports-msg"></div>
         </div>
       </section>
@@ -646,6 +781,12 @@ const ICONS = {
   fileText: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
   settings: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   printer: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" ${ICON_STROKE}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`,
+  search: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" ${ICON_STROKE}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  alertTriangle: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  checkCircle: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  userX: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>`,
+  clock: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  logOut: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
 };
 function mountIcons() {
   document.querySelectorAll('[data-icon]').forEach((el) => {
@@ -653,6 +794,12 @@ function mountIcons() {
     if (ICONS[name]) el.innerHTML = ICONS[name];
   });
 }
+
+// ---------- قائمة الجوال (شريط علوي + قائمة منزلقة) ----------
+const appShell = document.getElementById('app-shell');
+document.getElementById('btn-open-sidebar').addEventListener('click', () => appShell.classList.add('sidebar-open'));
+document.getElementById('sidebar-overlay').addEventListener('click', () => appShell.classList.remove('sidebar-open'));
+function closeMobileSidebar() { appShell.classList.remove('sidebar-open'); }
 
 const CONFIG_KEY = 'hather_v2_config';
 function loadConfig() {
@@ -719,6 +866,7 @@ function formatDayLabel(iso) {
 
 // ---------- Tabs ----------
 const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'reports', 'settings'];
+const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب', reports: 'التقارير', settings: 'الإعدادات' };
 let currentTab = 'dashboard';
 function showTab(name) {
   currentTab = name;
@@ -728,6 +876,8 @@ function showTab(name) {
   document.querySelectorAll('#side-nav button').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === name);
   });
+  document.getElementById('topbar-title').textContent = TAB_LABELS[name] || 'متابعة الحضور';
+  closeMobileSidebar();
   if (name === 'absence') {
     if (!document.getElementById('abs-from').value) {
       const d = new Date();
@@ -782,6 +932,45 @@ document.getElementById('btn-goto-import').addEventListener('click', () => {
   showTab('import');
 });
 document.getElementById('btn-print').addEventListener('click', printOfficialReport);
+
+// ---------- بحث سريع عن معلّم (الشريط الجانبي) ----------
+async function jumpToEmployeeReport(civil) {
+  showTab('reports');
+  await populateEmployeeSelect();
+  document.getElementById('er-employee').value = civil;
+  refreshEmployeeReport();
+  refreshPenalties();
+}
+const teacherSearchInput = document.getElementById('teacher-search');
+const teacherSearchResults = document.getElementById('teacher-search-results');
+let teacherSearchDebounce = null;
+teacherSearchInput.addEventListener('input', () => {
+  clearTimeout(teacherSearchDebounce);
+  const q = teacherSearchInput.value.trim();
+  if (!q) { teacherSearchResults.classList.remove('show'); return; }
+  teacherSearchDebounce = setTimeout(async () => {
+    let list = [];
+    try {
+      const res = await getTeachersCached();
+      const needle = q.toLowerCase();
+      list = res.teachers.filter((t) => String(t.name).toLowerCase().includes(needle) || String(t.civil).includes(q)).slice(0, 8);
+    } catch (e) { /* تجاهل أخطاء البحث الصامتة */ }
+    teacherSearchResults.innerHTML = list.length
+      ? list.map((t) => `<button type="button" data-civil="${escapeHtml(t.civil)}">${escapeHtml(t.name)} <span class="muted">— #${escapeHtml(t.num)}</span></button>`).join('')
+      : '<div class="snr-empty">لا نتائج</div>';
+    teacherSearchResults.classList.add('show');
+  }, 200);
+});
+teacherSearchResults.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-civil]');
+  if (!btn) return;
+  teacherSearchResults.classList.remove('show');
+  teacherSearchInput.value = '';
+  jumpToEmployeeReport(btn.dataset.civil);
+});
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('.side-nav-search')) teacherSearchResults.classList.remove('show');
+});
 
 // ---------- Settings ----------
 document.getElementById('cfg-save').addEventListener('click', () => {
@@ -897,7 +1086,7 @@ async function processImportFile(file) {
   const tbody = document.querySelector('#preview-table tbody');
   const thead = document.querySelector('#preview-table thead');
   thead.innerHTML = '<tr><th>السجل المدني</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th></tr>';
-  tbody.innerHTML = parsedRows.map((r) => `<tr><td>${r.civil}</td><td>${r.name}</td><td>${r.checkIn || '—'}</td><td>${r.checkOut || '—'}</td></tr>`).join('');
+  tbody.innerHTML = parsedRows.map((r) => `<tr><td>${escapeHtml(r.civil)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.checkIn) || '—'}</td><td>${escapeHtml(r.checkOut) || '—'}</td></tr>`).join('');
   document.getElementById('preview-summary').textContent = `تم العثور على ${parsedRows.length} صفاً — راجع البيانات ثم احفظ.`;
   document.getElementById('preview-wrap').style.display = 'block';
   setImportStep(2);
@@ -925,7 +1114,7 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
     document.getElementById('import-msg').innerHTML = `<div class="msg ok">تم الاستيراد: ${res.presentCount} حاضر، ${res.absentCount} غائب.</div>`;
     if (document.getElementById('dash-date').value === date) refreshDashboard();
   } catch (err) {
-    document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
     setImportStep(2);
   } finally {
     btn.disabled = false;
@@ -949,6 +1138,7 @@ async function refreshDashboard() {
   if (!date) { date = todayISO(); document.getElementById('dash-date').value = date; }
   document.getElementById('day-label').textContent = formatDayLabel(date);
   document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
+  loadDashboardInsights(); // مستقل — له معالجة أخطاء خاصة به فلا يوقف بقية اللوحة
 
   const msgEl = document.getElementById('dash-msg');
   msgEl.innerHTML = '';
@@ -977,12 +1167,13 @@ async function refreshDashboard() {
 
     if (!hasData) {
       document.getElementById('dash-summary').innerHTML = `<span class="pill">0 معلماً في الكشف</span>`;
+      lastDashboardRows = [];
+      renderDashboardTable();
       return;
     }
 
     let present = 0, absent = 0, late = 0;
-    const tbody = document.querySelector('#dash-table tbody');
-    tbody.innerHTML = teachers.map((t) => {
+    lastDashboardRows = teachers.map((t) => {
       const civil = String(t.civil);
       const att = attendanceByCivil[civil];
       const abs = absenceByCivil[civil];
@@ -990,14 +1181,18 @@ async function refreshDashboard() {
         present++;
         const isLate = Number(att.lateMinutes) > 0;
         if (isLate) late++;
-        return `<tr><td>${t.num}</td><td>${t.name}</td><td>${att.checkIn || '—'}</td><td>${att.checkOut || '—'}</td><td>${att.hoursRaw || '—'}</td><td>${att.lateMinutes || 0}</td><td class="${isLate ? 'status-late' : 'status-ok'}">${isLate ? 'متأخر' : 'حاضر'}</td></tr>`;
+        return {
+          num: t.num, name: t.name, civil, checkIn: att.checkIn, checkOut: att.checkOut,
+          hoursRaw: att.hoursRaw, lateMinutes: Number(att.lateMinutes) || 0,
+          status: isLate ? 'late' : 'present', statusLabel: isLate ? 'متأخر' : 'حاضر', reason: '',
+        };
       }
       if (abs) {
         absent++;
-        return `<tr><td>${t.num}</td><td>${t.name}</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="status-absent">غائب${abs.reason ? ' (' + abs.reason + ')' : ''}</td></tr>`;
+        return { num: t.num, name: t.name, civil, checkIn: '', checkOut: '', hoursRaw: '', lateMinutes: 0, status: 'absent', statusLabel: 'غائب', reason: abs.reason || '' };
       }
-      return `<tr><td>${t.num}</td><td>${t.name}</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="muted">لا توجد بيانات</td></tr>`;
-    }).join('');
+      return { num: t.num, name: t.name, civil, checkIn: '', checkOut: '', hoursRaw: '', lateMinutes: 0, status: 'none', statusLabel: 'لا توجد بيانات', reason: '' };
+    });
 
     document.getElementById('dash-summary').innerHTML = `
       <span class="pill">${teachers.length} معلماً في الكشف</span>
@@ -1005,10 +1200,134 @@ async function refreshDashboard() {
       <span class="pill">غائب: ${absent}</span>
       <span class="pill">متأخر: ${late}</span>
     `;
+    renderDashboardTable();
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
+
+// ---------- جدول لوحة اليوم: بحث + فلترة بالحالة + تصدير ----------
+let lastDashboardRows = [];
+let dashFilterStatus = '';
+function renderDashboardTable() {
+  const q = document.getElementById('dash-search').value.trim().toLowerCase();
+  const rows = lastDashboardRows.filter((r) => {
+    if (dashFilterStatus && r.status !== dashFilterStatus) return false;
+    if (q && !(String(r.name).toLowerCase().includes(q) || String(r.num).includes(q))) return false;
+    return true;
+  });
+  const tbody = document.querySelector('#dash-table tbody');
+  tbody.innerHTML = rows.map((r) => {
+    const cls = r.status === 'late' ? 'status-late' : r.status === 'absent' ? 'status-absent' : r.status === 'present' ? 'status-ok' : 'muted';
+    const label = r.status === 'absent' && r.reason ? escapeHtml(r.statusLabel) + ' (' + escapeHtml(r.reason) + ')' : escapeHtml(r.statusLabel);
+    return `<tr><td>${escapeHtml(r.num)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.checkIn) || '—'}</td><td>${escapeHtml(r.checkOut) || '—'}</td><td>${escapeHtml(r.hoursRaw) || '—'}</td><td>${r.lateMinutes || 0}</td><td class="${cls}">${label}</td></tr>`;
+  }).join('');
+  document.getElementById('dash-search-empty').style.display = (lastDashboardRows.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('dash-search').addEventListener('input', renderDashboardTable);
+document.querySelectorAll('#dash-table-card .filter-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#dash-table-card .filter-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    dashFilterStatus = chip.dataset.status;
+    renderDashboardTable();
+  });
+});
+document.getElementById('btn-export-dash-excel').addEventListener('click', () => {
+  if (!lastDashboardRows.length) return;
+  const rows = lastDashboardRows.map((r) => ({
+    'الرقم': r.num, 'الاسم': r.name, 'الحضور': r.checkIn || '', 'الانصراف': r.checkOut || '',
+    'الساعات': r.hoursRaw || '', 'التأخير (د)': r.lateMinutes || 0, 'الحالة': r.statusLabel + (r.reason ? ' (' + r.reason + ')' : ''),
+  }));
+  exportRowsToExcel(`كشف_${document.getElementById('dash-date').value}.xlsx`, 'الكشف', rows);
+});
+
+// ---------- بطاقات "بحاجة إلى متابعة" ----------
+async function loadDashboardInsights() {
+  const el = document.getElementById('dash-insights');
+  try {
+    const res = await callApi('getAlerts', {});
+    const cards = [];
+
+    if (res.missingImportDate) {
+      cards.push(`
+        <div class="insight-card tone-bad">
+          <div class="insight-head"><span class="icon" data-icon="alertTriangle"></span> استيراد ناقص</div>
+          <div class="insight-value">${escapeHtml(res.missingImportDate)}</div>
+          <div class="insight-list">لم يُستورد ملف البصمة لهذا اليوم بعد.</div>
+          <button type="button" class="insight-cta" data-goto-import="${escapeHtml(res.missingImportDate)}">استيراد الآن</button>
+        </div>`);
+    } else {
+      cards.push(`
+        <div class="insight-card tone-ok">
+          <div class="insight-head"><span class="icon" data-icon="checkCircle"></span> الاستيراد</div>
+          <div class="insight-value">مكتمل</div>
+          <div class="insight-list">آخر يوم عمل مستورد بالفعل.</div>
+        </div>`);
+    }
+
+    const uc = res.unclassifiedAbsences || [];
+    cards.push(`
+      <div class="insight-card ${uc.length ? 'tone-warn' : 'tone-ok'}">
+        <div class="insight-head"><span class="icon" data-icon="listChecks"></span> غياب بحاجة تصنيف</div>
+        <div class="insight-value">${uc.length}</div>
+        <div class="insight-list">${uc.slice(0, 4).map((a) => `<div class="il-row"><span>${escapeHtml(a.name)}</span><span>${escapeHtml(a.date)}</span></div>`).join('') || 'لا يوجد.'}</div>
+        ${uc.length ? '<button type="button" class="insight-cta" data-goto-tab="absence" data-cls-filter="__unclassified">عرض الكل</button>' : ''}
+      </div>`);
+
+    const rep = res.repeatedAbsence || [];
+    cards.push(`
+      <div class="insight-card ${rep.length ? 'tone-warn' : 'tone-ok'}">
+        <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر (٣٠ يوماً)</div>
+        <div class="insight-value">${rep.length}</div>
+        <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span>${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
+      </div>`);
+
+    const ap = res.approachingPenalty || [];
+    cards.push(`
+      <div class="insight-card ${ap.length ? 'tone-warn' : 'tone-ok'}">
+        <div class="insight-head"><span class="icon" data-icon="clock"></span> اقترب من جزاء جديد</div>
+        <div class="insight-value">${ap.length}</div>
+        <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span>${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
+        ${ap.length ? '<button type="button" class="insight-cta" data-goto-tab="reports">فتح كشف الجزاءات</button>' : ''}
+      </div>`);
+
+    const nc = (res.noCheckoutLastImport && res.noCheckoutLastImport.list) || [];
+    cards.push(`
+      <div class="insight-card ${nc.length ? 'tone-warn' : 'tone-ok'}">
+        <div class="insight-head"><span class="icon" data-icon="logOut"></span> بلا بصمة انصراف</div>
+        <div class="insight-value">${nc.length}</div>
+        <div class="insight-list">${nc.slice(0, 4).map((n) => `<div class="il-row"><span>${escapeHtml(n.name)}</span></div>`).join('') || (res.noCheckoutLastImport && res.noCheckoutLastImport.date ? 'لا يوجد.' : 'لا يوجد استيراد بعد.')}</div>
+      </div>`);
+
+    el.innerHTML = cards.join('');
+
+    const badge = document.getElementById('badge-absence');
+    if (uc.length) { badge.textContent = uc.length; badge.style.display = 'inline-flex'; }
+    else { badge.style.display = 'none'; }
+  } catch (err) {
+    el.innerHTML = `<div class="insight-card tone-bad"><div class="insight-head">تعذّر تحميل التنبيهات</div><div class="insight-list">${escapeHtml(err.message)}</div></div>`;
+  }
+}
+document.getElementById('dash-insights').addEventListener('click', (ev) => {
+  const importBtn = ev.target.closest('[data-goto-import]');
+  if (importBtn) {
+    document.getElementById('imp-date').value = importBtn.dataset.gotoImport;
+    showTab('import');
+    return;
+  }
+  const tabBtn = ev.target.closest('[data-goto-tab]');
+  if (tabBtn) {
+    showTab(tabBtn.dataset.gotoTab);
+    if (tabBtn.dataset.clsFilter) {
+      setTimeout(() => {
+        const chip = document.querySelector(`#view-absence .filter-chip[data-cls="${tabBtn.dataset.clsFilter}"]`);
+        if (chip) chip.click();
+      }, 0);
+    }
+  }
+});
+
 
 // ---------- Absence log ----------
 document.getElementById('btn-refresh-absence').addEventListener('click', refreshAbsence);
@@ -1024,6 +1343,8 @@ const ABSENCE_REASONS = [
   'إجازة المشاركة الوطنية', 'إجازة التعويض',
 ];
 
+let lastAbsenceRows = [];
+let absClassFilter = '';
 async function refreshAbsence() {
   const from = document.getElementById('abs-from').value;
   const to = document.getElementById('abs-to').value;
@@ -1032,26 +1353,57 @@ async function refreshAbsence() {
   msgEl.innerHTML = '';
   try {
     const res = await callApi('getAbsenceRange', { from, to });
-    const tbody = document.querySelector('#absence-table tbody');
+    lastAbsenceRows = res.rows;
     document.getElementById('absence-empty').style.display = res.rows.length ? 'none' : 'block';
-    tbody.innerHTML = res.rows.map((r) => {
-      const classOptions = CLASSIFICATIONS.map((c) => `<option value="${c}" ${c === (r.classification || '') ? 'selected' : ''}>${c || '—'}</option>`).join('');
-      const reasonList = r.reason && !ABSENCE_REASONS.includes(r.reason) ? [r.reason, ...ABSENCE_REASONS] : ABSENCE_REASONS;
-      const reasonOptions = ['', ...reasonList].map((rs) => `<option value="${rs}" ${rs === (r.reason || '') ? 'selected' : ''}>${rs || '— بدون سبب محدد —'}</option>`).join('');
-      return `
-        <tr data-id="${r.id}">
-          <td>${r.date}</td>
-          <td>${r.name}</td>
-          <td><select class="f-classification">${classOptions}</select></td>
-          <td><select class="f-reason">${reasonOptions}</select></td>
-          <td><input class="f-note" type="text" value="${(r.note || '').replace(/"/g, '&quot;')}"></td>
-          <td><button class="small btn-save-absence">حفظ</button></td>
-        </tr>`;
-    }).join('');
+    renderAbsenceTable();
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
+
+function renderAbsenceTable() {
+  const q = document.getElementById('abs-search').value.trim().toLowerCase();
+  const rows = lastAbsenceRows.filter((r) => {
+    if (absClassFilter === '__unclassified' && r.classification) return false;
+    if (absClassFilter && absClassFilter !== '__unclassified' && r.classification !== absClassFilter) return false;
+    if (q && !String(r.name).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const tbody = document.querySelector('#absence-table tbody');
+  tbody.innerHTML = rows.map((r) => {
+    const classOptions = CLASSIFICATIONS.map((c) => `<option value="${escapeHtml(c)}" ${c === (r.classification || '') ? 'selected' : ''}>${escapeHtml(c) || '—'}</option>`).join('');
+    const reasonList = r.reason && !ABSENCE_REASONS.includes(r.reason) ? [r.reason, ...ABSENCE_REASONS] : ABSENCE_REASONS;
+    const reasonOptions = ['', ...reasonList].map((rs) => `<option value="${escapeHtml(rs)}" ${rs === (r.reason || '') ? 'selected' : ''}>${escapeHtml(rs) || '— بدون سبب محدد —'}</option>`).join('');
+    return `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td><select class="f-classification">${classOptions}</select></td>
+        <td><select class="f-reason">${reasonOptions}</select></td>
+        <td><input class="f-note" type="text" value="${escapeHtml(r.note || '')}"></td>
+        <td><button class="small btn-save-absence">حفظ</button></td>
+      </tr>`;
+  }).join('');
+  document.getElementById('absence-search-empty').style.display = (lastAbsenceRows.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('abs-search').addEventListener('input', renderAbsenceTable);
+document.querySelectorAll('#view-absence .filter-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#view-absence .filter-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    absClassFilter = chip.dataset.cls;
+    renderAbsenceTable();
+  });
+});
+document.getElementById('btn-export-absence-excel').addEventListener('click', () => {
+  if (!lastAbsenceRows.length) return;
+  const rows = lastAbsenceRows.map((r) => ({
+    'التاريخ': r.date, 'الاسم': r.name, 'التصنيف': r.classification || '', 'السبب': r.reason || '', 'ملاحظات': r.note || '',
+  }));
+  const from = document.getElementById('abs-from').value;
+  const to = document.getElementById('abs-to').value;
+  exportRowsToExcel(`سجل_الغياب_${from}_${to}.xlsx`, 'الغياب', rows);
+});
 
 document.querySelector('#absence-table tbody').addEventListener('click', async (ev) => {
   if (!ev.target.classList.contains('btn-save-absence')) return;
@@ -1061,16 +1413,16 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    await callApi('updateAbsence', {
-      id,
-      classification: tr.querySelector('.f-classification').value,
-      reason: tr.querySelector('.f-reason').value,
-      note: tr.querySelector('.f-note').value,
-    });
+    const classification = tr.querySelector('.f-classification').value;
+    const reason = tr.querySelector('.f-reason').value;
+    const note = tr.querySelector('.f-note').value;
+    await callApi('updateAbsence', { id, classification, reason, note });
+    const rec = lastAbsenceRows.find((r) => String(r.id) === id);
+    if (rec) { rec.classification = classification; rec.reason = reason; rec.note = note; }
     btn.textContent = 'تم ✔';
     setTimeout(() => { btn.textContent = 'حفظ'; btn.disabled = false; }, 1500);
   } catch (err) {
-    document.getElementById('absence-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    document.getElementById('absence-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
     btn.textContent = 'حفظ';
     btn.disabled = false;
   }
@@ -1094,6 +1446,8 @@ document.getElementById('sum-from').addEventListener('change', refreshSummary);
 document.getElementById('sum-to').addEventListener('change', refreshSummary);
 
 let lastSummaryList = [];
+let sumSortKey = 'violations';
+let sumSortDir = 'desc';
 async function refreshSummary() {
   const from = document.getElementById('sum-from').value;
   const to = document.getElementById('sum-to').value;
@@ -1103,15 +1457,7 @@ async function refreshSummary() {
   try {
     const res = await callApi('getMonthlySummary', { from, to });
     lastSummaryList = res.list;
-    const tbody = document.querySelector('#summary-table tbody');
-    tbody.innerHTML = res.list.map((e, i) => `
-      <tr>
-        <td>${i + 1}</td><td>${e.num}</td><td>${e.name}</td>
-        <td>${e.presentDays}</td><td>${e.absenceDays}</td>
-        <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
-        <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
-        <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
-      </tr>`).join('');
+    renderSummaryTable();
     const t = res.totals;
     document.getElementById('sum-totals').innerHTML = `
       <span class="pill">أيام العمل: ${res.workDays}</span>
@@ -1120,9 +1466,40 @@ async function refreshSummary() {
       <span class="pill">أيام الانصراف المبكر: ${t.earlyDays}</span>
     `;
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
+
+function renderSummaryTable() {
+  const q = document.getElementById('sum-search').value.trim().toLowerCase();
+  let rows = lastSummaryList.filter((e) => !q || String(e.name).toLowerCase().includes(q));
+  rows = rows.slice().sort((a, b) => {
+    const av = a[sumSortKey], bv = b[sumSortKey];
+    const cmp = sumSortKey === 'name' ? String(av || '').localeCompare(String(bv || ''), 'ar') : (Number(av) || 0) - (Number(bv) || 0);
+    return sumSortDir === 'asc' ? cmp : -cmp;
+  });
+  const tbody = document.querySelector('#summary-table tbody');
+  tbody.innerHTML = rows.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
+        <td>${e.presentDays}</td><td>${e.absenceDays}</td>
+        <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
+        <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
+        <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
+      </tr>`).join('');
+  document.getElementById('summary-search-empty').style.display = (lastSummaryList.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('sum-search').addEventListener('input', renderSummaryTable);
+document.querySelectorAll('#summary-table th.sortable').forEach((th) => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (sumSortKey === key) sumSortDir = sumSortDir === 'asc' ? 'desc' : 'asc';
+    else { sumSortKey = key; sumSortDir = key === 'name' ? 'asc' : 'desc'; }
+    document.querySelectorAll('#summary-table th.sortable').forEach((t2) => t2.classList.remove('sort-active'));
+    th.classList.add('sort-active');
+    renderSummaryTable();
+  });
+});
 
 // ---------- التحليلات ----------
 document.getElementById('btn-refresh-analytics').addEventListener('click', refreshAnalytics);
@@ -1246,17 +1623,13 @@ function renderLeaderboard(containerId, list, key, unit) {
     return;
   }
   el.innerHTML = top.map((e, i) => `
-    <div class="leaderboard-row" data-civil="${e.civil}">
+    <div class="leaderboard-row" data-civil="${escapeHtml(e.civil)}">
       <span class="lb-rank">${i + 1}</span>
-      <span class="lb-name">${e.name}</span>
+      <span class="lb-name">${escapeHtml(e.name)}</span>
       <span class="lb-value">${e[key]}${unit}</span>
     </div>`).join('');
   el.querySelectorAll('.leaderboard-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      showTab('reports');
-      document.getElementById('er-employee').value = row.dataset.civil;
-      refreshEmployeeReport();
-    });
+    row.addEventListener('click', () => { jumpToEmployeeReport(row.dataset.civil); });
   });
 }
 
@@ -1300,7 +1673,7 @@ async function refreshAnalytics() {
         <td>${d.late}</td><td>${d.early}</td><td>${d.noCheckout}</td>
       </tr>`).join('') || '<tr><td colspan="6" class="muted">لا توجد بيانات في هذه الفترة</td></tr>';
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1440,7 +1813,7 @@ async function printOfficialReport(dateArg, errorElId) {
     win.focus();
     setTimeout(() => win.print(), 300);
   } catch (err) {
-    document.getElementById(errorElId || 'dash-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${err.message}</div>`;
+    document.getElementById(errorElId || 'dash-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1452,23 +1825,33 @@ async function refreshReports() {
   msgEl.innerHTML = '';
   try {
     const res = await callApi('listImports', {});
+    lastReportsList = res.list;
     document.getElementById('reports-empty').style.display = res.list.length ? 'none' : 'block';
-    const tbody = document.querySelector('#reports-table tbody');
-    tbody.innerHTML = res.list.map((r) => `
-      <tr data-date="${r.date}">
-        <td>${r.date}</td>
-        <td>${r.importedAt ? String(r.importedAt).replace('T', ' ').slice(0, 16) : '—'}</td>
-        <td>${r.fileName || '—'}</td>
-        <td>${r.schedLabel || '—'} (${r.schedStart || '—'}–${r.schedEnd || '—'})</td>
+    renderReportsTable();
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+let lastReportsList = [];
+function renderReportsTable() {
+  const q = document.getElementById('reports-search').value.trim().toLowerCase();
+  const rows = lastReportsList.filter((r) => !q || String(r.date).includes(q) || String(r.fileName || '').toLowerCase().includes(q));
+  const tbody = document.querySelector('#reports-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr data-date="${escapeHtml(r.date)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${r.importedAt ? escapeHtml(String(r.importedAt).replace('T', ' ').slice(0, 16)) : '—'}</td>
+        <td>${escapeHtml(r.fileName) || '—'}</td>
+        <td>${escapeHtml(r.schedLabel) || '—'} (${escapeHtml(r.schedStart) || '—'}–${escapeHtml(r.schedEnd) || '—'})</td>
         <td>${r.presentCount}</td>
         <td>${r.absentCount}</td>
         <td><button class="small btn-reprint">إعادة الطباعة</button></td>
         <td><button class="small btn-delete-import" style="background:var(--bad)">حذف</button></td>
       </tr>`).join('');
-  } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
-  }
+  document.getElementById('reports-search-empty').style.display = (lastReportsList.length && !rows.length) ? 'block' : 'none';
 }
+document.getElementById('reports-search').addEventListener('input', renderReportsTable);
 
 document.getElementById('reports-table').addEventListener('click', async (ev) => {
   const tr = ev.target.closest('tr');
@@ -1483,7 +1866,7 @@ document.getElementById('reports-table').addEventListener('click', async (ev) =>
       await callApi('deleteDay', { date });
       await refreshReports();
     } catch (err) {
-      document.getElementById('reports-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+      document.getElementById('reports-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
       ev.target.disabled = false;
     }
   }
@@ -1519,7 +1902,7 @@ async function populateEmployeeSelect() {
     });
     employeeSelectPopulated = true;
   } catch (err) {
-    document.getElementById('employee-report-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    document.getElementById('employee-report-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1549,7 +1932,7 @@ async function refreshEmployeeReport() {
 
     document.getElementById('er-absence-empty').style.display = res.absenceEvents.length ? 'none' : 'block';
     document.querySelector('#er-absence-table tbody').innerHTML = res.absenceEvents.map((e) => `
-      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.classification || '—'}</td><td>${e.reason || '—'}</td><td>${e.note || '—'}</td></tr>
+      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.classification) || '—'}</td><td>${escapeHtml(e.reason) || '—'}</td><td>${escapeHtml(e.note) || '—'}</td></tr>
     `).join('');
     document.querySelector('#er-absence-table thead').innerHTML = showName
       ? '<tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr>'
@@ -1557,7 +1940,7 @@ async function refreshEmployeeReport() {
 
     document.getElementById('er-late-empty').style.display = res.lateEvents.length ? 'none' : 'block';
     document.querySelector('#er-late-table tbody').innerHTML = res.lateEvents.map((e) => `
-      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.checkIn || '—'}</td><td class="status-late">${e.lateMinutes}</td></tr>
+      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.checkIn) || '—'}</td><td class="status-late">${e.lateMinutes}</td></tr>
     `).join('');
     document.querySelector('#er-late-table thead').innerHTML = showName
       ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr>'
@@ -1565,13 +1948,13 @@ async function refreshEmployeeReport() {
 
     document.getElementById('er-early-empty').style.display = res.earlyEvents.length ? 'none' : 'block';
     document.querySelector('#er-early-table tbody').innerHTML = res.earlyEvents.map((e) => `
-      <tr><td>${e.date}</td>${showName ? `<td>${e.name}</td>` : ''}<td>${e.checkOut || '—'}</td><td class="status-late">${e.earlyMinutes}</td></tr>
+      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.checkOut) || '—'}</td><td class="status-late">${e.earlyMinutes}</td></tr>
     `).join('');
     document.querySelector('#er-early-table thead').innerHTML = showName
       ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>'
       : '<tr><th>التاريخ</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>';
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1595,13 +1978,13 @@ async function refreshPenalties() {
     document.getElementById('penalties-empty').style.display = res.list.length ? 'none' : 'block';
     document.querySelector('#penalties-table tbody').innerHTML = res.list.map((e) => `
       <tr>
-        <td>${e.num}</td><td>${e.name}</td>
+        <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
         <td class="status-late">${e.totalLateMinutes}</td>
-        <td>${e.action}</td><td>${e.note || '—'}</td>
+        <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
         <td>${e.deductionDays || '—'}</td>
       </tr>`).join('');
   } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1629,7 +2012,7 @@ document.getElementById('btn-print-circular').addEventListener('click', () => {
   const cfg = loadConfig();
   const eligible = lastPenaltiesList.filter((e) => e.totalLateMinutes >= 420); // من وصل لدرجة "لفت نظر" فأعلى
   const rowsHtml = eligible.length
-    ? eligible.map((e, i) => `<tr><td>${i + 1}</td><td>${e.name}</td><td>${e.totalLateMinutes}</td><td>${e.action}</td><td>${e.deductionDays || '—'}</td></tr>`).join('')
+    ? eligible.map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(e.name)}</td><td>${e.totalLateMinutes}</td><td>${escapeHtml(e.action)}</td><td>${e.deductionDays || '—'}</td></tr>`).join('')
     : '<tr><td colspan="5">لا يوجد من بلغ درجة "لفت نظر" فأعلى خلال هذه الفترة.</td></tr>';
   const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><style>
     body{font-family:Arial,sans-serif;padding:30px;color:#111}
@@ -1702,13 +2085,13 @@ function renderPeriods() {
   el.innerHTML = currentSettings.schedulePeriods.map((p, i) => `
     <div class="period-card" data-index="${i}">
       <div class="period-head">
-        <input type="text" class="period-label-input p-label" value="${p.label || ''}" placeholder="اسم الفترة">
+        <input type="text" class="period-label-input p-label" value="${escapeHtml(p.label || '')}" placeholder="اسم الفترة">
         <button type="button" class="small btn-del-period" style="background:var(--bad)">حذف</button>
       </div>
       <label>بداية الدوام</label>
-      <input type="text" class="p-start" value="${p.workStart || ''}" style="width:100%">
+      <input type="text" class="p-start" value="${escapeHtml(p.workStart || '')}" style="width:100%">
       <label>نهاية الدوام</label>
-      <input type="text" class="p-end" value="${p.workEnd || ''}" style="width:100%">
+      <input type="text" class="p-end" value="${escapeHtml(p.workEnd || '')}" style="width:100%">
       <label>من تاريخ (اختياري)</label>
       <input type="date" class="p-from" value="${p.dateFrom || ''}" style="width:100%">
       <label>إلى تاريخ (اختياري)</label>
@@ -1746,8 +2129,8 @@ function renderHolidays() {
   el.innerHTML = list.length
     ? list.map((h, i) => `
       <div class="holiday-row" data-index="${i}">
-        <span class="h-label">${h.label}</span>
-        <span class="h-range">${h.from} → ${h.to}</span>
+        <span class="h-label">${escapeHtml(h.label)}</span>
+        <span class="h-range">${escapeHtml(h.from)} → ${escapeHtml(h.to)}</span>
         <button type="button" class="small btn-del-holiday" style="background:var(--bad)">حذف</button>
       </div>`).join('')
     : '<p class="muted">لم تُسجَّل إجازات بعد.</p>';

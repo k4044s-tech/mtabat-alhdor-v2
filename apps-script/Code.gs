@@ -57,6 +57,9 @@ function handleRequest_(payload) {
         case 'listImports':
           out = handleListImports_();
           break;
+        case 'getEmployeeReport':
+          out = handleGetEmployeeReport_(payload);
+          break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
           break;
@@ -577,6 +580,55 @@ function handleListImports_() {
   });
   list.sort(function (a, b) { return b.date.localeCompare(a.date); });
   return { ok: true, list: list };
+}
+
+// تقرير الغياب والتأخر والانصراف المبكر — لموظف واحد (civil) أو لجميع الموظفين (civil فارغ)
+function handleGetEmployeeReport_(payload) {
+  var from = String(payload.from);
+  var to = String(payload.to);
+  var civilFilter = payload.civil ? String(payload.civil) : '';
+
+  var daily = sheetToObjects_(getSheet_(SHEET_ATTENDANCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    if (d < from || d > to) return false;
+    if (civilFilter && String(r.civil) !== civilFilter) return false;
+    return true;
+  });
+  var absences = sheetToObjects_(getSheet_(SHEET_ABSENCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    if (d < from || d > to) return false;
+    if (civilFilter && String(r.civil) !== civilFilter) return false;
+    return true;
+  });
+
+  var absenceEvents = absences.map(function (a) {
+    return {
+      date: normalizeDate_(a.date), civil: String(a.civil), num: a.num, name: a.name,
+      classification: a.classification, reason: a.reason, note: a.note,
+    };
+  }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+  var lateEvents = daily.filter(function (r) { return Number(r.lateMinutes) > 0; }).map(function (r) {
+    return { date: normalizeDate_(r.date), civil: String(r.civil), num: r.num, name: r.name, checkIn: r.checkIn, lateMinutes: Number(r.lateMinutes) };
+  }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+  var earlyEvents = daily.filter(function (r) { return Number(r.earlyMinutes) > 0; }).map(function (r) {
+    return { date: normalizeDate_(r.date), civil: String(r.civil), num: r.num, name: r.name, checkOut: r.checkOut, earlyMinutes: Number(r.earlyMinutes) };
+  }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+  var totals = {
+    presentDays: daily.length,
+    absenceDays: absenceEvents.length,
+    lateDays: lateEvents.length,
+    lateMinutesTotal: lateEvents.reduce(function (s, e) { return s + e.lateMinutes; }, 0),
+    earlyDays: earlyEvents.length,
+    earlyMinutesTotal: earlyEvents.reduce(function (s, e) { return s + e.earlyMinutes; }, 0),
+  };
+
+  return {
+    ok: true, from: from, to: to, civil: civilFilter,
+    absenceEvents: absenceEvents, lateEvents: lateEvents, earlyEvents: earlyEvents, totals: totals,
+  };
 }
 
 function handleUpdateAbsence_(payload) {

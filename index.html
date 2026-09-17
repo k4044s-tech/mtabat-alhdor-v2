@@ -13,6 +13,7 @@
     --muted: #8a7d6c;
     --accent: #c67139;
     --accent-dark: #a85a29;
+    --accent-soft: #f3ead9;
     --border: #e7ddcc;
     --good: #2f7a4f;
     --bad: #b3432f;
@@ -24,31 +25,37 @@
     background: var(--bg);
     color: var(--ink);
     font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
-    min-height: 100vh;
   }
-  header {
-    background: var(--accent);
-    color: #fff;
-    padding: 14px 20px;
+  .app { display: flex; min-height: 100vh; align-items: stretch; }
+  .sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: #fff;
+    border-left: 1px solid var(--border);
+    padding: 22px 16px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column;
   }
-  header h1 { font-size: 18px; margin: 0; }
-  nav { display: flex; gap: 8px; }
-  nav button {
-    background: rgba(255,255,255,0.18);
-    border: none;
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; padding: 0 4px; }
+  .brand-badge {
+    width: 40px; height: 40px; border-radius: 11px; background: var(--accent);
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
   }
-  nav button.active { background: #fff; color: var(--accent-dark); font-weight: 600; }
-  main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
+  .brand-title { font-weight: 700; font-size: 15px; }
+  .brand-sub { font-size: 11px; color: var(--muted); }
+  .side-nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+  .side-nav button {
+    display: flex; align-items: center; gap: 10px; background: none; border: none;
+    padding: 11px 14px; border-radius: 10px; cursor: pointer; font-size: 14px; color: var(--ink); text-align: right;
+  }
+  .side-nav button .icon { width: 20px; text-align: center; }
+  .side-nav button.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .side-nav button.placeholder { color: var(--muted); }
+  .sidebar-foot { font-size: 11px; color: var(--muted); padding: 10px 4px 0; border-top: 1px solid var(--border); margin-top: 14px; }
+
+  main.content { flex: 1; padding: 26px 30px 60px; min-width: 0; }
+  .content-inner { max-width: 900px; }
+
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -58,13 +65,14 @@
   }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
-  input[type=text], input[type=date], input[type=file] {
+  input[type=text], input[type=date], input[type=file], select {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 14px;
     font-family: inherit;
   }
+  td input[type=text], td select { padding: 5px 6px; font-size: 12.5px; width: 100%; }
   button.primary {
     background: var(--accent);
     color: #fff;
@@ -75,113 +83,210 @@
     font-size: 14px;
   }
   button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.ghost {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 16px; cursor: pointer; font-size: 13px; color: var(--ink);
+  }
+  button.small {
+    background: var(--accent); color: #fff; border: none;
+    padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  button.small:disabled { opacity: 0.5; cursor: not-allowed; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border); }
-  th { background: #f3ead9; color: var(--accent-dark); }
+  th { background: var(--accent-soft); color: var(--accent-dark); }
   .status-late { color: var(--warn); font-weight: 600; }
   .status-absent { color: var(--bad); font-weight: 600; }
   .status-ok { color: var(--good); }
   .summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
-  .summary .pill {
-    background: #f3ead9;
-    border-radius: 999px;
-    padding: 8px 16px;
-    font-size: 13px;
-  }
+  .summary .pill { background: var(--accent-soft); border-radius: 999px; padding: 8px 16px; font-size: 13px; }
   .muted { color: var(--muted); font-size: 13px; }
   .msg { padding: 10px 14px; border-radius: 8px; margin-top: 10px; font-size: 14px; }
   .msg.ok { background: #e7f5eb; color: var(--good); }
   .msg.err { background: #fbe9e6; color: var(--bad); }
-  .settings-toggle { background: none; border: none; color: #fff; cursor: pointer; font-size: 13px; text-decoration: underline; }
+
+  /* لوحة اليوم */
+  .school-name { font-size: 13px; color: var(--muted); }
+  .dash-title { font-size: 26px; font-weight: 800; margin: 2px 0 12px; }
+  .duty-banner { display: inline-block; background: var(--accent-soft); border-radius: 12px; padding: 9px 16px; font-size: 13px; margin-bottom: 16px; }
+  .day-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .day-nav button.nav-arrow { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 9px 16px; cursor: pointer; font-size: 13px; }
+  .day-label {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 20px; font-weight: 600; font-size: 14px; flex: 1; text-align: center; min-width: 160px;
+  }
+  .empty-state { text-align: center; padding: 46px 16px; }
+  .empty-state .icon-circle {
+    width: 66px; height: 66px; border-radius: 50%; background: #fde3d3; color: var(--accent);
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 26px;
+  }
+  .empty-state h3 { margin: 0 0 6px; font-size: 18px; }
+  .placeholder-card { text-align: center; padding: 60px 16px; color: var(--muted); }
+
+  @media print {
+    .sidebar, .day-nav, .no-print { display: none !important; }
+    main.content { padding: 0; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>متابعة الحضور</h1>
-  <nav>
-    <button id="tab-import" class="active">الاستيراد</button>
-    <button id="tab-dashboard">لوحة اليوم</button>
-  </nav>
-  <button class="settings-toggle" id="settings-toggle">الإعدادات</button>
-</header>
-
-<main>
-  <div class="card" id="settings-card" style="display:none">
-    <h3>إعدادات الاتصال بالشيت</h3>
-    <div class="row">
+<div class="app">
+  <aside class="sidebar no-print">
+    <div class="brand">
+      <div class="brand-badge">📋</div>
       <div>
-        <label>رابط Apps Script (exec)</label>
-        <input type="text" id="cfg-url" style="width:420px" placeholder="https://script.google.com/macros/s/.../exec">
-      </div>
-      <div>
-        <label>التوكن (SHARED_SECRET)</label>
-        <input type="text" id="cfg-token" style="width:200px">
+        <div class="brand-title">متابعة الحضور</div>
+        <div class="brand-sub" id="sync-indicator">متزامن مع الشيت</div>
       </div>
     </div>
-    <div class="row" style="margin-top:10px">
-      <button class="primary" id="cfg-save">حفظ</button>
-      <span class="muted" id="cfg-status"></span>
-    </div>
-  </div>
+    <nav class="side-nav" id="side-nav">
+      <button data-tab="dashboard"><span class="icon">📅</span><span>لوحة اليوم</span></button>
+      <button data-tab="import"><span class="icon">⬆️</span><span>الاستيراد</span></button>
+      <button data-tab="summary" class="placeholder"><span class="icon">📊</span><span>الملخص والترتيب</span></button>
+      <button data-tab="analytics" class="placeholder"><span class="icon">📈</span><span>التحليلات</span></button>
+      <button data-tab="absence"><span class="icon">📋</span><span>سجل الغياب</span></button>
+      <button data-tab="reports" class="placeholder"><span class="icon">📄</span><span>التقارير</span></button>
+      <button data-tab="settings"><span class="icon">⚙️</span><span>الإعدادات</span></button>
+    </nav>
+    <div class="sidebar-foot">البيانات محفوظة في Google Sheet مشترك</div>
+  </aside>
 
-  <section id="view-import">
-    <div class="card">
-      <h3>استيراد ملف اليوم</h3>
-      <p class="muted">اختر ملف Excel المصدَّر من نظام حضوري (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
-      <input type="file" id="file-input" accept=".xlsx,.xls">
-      <div class="row" style="margin-top:14px">
-        <div>
-          <label>التاريخ</label>
-          <input type="text" id="imp-date" style="width:130px" placeholder="YYYY-MM-DD">
-        </div>
-        <div>
-          <label>بداية الدوام</label>
-          <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
-        </div>
-        <div>
-          <label>نهاية الدوام</label>
-          <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
-        </div>
-        <div>
-          <label>تسمية الفترة</label>
-          <input type="text" id="imp-sched-label" style="width:100px" value="صيفي">
-        </div>
-      </div>
-      <div id="preview-wrap" style="margin-top:16px; display:none">
-        <p class="muted" id="preview-summary"></p>
-        <div style="max-height:320px; overflow:auto">
-          <table id="preview-table"><thead></thead><tbody></tbody></table>
-        </div>
-        <button class="primary" id="btn-confirm-import" style="margin-top:14px">تأكيد الاستيراد وإرسال للشيت</button>
-      </div>
-      <div id="import-msg"></div>
-    </div>
-  </section>
+  <main class="content">
+    <div class="content-inner">
 
-  <section id="view-dashboard" style="display:none">
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>التاريخ</label>
+      <section id="view-dashboard">
+        <div class="school-name" id="dash-school-name">مدرسة</div>
+        <div class="dash-title">لوحة اليوم</div>
+        <div class="duty-banner" id="duty-banner"></div>
+        <div class="day-nav no-print">
+          <button class="nav-arrow" id="btn-prev-day">◀ السابق</button>
+          <div class="day-label" id="day-label">—</div>
+          <button class="nav-arrow" id="btn-next-day">التالي ▶</button>
           <input type="date" id="dash-date">
+          <button class="ghost" id="btn-print">🖶 طباعة الكشف الرسمي</button>
         </div>
-        <button class="primary" id="btn-refresh-dash" style="align-self:flex-end">تحديث</button>
-      </div>
+        <div class="summary" id="dash-summary"></div>
+        <div class="card" id="dash-empty" style="display:none">
+          <div class="empty-state">
+            <div class="icon-circle">⬆️</div>
+            <h3>لا توجد بيانات لهذا اليوم</h3>
+            <p class="muted">لم يُستورد ملف البصمة لهذا التاريخ بعد.</p>
+            <button class="primary" id="btn-goto-import">استيراد ملف اليوم</button>
+          </div>
+        </div>
+        <div class="card" id="dash-table-card" style="display:none">
+          <div style="max-height:480px; overflow:auto">
+            <table id="dash-table">
+              <thead>
+                <tr><th>الرقم</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th><th>الساعات</th><th>التأخير (د)</th><th>الحالة</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="dash-msg"></div>
+      </section>
+
+      <section id="view-import" style="display:none">
+        <div class="card">
+          <h3>استيراد ملف اليوم</h3>
+          <p class="muted">اختر ملف Excel المصدَّر من نظام حضوري (الرقم · الاسم · السجل المدني · وقت الحضور · وقت الانصراف).</p>
+          <input type="file" id="file-input" accept=".xlsx,.xls">
+          <div class="row" style="margin-top:14px">
+            <div>
+              <label>التاريخ</label>
+              <input type="text" id="imp-date" style="width:130px" placeholder="YYYY-MM-DD">
+            </div>
+            <div>
+              <label>بداية الدوام</label>
+              <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
+            </div>
+            <div>
+              <label>نهاية الدوام</label>
+              <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
+            </div>
+            <div>
+              <label>تسمية الفترة</label>
+              <input type="text" id="imp-sched-label" style="width:100px" value="صيفي">
+            </div>
+          </div>
+          <div id="preview-wrap" style="margin-top:16px; display:none">
+            <p class="muted" id="preview-summary"></p>
+            <div style="max-height:320px; overflow:auto">
+              <table id="preview-table"><thead></thead><tbody></tbody></table>
+            </div>
+            <button class="primary" id="btn-confirm-import" style="margin-top:14px">تأكيد الاستيراد وإرسال للشيت</button>
+          </div>
+          <div id="import-msg"></div>
+        </div>
+      </section>
+
+      <section id="view-absence" style="display:none">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="abs-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="abs-to">
+            </div>
+            <button class="primary" id="btn-refresh-absence" style="align-self:flex-end">تحديث</button>
+          </div>
+        </div>
+        <div class="card">
+          <datalist id="reason-suggestions">
+            <option value="إجازة اضطرارية">
+            <option value="إجازة مرضية">
+            <option value="إجازة مرافقة مريض">
+          </datalist>
+          <div style="max-height:520px; overflow:auto">
+            <table id="absence-table">
+              <thead>
+                <tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
+          <div id="absence-msg"></div>
+        </div>
+      </section>
+
+      <section id="view-settings" style="display:none">
+        <div class="card">
+          <h3>إعدادات الاتصال بالشيت</h3>
+          <div class="row">
+            <div>
+              <label>رابط Apps Script (exec)</label>
+              <input type="text" id="cfg-url" style="width:420px" placeholder="https://script.google.com/macros/s/.../exec">
+            </div>
+            <div>
+              <label>التوكن (SHARED_SECRET)</label>
+              <input type="text" id="cfg-token" style="width:200px">
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div>
+              <label>اسم المدرسة</label>
+              <input type="text" id="cfg-school" style="width:320px">
+            </div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="primary" id="cfg-save">حفظ</button>
+            <span class="muted" id="cfg-status"></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-summary" style="display:none"><div class="card placeholder-card">الملخص والترتيب — قريباً</div></section>
+      <section id="view-analytics" style="display:none"><div class="card placeholder-card">التحليلات — قريباً</div></section>
+      <section id="view-reports" style="display:none"><div class="card placeholder-card">التقارير — قريباً</div></section>
+
     </div>
-    <div class="card">
-      <div class="summary" id="dash-summary"></div>
-      <div style="max-height:480px; overflow:auto">
-        <table id="dash-table">
-          <thead>
-            <tr><th>الرقم</th><th>الاسم</th><th>الحضور</th><th>الانصراف</th><th>الساعات</th><th>التأخير (د)</th><th>الحالة</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div id="dash-msg"></div>
-    </div>
-  </section>
-</main>
+  </main>
+</div>
 
 <script>
 const CONFIG_KEY = 'hather_v2_config';
@@ -204,36 +309,68 @@ async function callApi(action, payload) {
   return json;
 }
 
-// ---------- Settings ----------
-const settingsCard = document.getElementById('settings-card');
-document.getElementById('settings-toggle').onclick = () => {
-  settingsCard.style.display = settingsCard.style.display === 'none' ? 'block' : 'none';
-  const cfg = loadConfig();
-  document.getElementById('cfg-url').value = cfg.url || '';
-  document.getElementById('cfg-token').value = cfg.token || '';
-};
-document.getElementById('cfg-save').onclick = () => {
-  saveConfig({ url: document.getElementById('cfg-url').value.trim(), token: document.getElementById('cfg-token').value.trim() });
-  document.getElementById('cfg-status').textContent = 'تم الحفظ ✔';
-};
-
-// ---------- Tabs ----------
-const tabImport = document.getElementById('tab-import');
-const tabDashboard = document.getElementById('tab-dashboard');
-const viewImport = document.getElementById('view-import');
-const viewDashboard = document.getElementById('view-dashboard');
-tabImport.onclick = () => { tabImport.classList.add('active'); tabDashboard.classList.remove('active'); viewImport.style.display = ''; viewDashboard.style.display = 'none'; };
-tabDashboard.onclick = () => {
-  tabDashboard.classList.add('active'); tabImport.classList.remove('active');
-  viewDashboard.style.display = ''; viewImport.style.display = 'none';
-  if (!document.getElementById('dash-date').value) document.getElementById('dash-date').value = todayISO();
-  refreshDashboard();
-};
-
 function todayISO() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+function isoToLocalDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function addDaysISO(iso, delta) {
+  const d = isoToLocalDate(iso);
+  d.setDate(d.getDate() + delta);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+const WEEKDAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+function formatDayLabel(iso) {
+  const d = isoToLocalDate(iso);
+  return `${WEEKDAYS_AR[d.getDay()]} ${iso.split('-').reverse().join('/')}`;
+}
+
+// ---------- Tabs ----------
+const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'reports', 'settings'];
+function showTab(name) {
+  TAB_IDS.forEach((id) => {
+    document.getElementById('view-' + id).style.display = id === name ? '' : 'none';
+  });
+  document.querySelectorAll('#side-nav button').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  if (name === 'absence') {
+    if (!document.getElementById('abs-from').value) {
+      const d = new Date();
+      document.getElementById('abs-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      document.getElementById('abs-to').value = todayISO();
+    }
+    refreshAbsence();
+  }
+  if (name === 'settings') {
+    const cfg = loadConfig();
+    document.getElementById('cfg-url').value = cfg.url || '';
+    document.getElementById('cfg-token').value = cfg.token || '';
+    document.getElementById('cfg-school').value = cfg.schoolName || '';
+  }
+}
+document.querySelectorAll('#side-nav button').forEach((btn) => {
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+});
+document.getElementById('btn-goto-import').addEventListener('click', () => {
+  document.getElementById('imp-date').value = document.getElementById('dash-date').value;
+  showTab('import');
+});
+document.getElementById('btn-print').addEventListener('click', () => window.print());
+
+// ---------- Settings ----------
+document.getElementById('cfg-save').addEventListener('click', () => {
+  saveConfig({
+    url: document.getElementById('cfg-url').value.trim(),
+    token: document.getElementById('cfg-token').value.trim(),
+    schoolName: document.getElementById('cfg-school').value.trim(),
+  });
+  document.getElementById('cfg-status').textContent = 'تم الحفظ ✔';
+  document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
+});
 
 // ---------- Import ----------
 let parsedRows = []; // [{civil, name, checkIn, checkOut}]
@@ -253,7 +390,6 @@ function normalizeTimeString(v) {
   const min = m[2];
   const ap = m[3] ? m[3].toUpperCase() : null;
   if (ap) return `${String(h).padStart(2, '0')}:${min} ${ap}`;
-  // بدون AM/PM: افتراض تنسيق 24 ساعة كما تُصدّره حضوري أحياناً
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
@@ -328,6 +464,7 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
       rows: parsedRows,
     });
     document.getElementById('import-msg').innerHTML = `<div class="msg ok">تم الاستيراد: ${res.presentCount} حاضر، ${res.absentCount} غائب.</div>`;
+    if (document.getElementById('dash-date').value === date) refreshDashboard();
   } catch (err) {
     document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
   } finally {
@@ -337,12 +474,22 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
 });
 
 // ---------- Dashboard ----------
-document.getElementById('btn-refresh-dash').addEventListener('click', refreshDashboard);
 document.getElementById('dash-date').addEventListener('change', refreshDashboard);
+document.getElementById('btn-prev-day').addEventListener('click', () => {
+  document.getElementById('dash-date').value = addDaysISO(document.getElementById('dash-date').value, -1);
+  refreshDashboard();
+});
+document.getElementById('btn-next-day').addEventListener('click', () => {
+  document.getElementById('dash-date').value = addDaysISO(document.getElementById('dash-date').value, 1);
+  refreshDashboard();
+});
 
 async function refreshDashboard() {
-  const date = document.getElementById('dash-date').value;
-  if (!date) return;
+  let date = document.getElementById('dash-date').value;
+  if (!date) { date = todayISO(); document.getElementById('dash-date').value = date; }
+  document.getElementById('day-label').textContent = formatDayLabel(date);
+  document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
+
   const msgEl = document.getElementById('dash-msg');
   msgEl.innerHTML = '';
   try {
@@ -356,6 +503,23 @@ async function refreshDashboard() {
     dayRes.absence.forEach((r) => (absenceByCivil[String(r.civil)] = r));
 
     const teachers = teachersRes.teachers.slice().sort((a, b) => Number(a.num) - Number(b.num));
+    const hasData = dayRes.attendance.length > 0 || dayRes.absence.length > 0;
+
+    document.getElementById('dash-empty').style.display = hasData ? 'none' : 'block';
+    document.getElementById('dash-table-card').style.display = hasData ? 'block' : 'none';
+
+    if (dayRes.importInfo && dayRes.importInfo.schedStart) {
+      document.getElementById('duty-banner').textContent = `الدوام على ${date}: ${dayRes.importInfo.schedStart} — ${dayRes.importInfo.schedEnd}`;
+      document.getElementById('duty-banner').style.display = 'inline-block';
+    } else {
+      document.getElementById('duty-banner').style.display = 'none';
+    }
+
+    if (!hasData) {
+      document.getElementById('dash-summary').innerHTML = `<span class="pill">0 معلماً في الكشف</span>`;
+      return;
+    }
+
     let present = 0, absent = 0, late = 0;
     const tbody = document.querySelector('#dash-table tbody');
     tbody.innerHTML = teachers.map((t) => {
@@ -376,7 +540,7 @@ async function refreshDashboard() {
     }).join('');
 
     document.getElementById('dash-summary').innerHTML = `
-      <span class="pill">إجمالي المعلمين: ${teachers.length}</span>
+      <span class="pill">${teachers.length} معلماً في الكشف</span>
       <span class="pill">حاضر: ${present}</span>
       <span class="pill">غائب: ${absent}</span>
       <span class="pill">متأخر: ${late}</span>
@@ -386,8 +550,70 @@ async function refreshDashboard() {
   }
 }
 
+// ---------- Absence log ----------
+document.getElementById('btn-refresh-absence').addEventListener('click', refreshAbsence);
+
+const CLASSIFICATIONS = ['', 'بعذر', 'بدون عذر'];
+
+async function refreshAbsence() {
+  const from = document.getElementById('abs-from').value;
+  const to = document.getElementById('abs-to').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('absence-msg');
+  msgEl.innerHTML = '';
+  try {
+    const res = await callApi('getAbsenceRange', { from, to });
+    const tbody = document.querySelector('#absence-table tbody');
+    document.getElementById('absence-empty').style.display = res.rows.length ? 'none' : 'block';
+    tbody.innerHTML = res.rows.map((r) => {
+      const options = CLASSIFICATIONS.map((c) => `<option value="${c}" ${c === (r.classification || '') ? 'selected' : ''}>${c || '—'}</option>`).join('');
+      return `
+        <tr data-id="${r.id}">
+          <td>${r.date}</td>
+          <td>${r.name}</td>
+          <td><select class="f-classification">${options}</select></td>
+          <td><input class="f-reason" type="text" list="reason-suggestions" value="${(r.reason || '').replace(/"/g, '&quot;')}"></td>
+          <td><input class="f-note" type="text" value="${(r.note || '').replace(/"/g, '&quot;')}"></td>
+          <td><button class="small btn-save-absence">حفظ</button></td>
+        </tr>`;
+    }).join('');
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+  }
+}
+
+document.querySelector('#absence-table tbody').addEventListener('click', async (ev) => {
+  if (!ev.target.classList.contains('btn-save-absence')) return;
+  const tr = ev.target.closest('tr');
+  const id = tr.dataset.id;
+  const btn = ev.target;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await callApi('updateAbsence', {
+      id,
+      classification: tr.querySelector('.f-classification').value,
+      reason: tr.querySelector('.f-reason').value,
+      note: tr.querySelector('.f-note').value,
+    });
+    btn.textContent = 'تم ✔';
+    setTimeout(() => { btn.textContent = 'حفظ'; btn.disabled = false; }, 1500);
+  } catch (err) {
+    document.getElementById('absence-msg').innerHTML = `<div class="msg err">خطأ: ${err.message}</div>`;
+    btn.textContent = 'حفظ';
+    btn.disabled = false;
+  }
+});
+
 // init
-if (!loadConfig().url) settingsCard.style.display = 'block';
+document.getElementById('dash-date').value = todayISO();
+document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
+if (!loadConfig().url) {
+  showTab('settings');
+} else {
+  showTab('dashboard');
+  refreshDashboard();
+}
 </script>
 </body>
 </html>

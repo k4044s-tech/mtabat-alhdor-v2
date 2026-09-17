@@ -48,6 +48,9 @@ function handleRequest_(payload) {
         case 'getAbsenceRange':
           out = handleGetAbsenceRange_(payload);
           break;
+        case 'getMonthlySummary':
+          out = handleGetMonthlySummary_(payload);
+          break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
           break;
@@ -177,6 +180,17 @@ function upsertRows_(sheet, idColName, records) {
   });
 }
 
+function deleteRowsByIds_(sheet, ids) {
+  if (!ids.length) return;
+  var idSet = {};
+  ids.forEach(function (id) { idSet[id] = true; });
+  var data = sheet.getDataRange().getValues();
+  var idCol = data[0].indexOf('id');
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (idSet[normalizeDate_(data[i][idCol])]) sheet.deleteRow(i + 1);
+  }
+}
+
 // يحذف كل صفوف تاريخ معيّن من الحضور/الغياب/الاستيرادات — لتصحيح استيراد خاطئ
 function handleDeleteDay_(payload) {
   var date = String(payload.date);
@@ -238,6 +252,12 @@ function handleImportDay_(payload) {
       teacherByCivil[String(t.civil)] = t;
     });
 
+    // نحتفظ بتصنيف/سبب/ملاحظة الغياب اليدوية الموجودة مسبقاً لهذا التاريخ عند إعادة الاستيراد
+    var existingAbsenceByCivil = {};
+    sheetToObjects_(getSheet_(SHEET_ABSENCE)).forEach(function (a) {
+      if (normalizeDate_(a.date) === date) existingAbsenceByCivil[String(a.civil)] = a;
+    });
+
     var schedStartMin = parseTimeToMinutes_(schedStart);
     var schedEndMin = parseTimeToMinutes_(schedEnd);
     var now = Date.now();
@@ -289,21 +309,30 @@ function handleImportDay_(payload) {
       if (!isActive_(t.active)) return;
       var civil = String(t.civil);
       if (presentCivils[civil]) return;
+      var existing = existingAbsenceByCivil[civil];
       absenceRecords.push({
         id: date + '__' + civil,
         date: date,
         civil: civil,
         num: t.num,
         name: t.name,
-        classification: '',
-        reason: '',
-        note: '',
+        classification: existing ? existing.classification : '',
+        reason: existing ? existing.reason : '',
+        note: existing ? existing.note : '',
         updatedAt: now,
       });
     });
 
     upsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
     upsertRows_(getSheet_(SHEET_ABSENCE), 'id', absenceRecords);
+
+    // احذف أي سجل غياب/حضور سابق لنفس اليوم أصبح غير صحيح الآن (مثلاً معلّم كان غائباً وحضر اليوم)
+    var absentCivilsNow = {};
+    absenceRecords.forEach(function (a) { absentCivilsNow[a.civil] = true; });
+    var staleAbsenceIds = Object.keys(existingAbsenceByCivil)
+      .filter(function (c) { return !absentCivilsNow[c]; })
+      .map(function (c) { return date + '__' + c; });
+    deleteRowsByIds_(getSheet_(SHEET_ABSENCE), staleAbsenceIds);
     upsertRows_(getSheet_(SHEET_IMPORTS), 'date', [
       {
         date: date,
@@ -338,6 +367,78 @@ function handleGetAbsenceRange_(payload) {
     return normalizeDate_(a.date) < normalizeDate_(b.date) ? -1 : 1;
   });
   return { ok: true, from: from, to: to, rows: rows };
+}
+
+// ملخص شهري لكل معلّم مرتّب تنازلياً حسب "المخالفات" (غياب + تأخير + انصراف مبكر) — لشاشة الملخص والترتيب
+function handleGetMonthlySummary_(payload) {
+  var from = String(payload.from);
+  var to = String(payload.to);
+
+  var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS));
+  var daily = sheetToObjects_(getSheet_(SHEET_ATTENDANCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+  var absences = sheetToObjects_(getSheet_(SHEET_ABSENCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+  var imports = sheetToObjects_(getSheet_(SHEET_IMPORTS)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+
+  function blankEntry(civil, num, name, active) {
+    return {
+      civil: civil, num: num, name: name, active: active,
+      presentDays: 0, absenceDays: 0, excused: 0, unexcused: 0, unclassified: 0,
+      lateDays: 0, lateMinutes: 0, earlyDays: 0, earlyMinutes: 0, noCheckoutDays: 0,
+    };
+  }
+
+  var byCivil = {};
+  teachers.forEach(function (t) {
+    byCivil[String(t.civil)] = blankEntry(String(t.civil), t.num, t.name, isActive_(t.active));
+  });
+
+  daily.forEach(function (r) {
+    var civil = String(r.civil);
+    var e = byCivil[civil] || (byCivil[civil] = blankEntry(civil, r.num, r.name, true));
+    e.presentDays++;
+    var late = Number(r.lateMinutes) || 0;
+    var early = Number(r.earlyMinutes) || 0;
+    if (late > 0) { e.lateDays++; e.lateMinutes += late; }
+    if (early > 0) { e.earlyDays++; e.earlyMinutes += early; }
+    if (String(r.noCheckout) === 'true') e.noCheckoutDays++;
+  });
+
+  absences.forEach(function (a) {
+    var civil = String(a.civil);
+    var e = byCivil[civil] || (byCivil[civil] = blankEntry(civil, a.num, a.name, true));
+    e.absenceDays++;
+    if (a.classification === 'بعذر') e.excused++;
+    else if (a.classification === 'بدون عذر') e.unexcused++;
+    else e.unclassified++;
+  });
+
+  var list = Object.keys(byCivil).map(function (k) { return byCivil[k]; });
+  list.forEach(function (e) { e.violations = e.absenceDays + e.lateDays + e.earlyDays; });
+  list.sort(function (a, b) { return (b.violations - a.violations) || ((a.num || 0) - (b.num || 0)); });
+
+  var totals = list.reduce(function (acc, e) {
+    acc.absenceDays += e.absenceDays;
+    acc.excused += e.excused;
+    acc.unexcused += e.unexcused;
+    acc.unclassified += e.unclassified;
+    acc.lateDays += e.lateDays;
+    acc.lateMinutes += e.lateMinutes;
+    acc.earlyDays += e.earlyDays;
+    acc.earlyMinutes += e.earlyMinutes;
+    acc.noCheckoutDays += e.noCheckoutDays;
+    return acc;
+  }, { absenceDays: 0, excused: 0, unexcused: 0, unclassified: 0, lateDays: 0, lateMinutes: 0, earlyDays: 0, earlyMinutes: 0, noCheckoutDays: 0 });
+
+  return { ok: true, from: from, to: to, list: list, totals: totals, workDays: imports.length };
 }
 
 function handleUpdateAbsence_(payload) {

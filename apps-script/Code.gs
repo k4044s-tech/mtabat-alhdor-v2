@@ -51,6 +51,9 @@ function handleRequest_(payload) {
         case 'getMonthlySummary':
           out = handleGetMonthlySummary_(payload);
           break;
+        case 'getAnalytics':
+          out = handleGetAnalytics_(payload);
+          break;
         case 'updateAbsence':
           out = handleUpdateAbsence_(payload);
           break;
@@ -439,6 +442,69 @@ function handleGetMonthlySummary_(payload) {
   }, { absenceDays: 0, excused: 0, unexcused: 0, unclassified: 0, lateDays: 0, lateMinutes: 0, earlyDays: 0, earlyMinutes: 0, noCheckoutDays: 0 });
 
   return { ok: true, from: from, to: to, list: list, totals: totals, workDays: imports.length };
+}
+
+function classifyLate_(minutes) {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes <= 10) return 'بسيط';
+  if (minutes <= 30) return 'متوسط';
+  return 'كبير';
+}
+
+// اتجاه يومي + شدة التأخير + أكثر أسباب الغياب تكراراً خلال فترة — لشاشة التحليلات
+function handleGetAnalytics_(payload) {
+  var from = String(payload.from);
+  var to = String(payload.to);
+
+  var daily = sheetToObjects_(getSheet_(SHEET_ATTENDANCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+  var absences = sheetToObjects_(getSheet_(SHEET_ABSENCE)).filter(function (r) {
+    var d = normalizeDate_(r.date);
+    return d >= from && d <= to;
+  });
+
+  var dateSet = {};
+  daily.forEach(function (r) { dateSet[normalizeDate_(r.date)] = true; });
+  absences.forEach(function (r) { dateSet[normalizeDate_(r.date)] = true; });
+  var dates = Object.keys(dateSet).sort();
+
+  var dailyTrend = dates.map(function (date) {
+    var dRows = daily.filter(function (r) { return normalizeDate_(r.date) === date; });
+    var aRows = absences.filter(function (r) { return normalizeDate_(r.date) === date; });
+    return {
+      date: date,
+      present: dRows.length,
+      absent: aRows.length,
+      late: dRows.filter(function (r) { return Number(r.lateMinutes) > 0; }).length,
+      early: dRows.filter(function (r) { return Number(r.earlyMinutes) > 0; }).length,
+      noCheckout: dRows.filter(function (r) { return String(r.noCheckout) === 'true'; }).length,
+    };
+  });
+
+  var latenessSeverity = { 'بسيط': 0, 'متوسط': 0, 'كبير': 0 };
+  daily.forEach(function (r) {
+    var c = classifyLate_(Number(r.lateMinutes));
+    if (c) latenessSeverity[c]++;
+  });
+
+  var reasonCounts = {};
+  absences.forEach(function (a) {
+    var key = (a.reason && String(a.reason).trim())
+      || (a.classification === 'بعذر' ? 'بعذر (بدون سبب محدد)' : a.classification === 'بدون عذر' ? 'بدون عذر' : 'غير مصنف');
+    reasonCounts[key] = (reasonCounts[key] || 0) + 1;
+  });
+  var absenceReasons = Object.keys(reasonCounts)
+    .map(function (label) { return { label: label, value: reasonCounts[label] }; })
+    .sort(function (a, b) { return b.value - a.value; });
+  if (absenceReasons.length > 8) {
+    var head = absenceReasons.slice(0, 7);
+    var restTotal = absenceReasons.slice(7).reduce(function (s, x) { return s + x.value; }, 0);
+    absenceReasons = head.concat([{ label: 'أخرى', value: restTotal }]);
+  }
+
+  return { ok: true, from: from, to: to, dailyTrend: dailyTrend, latenessSeverity: latenessSeverity, absenceReasons: absenceReasons };
 }
 
 function handleUpdateAbsence_(payload) {

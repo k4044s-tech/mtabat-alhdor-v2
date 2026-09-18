@@ -126,6 +126,24 @@
     border-color: #71717a;
     box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
   }
+  input[type=search] {
+    padding: 7px 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--ink);
+    outline: none;
+    transition: border-color .12s ease, box-shadow .12s ease;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type=search]:focus {
+    border-color: #71717a;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  }
+  input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   td input[type=text], td select { padding: 4px 6px; font-size: 12px; width: 100%; }
   button { font-family: inherit; }
   button.primary {
@@ -1053,11 +1071,14 @@ function showTab(name) {
   closeMobileSidebar();
   if (name === 'absence') {
     if (!document.getElementById('abs-from').value) {
-      const d = new Date();
-      document.getElementById('abs-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      document.getElementById('abs-to').value = todayISO();
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('abs-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('abs-to').value = to;
+        refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
+      });
+    } else {
+      refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
     }
-    refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
   }
   if (name === 'settings') {
     const cfg = loadConfig();
@@ -1071,19 +1092,25 @@ function showTab(name) {
   }
   if (name === 'summary') {
     if (!document.getElementById('sum-from').value) {
-      const d = new Date();
-      document.getElementById('sum-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      document.getElementById('sum-to').value = todayISO();
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('sum-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('sum-to').value = to;
+        refreshSummary();
+      });
+    } else {
+      refreshSummary();
     }
-    refreshSummary();
   }
   if (name === 'analytics') {
     if (!document.getElementById('an-from').value) {
-      const d = new Date();
-      document.getElementById('an-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      document.getElementById('an-to').value = todayISO();
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('an-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('an-to').value = to;
+        refreshAnalytics();
+      });
+    } else {
+      refreshAnalytics();
     }
-    refreshAnalytics();
   }
   if (name === 'reports') {
     populateDrEmployeeSelect_();
@@ -2593,19 +2620,38 @@ function buildReportFooterHtml() {
 // طباعة داخل الصفحة الحالية بلا فتح نافذة/تبويب جديد: نملأ حاوية مخفية (#print-area)
 // بمحتوى المستند مع أنماطه الخاصة، ثم نستدعي طباعة المتصفح مباشرة — قاعدة CSS مرافقة
 // تُخفي كل شيء آخر أثناء الطباعة فتظهر هذه الحاوية فقط.
+let printCleanupState = null;
 function printInPage(styleCss, bodyHtml) {
+  // ننظّف أي طباعة سابقة عالقة قبل بدء طباعة جديدة (حماية إضافية)
+  if (printCleanupState) printCleanupState();
+
   const area = document.getElementById('print-area');
   area.innerHTML = `<style>${styleCss}</style>${bodyHtml}`;
   document.body.classList.add('print-mode');
+
+  const cleanup = () => {
+    document.body.classList.remove('print-mode');
+    area.innerHTML = '';
+    window.removeEventListener('afterprint', cleanup);
+    window.removeEventListener('focus', onFocus);
+    clearTimeout(safetyTimer);
+    printCleanupState = null;
+  };
+  printCleanupState = cleanup;
+
+  let onFocus = () => {};
+  let safetyTimer = null;
+
   setTimeout(() => {
     window.print();
-    const cleanup = () => {
-      document.body.classList.remove('print-mode');
-      area.innerHTML = '';
-      window.removeEventListener('afterprint', cleanup);
-    };
+    // 'afterprint' هو الإشارة الأدق (يُطلق سواء طبع المستخدم أو ألغى)، لكن بعض المتصفحات
+    // لا تُطلقه بشكل موثوق دائماً — لذا نضيف أيضاً استعادة التركيز على النافذة (تحدث فور
+    // إغلاق نافذة الطباعة) كإشارة احتياطية، مع تأخير بسيط لتفادي التقاط ظهور مربع الطباعة
+    // نفسه كأنه إغلاق له، وشبكة أمان أخيرة في حال فشلت الإشارتان معاً.
+    onFocus = () => setTimeout(cleanup, 400);
     window.addEventListener('afterprint', cleanup);
-    setTimeout(cleanup, 4000);
+    window.addEventListener('focus', onFocus);
+    safetyTimer = setTimeout(cleanup, 20000);
   }, 60);
 }
 

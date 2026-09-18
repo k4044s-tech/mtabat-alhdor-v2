@@ -531,8 +531,9 @@
               <div class="dropzone-title">اختر ملفاً من الجهاز</div>
               <div class="muted" style="margin-bottom:12px">xlsx · xls</div>
               <button class="primary" id="btn-pick-file">اختيار ملف البصمة</button>
-              <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+              <input type="file" id="file-input" accept=".xlsx,.xls" multiple style="display:none">
             </div>
+            <p class="muted" style="font-size:11.5px; margin-top:8px">يمكنك اختيار أكثر من ملف دفعة واحدة (مثلاً أسبوع كامل) — سيُستخرج تاريخ كل ملف تلقائياً من اسمه.</p>
             <div class="row" style="margin-top:14px">
               <div>
                 <label>تاريخ اليوم في الملف</label>
@@ -565,6 +566,19 @@
           </div>
         </div>
         <div id="import-msg"></div>
+
+        <div class="card" id="batch-import-card" style="display:none; margin-top:16px">
+          <h3 style="margin-top:0">استيراد عدة ملفات دفعة واحدة (<span id="batch-count">0</span>)</h3>
+          <p class="muted">استُخرج تاريخ كل ملف تلقائياً من اسمه — راجعه وعدّله عند الحاجة. بداية/نهاية الدوام وتسمية الفترة المحدَّدة أعلاه تُطبَّق على كل الملفات.</p>
+          <div style="max-height:400px; overflow:auto">
+            <table id="batch-import-table">
+              <thead><tr><th>الملف</th><th>التاريخ</th><th>عدد الصفوف</th><th>الحالة</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <button class="primary" id="btn-batch-import-all" style="margin-top:14px; width:100%">استيراد كل الملفات</button>
+          <div id="batch-import-msg"></div>
+        </div>
       </section>
 
       <section id="view-absence" style="display:none">
@@ -1200,7 +1214,9 @@ document.getElementById('cfg-save').addEventListener('click', () => {
 let parsedRows = []; // [{civil, name, checkIn, checkOut}]
 
 function detectDateFromFilename(name) {
-  const m = name.match(/\((\d{4}-\d{2}-\d{2})\)/);
+  // يبحث عن أي تاريخ بصيغة YYYY-MM-DD في أي مكان من اسم الملف، بغضّ النظر عمّا يحيط به
+  // (تحت شرطة، قوسين، شرطة عادية...) — يطابق كلا الشكلين: "(2026-09-17)" و"_2026-09-17_"
+  const m = name.match(/(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : '';
 }
 
@@ -1243,18 +1259,22 @@ const dropzone = document.getElementById('dropzone');
   dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
 });
 dropzone.addEventListener('drop', (e) => {
-  const file = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file) processImportFile(file);
+  const files = e.dataTransfer.files;
+  if (!files || !files.length) return;
+  if (files.length === 1) processImportFile(files[0]);
+  else processBatchImportFiles([...files]);
 });
 
 document.getElementById('file-input').addEventListener('change', (ev) => {
-  const file = ev.target.files[0];
-  if (file) processImportFile(file);
+  const files = ev.target.files;
+  if (!files || !files.length) return;
+  if (files.length === 1) processImportFile(files[0]);
+  else processBatchImportFiles([...files]);
 });
 
-async function processImportFile(file) {
-  document.getElementById('import-msg').innerHTML = '';
-  currentImportFileName = file.name;
+// يحلّل ملف بصمة واحد ويُرجع صفوف الحضور المستخرجة منه، أو خطأ إن تعذّر إيجاد الأعمدة
+// المتوقّعة — مستخدَمة من مسار الملف الواحد ومسار الاستيراد الجماعي معاً بلا ازدواج.
+async function parseBiometricFile_(file) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -1265,27 +1285,38 @@ async function processImportFile(file) {
     const row = grid[i].map(String);
     if (row.some((c) => c.includes('السجل المدني'))) { headerRowIdx = i; headers = row; break; }
   }
-  if (headerRowIdx === -1) {
-    document.getElementById('import-msg').innerHTML = '<div class="msg err">تعذّر إيجاد عمود "السجل المدني" في الملف.</div>';
-    return;
-  }
+  if (headerRowIdx === -1) return { rows: null, error: 'تعذّر إيجاد عمود "السجل المدني" في الملف.' };
+
   const civilCol = findCol(headers, 'السجل المدني');
   const nameCol = findCol(headers, 'اسم');
   const inCol = headers.findIndex((h) => h.includes('حضور'));
   const outCol = headers.findIndex((h) => h.includes('انصراف'));
 
-  parsedRows = [];
+  const rows = [];
   for (let i = headerRowIdx + 1; i < grid.length; i++) {
     const row = grid[i];
     const civil = String(row[civilCol] || '').trim();
     if (!/^\d{5,}$/.test(civil)) continue;
-    parsedRows.push({
+    rows.push({
       civil,
       name: nameCol >= 0 ? String(row[nameCol] || '') : '',
       checkIn: normalizeTimeString(row[inCol]),
       checkOut: normalizeTimeString(row[outCol]),
     });
   }
+  return { rows, error: null };
+}
+
+async function processImportFile(file) {
+  document.getElementById('import-msg').innerHTML = '';
+  document.getElementById('batch-import-card').style.display = 'none';
+  currentImportFileName = file.name;
+  const { rows, error } = await parseBiometricFile_(file);
+  if (error) {
+    document.getElementById('import-msg').innerHTML = `<div class="msg err">${escapeHtml(error)}</div>`;
+    return;
+  }
+  parsedRows = rows;
 
   const importDate = detectDateFromFilename(file.name) || todayISO();
   document.getElementById('imp-date').value = importDate;
@@ -1302,6 +1333,89 @@ async function processImportFile(file) {
   document.getElementById('preview-wrap').style.display = 'block';
   setImportStep(2);
 }
+
+// ---------- استيراد عدة ملفات دفعة واحدة ----------
+let batchImportFiles = [];
+async function processBatchImportFiles(files) {
+  document.getElementById('import-msg').innerHTML = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-summary').textContent = 'اختر ملفاً ليُفحص هنا قبل الحفظ.';
+  setImportStep(1);
+
+  const parsed = await Promise.all(files.map(async (file) => {
+    const { rows, error } = await parseBiometricFile_(file);
+    const date = detectDateFromFilename(file.name);
+    return { file, fileName: file.name, rows, error, date, status: 'pending' };
+  }));
+  batchImportFiles = parsed;
+
+  document.getElementById('batch-count').textContent = parsed.length;
+  document.getElementById('batch-import-card').style.display = 'block';
+  renderBatchImportTable();
+}
+
+function renderBatchImportTable() {
+  const tbody = document.querySelector('#batch-import-table tbody');
+  tbody.innerHTML = batchImportFiles.map((f, i) => {
+    let statusHtml = '<span class="muted">بانتظار</span>';
+    if (f.error) statusHtml = `<span style="color:var(--bad)">✕ ${escapeHtml(f.error)}</span>`;
+    else if (f.status === 'saving') statusHtml = '<span class="msg-loading" style="padding:0">جارٍ الحفظ…</span>';
+    else if (f.status === 'done') statusHtml = `<span style="color:var(--good)">✔ تم — ${f.result.presentCount} حاضر، ${f.result.absentCount} غائب</span>`;
+    else if (f.status === 'failed') statusHtml = `<span style="color:var(--bad)">✕ فشل: ${escapeHtml(f.failReason || '')}</span>`;
+    return `
+      <tr data-idx="${i}">
+        <td class="pr-name" style="text-align:right">${escapeHtml(f.fileName)}</td>
+        <td><input type="text" class="batch-date-input" data-idx="${i}" value="${escapeHtml(f.date || '')}" placeholder="YYYY-MM-DD" style="width:110px" ${f.error ? 'disabled' : ''}></td>
+        <td>${f.rows ? f.rows.length : '—'}</td>
+        <td>${statusHtml}</td>
+      </tr>`;
+  }).join('');
+}
+document.querySelector('#batch-import-table tbody').addEventListener('input', (ev) => {
+  if (!ev.target.classList.contains('batch-date-input')) return;
+  const idx = Number(ev.target.dataset.idx);
+  batchImportFiles[idx].date = ev.target.value.trim();
+});
+
+document.getElementById('btn-batch-import-all').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-batch-import-all');
+  const msgEl = document.getElementById('batch-import-msg');
+  const eligible = batchImportFiles.filter((f) => !f.error);
+  const badDate = eligible.find((f) => !/^\d{4}-\d{2}-\d{2}$/.test(f.date || ''));
+  if (badDate) {
+    msgEl.innerHTML = `<div class="msg err">تحقّق من تاريخ الملف "${escapeHtml(badDate.fileName)}" — يجب أن يكون بصيغة YYYY-MM-DD.</div>`;
+    return;
+  }
+  btn.disabled = true;
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ استيراد الملفات بالتتابع…</div>';
+  let okCount = 0, failCount = 0;
+  for (const f of eligible) {
+    f.status = 'saving';
+    renderBatchImportTable();
+    try {
+      const sched = resolveScheduleForDateClient(f.date);
+      const res = await callApi('importDay', {
+        date: f.date,
+        fileName: f.fileName,
+        schedStart: document.getElementById('imp-sched-start').value.trim() || sched.workStart || '',
+        schedEnd: document.getElementById('imp-sched-end').value.trim() || sched.workEnd || '',
+        schedLabel: document.getElementById('imp-sched-label').value.trim() || sched.label || '',
+        rows: f.rows,
+      });
+      f.status = 'done';
+      f.result = res;
+      okCount++;
+    } catch (err) {
+      f.status = 'failed';
+      f.failReason = err.message;
+      failCount++;
+    }
+    renderBatchImportTable();
+  }
+  msgEl.innerHTML = `<div class="msg ${failCount ? 'err' : 'ok'}">اكتمل الاستيراد: ${okCount} ملفاً بنجاح${failCount ? `، ${failCount} فشل` : ''}.</div>`;
+  btn.disabled = false;
+  refreshDashboard();
+});
 
 document.getElementById('btn-confirm-import').addEventListener('click', async () => {
   const date = document.getElementById('imp-date').value.trim();

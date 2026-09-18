@@ -201,6 +201,19 @@
   .rate-cell .rate-fill.low { background: var(--bad); }
   .rate-cell .rate-text { font-size: 11.5px; color: var(--muted); width: 34px; flex-shrink: 0; text-align: left; }
   tr.row-flag td { background: var(--bad-soft); }
+  .sum-sticky { position: sticky; background: #fff; z-index: 2; }
+  tr.row-flag .sum-sticky { background: var(--bad-soft); }
+  .sum-sticky-1 { right: 0; width: 32px; }
+  .sum-sticky-2 { right: 32px; width: 56px; }
+  .sum-sticky-3 { right: 88px; width: 130px; text-align: right !important; padding-inline-start: 8px; }
+  thead .sum-sticky { z-index: 3; background: #fff; }
+  #summary-table td.sum-sticky.tn-link { cursor: pointer; color: var(--ink); text-decoration: underline; text-decoration-style: dotted; }
+  .sum-trend { font-size: 10.5px; margin-inline-start: 4px; font-weight: 700; }
+  .sum-trend.up { color: var(--good); }
+  .sum-trend.down { color: var(--bad); }
+  .sum-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px; margin-inline-start: 4px; white-space: nowrap; vertical-align: middle; }
+  .sum-badge.action { background: var(--bad-soft); color: var(--bad); }
+  .sum-badge.approaching { background: var(--warn-soft); color: var(--warn); }
   .action-status-btn {
     border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; font-size: 11.5px;
     font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit;
@@ -586,7 +599,7 @@
             <div style="max-height:520px; overflow:auto">
               <table id="absence-table">
                 <thead>
-                  <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th><th></th></tr>
+                  <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th>الحالة</th><th></th><th></th></tr>
                 </thead>
                 <tbody></tbody>
               </table>
@@ -624,7 +637,7 @@
             </div>
             <div style="max-height:520px; overflow:auto">
               <table id="late-table">
-                <thead><tr><th>التاريخ</th><th>الاسم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th></th></tr></thead>
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th>الحالة</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -722,22 +735,33 @@
             </div>
             <button class="primary" id="btn-refresh-summary" style="align-self:flex-end">تحديث</button>
             <button class="ghost" id="btn-export-summary-excel" style="align-self:flex-end">تصدير Excel</button>
+            <button class="ghost" id="btn-print-summary-official" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة رسمية</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <span class="muted" style="font-size:12px; align-self:center">فترات جاهزة:</span>
+            <button type="button" class="filter-chip" id="btn-sum-preset-month">هذا الشهر</button>
+            <button type="button" class="filter-chip" id="btn-sum-preset-lastmonth">الشهر الماضي</button>
+            <button type="button" class="filter-chip" id="btn-sum-preset-year">منذ بداية العام الدراسي</button>
           </div>
         </div>
+
         <div class="summary" id="sum-totals"></div>
+
+        <div class="kpi-row" id="sum-highlights"></div>
+
         <div class="card">
           <div class="table-toolbar no-print">
             <input type="search" id="sum-search" placeholder="ابحث بالاسم…">
             <div class="toolbar-spacer"></div>
-            <span class="muted" style="font-size:12px">انقر عنوان العمود للفرز</span>
+            <span class="muted" style="font-size:12px">انقر عنوان العمود للفرز • انقر اسم المعلّم لفتح تقريره</span>
           </div>
           <div style="max-height:560px; overflow:auto">
             <table id="summary-table">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th class="sortable" data-key="num">الرقم<span class="sort-arrow">▾</span></th>
-                  <th class="sortable" data-key="name">الاسم<span class="sort-arrow">▾</span></th>
+                  <th class="sum-sticky sum-sticky-1">#</th>
+                  <th class="sortable sum-sticky sum-sticky-2" data-key="num">الرقم<span class="sort-arrow">▾</span></th>
+                  <th class="sortable sum-sticky sum-sticky-3" data-key="name">الاسم<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="presentDays">حضور<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="attendanceRate">نسبة الحضور<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="absenceDays">غياب<span class="sort-arrow">▾</span></th>
@@ -748,6 +772,7 @@
                   <th class="sortable" data-key="lateMinutes">دقائق التأخير<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="earlyDays">انصراف مبكر (أيام)<span class="sort-arrow">▾</span></th>
                   <th class="sortable sort-active" data-key="violations">المخالفات<span class="sort-arrow">▾</span></th>
+                  <th>الحالة</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -1032,8 +1057,7 @@ function showTab(name) {
       document.getElementById('abs-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
       document.getElementById('abs-to').value = todayISO();
     }
-    refreshAbsence();
-    refreshLate();
+    refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
   }
   if (name === 'settings') {
     const cfg = loadConfig();
@@ -1090,7 +1114,7 @@ document.getElementById('btn-goto-import').addEventListener('click', () => {
   document.getElementById('imp-date').value = document.getElementById('dash-date').value;
   showTab('import');
 });
-document.getElementById('btn-print').addEventListener('click', printOfficialReport);
+document.getElementById('btn-print').addEventListener('click', () => printOfficialReport());
 
 // ---------- بحث سريع عن معلّم (الشريط الجانبي) ----------
 async function jumpToEmployeeReport(civil) {
@@ -1488,7 +1512,7 @@ document.getElementById('dash-insights').addEventListener('click', (ev) => {
 
 
 // ---------- Absence log ----------
-document.getElementById('btn-refresh-absence').addEventListener('click', () => { refreshAbsence(); refreshLate(); });
+document.getElementById('btn-refresh-absence').addEventListener('click', () => { refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); }); });
 document.getElementById('abs-from').addEventListener('change', refreshAbsence);
 document.getElementById('abs-to').addEventListener('change', refreshAbsence);
 
@@ -1564,6 +1588,7 @@ function renderAbsenceTable() {
         <td><select class="f-classification">${classOptions}</select></td>
         <td><select class="f-reason">${reasonOptions}</select></td>
         <td><input class="f-note" type="text" value="${escapeHtml(r.note || '')}"></td>
+        <td>${dayNoticeStatusBtnHtml_('absence', r.civil, r.date)}</td>
         <td><button class="small btn-save-absence">حفظ</button></td>
         <td><button class="small btn-print-mesaalah-day">مسألة</button></td>
       </tr>`;
@@ -1703,6 +1728,7 @@ function renderLateTable() {
         <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td>
         <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
         <td class="status-late">${r.lateMinutes}</td>
+        <td>${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-late">مسألة</button></td>
       </tr>`).join('');
   document.getElementById('late-search-empty').style.display = (lastLateRows.length && !rows.length) ? 'block' : 'none';
@@ -1781,10 +1807,20 @@ document.getElementById('btn-export-late-excel').addEventListener('click', () =>
 });
 
 document.querySelector('#late-table tbody').addEventListener('click', (ev) => {
-  if (!ev.target.classList.contains('btn-print-mesaalah-day-late')) return;
-  const tr = ev.target.closest('tr');
-  const row = lastLateRows.find((r) => String(r.id) === tr.dataset.id);
-  if (row) printLateEshaarSingle_(row);
+  if (ev.target.classList.contains('btn-print-mesaalah-day-late')) {
+    const tr = ev.target.closest('tr');
+    const row = lastLateRows.find((r) => String(r.id) === tr.dataset.id);
+    if (row) {
+      printLateEshaarSingle_(row);
+      callApi('markActionDone', { key: dayNoticeKey_('late', row.civil, row.date), civil: row.civil, done: true })
+        .then(() => { dayNoticeStatuses[dayNoticeKey_('late', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderLateTable(); })
+        .catch(() => {});
+    }
+    return;
+  }
+  if (ev.target.classList.contains('btn-toggle-day-notice')) {
+    toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
+  }
 });
 
 
@@ -1833,12 +1869,15 @@ document.getElementById('btn-bulk-apply').addEventListener('click', async () => 
   btn.textContent = 'جارٍ التطبيق…';
   const ids = [...absSelectedIds];
   try {
-    for (const id of ids) {
-      const rec = lastAbsenceRows.find((r) => String(r.id) === id);
-      if (!rec) continue;
-      await callApi('updateAbsence', { id, classification, reason: rec.reason || '', note: rec.note || '' });
-      rec.classification = classification;
-    }
+    const updates = ids
+      .map((id) => lastAbsenceRows.find((r) => String(r.id) === id))
+      .filter(Boolean)
+      .map((rec) => ({ id: rec.id, classification, reason: rec.reason || '', note: rec.note || '' }));
+    await callApi('bulkUpdateAbsence', { updates });
+    updates.forEach((u) => {
+      const rec = lastAbsenceRows.find((r) => String(r.id) === u.id);
+      if (rec) rec.classification = classification;
+    });
     absSelectedIds.clear();
     renderAbsenceKpis();
     renderAbsenceTable();
@@ -1856,7 +1895,16 @@ document.querySelector('#absence-table tbody').addEventListener('click', async (
   if (ev.target.classList.contains('btn-print-mesaalah-day')) {
     const tr = ev.target.closest('tr');
     const row = lastAbsenceRows.find((r) => String(r.id) === tr.dataset.id);
-    if (row) printAbsenceMesaalah_({ civil: row.civil, name: row.name, dates: [row] });
+    if (row) {
+      printAbsenceMesaalah_({ civil: row.civil, name: row.name, dates: [row] });
+      callApi('markActionDone', { key: dayNoticeKey_('absence', row.civil, row.date), civil: row.civil, done: true })
+        .then(() => { dayNoticeStatuses[dayNoticeKey_('absence', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderAbsenceTable(); })
+        .catch(() => {});
+    }
+    return;
+  }
+  if (ev.target.classList.contains('btn-toggle-day-notice')) {
+    toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
     return;
   }
   if (!ev.target.classList.contains('btn-save-absence')) return;
@@ -1901,8 +1949,12 @@ document.getElementById('sum-from').addEventListener('change', refreshSummary);
 document.getElementById('sum-to').addEventListener('change', refreshSummary);
 
 let lastSummaryList = [];
+let lastSummaryPrevList = [];
+let summaryActionCivils = new Set();
+let summaryApproachingMap = new Map();
 let sumSortKey = 'violations';
 let sumSortDir = 'desc';
+
 async function refreshSummary() {
   const from = document.getElementById('sum-from').value;
   const to = document.getElementById('sum-to').value;
@@ -1910,8 +1962,22 @@ async function refreshSummary() {
   const msgEl = document.getElementById('summary-msg');
   msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل الملخص…</div>';
   try {
-    const res = await callApi('getMonthlySummary', { from, to });
+    const periodDays = Math.round((isoToLocalDate(to) - isoToLocalDate(from)) / 86400000) + 1;
+    const prevTo = addDaysISO(from, -1);
+    const prevFrom = addDaysISO(from, -periodDays);
+
+    const [res, prevRes, penaltiesRes, alertsRes] = await Promise.all([
+      callApi('getMonthlySummary', { from, to }),
+      callApi('getMonthlySummary', { from: prevFrom, to: prevTo }).catch(() => ({ list: [] })),
+      callApi('getAnnualPenalties', { from, to }).catch(() => ({ list: [] })),
+      callApi('getAlerts', {}).catch(() => ({ approachingPenalty: [] })),
+    ]);
     lastSummaryList = res.list;
+    lastSummaryPrevList = prevRes.list || [];
+    summaryActionCivils = new Set((penaltiesRes.list || []).map((e) => String(e.civil)));
+    summaryApproachingMap = new Map((alertsRes.approachingPenalty || []).map((e) => [String(e.civil), e.remaining]));
+
+    renderSummaryHighlights();
     renderSummaryTable();
     const t = res.totals;
     document.getElementById('sum-totals').innerHTML = `
@@ -1926,6 +1992,28 @@ async function refreshSummary() {
   }
 }
 
+// ---------- قسم "الأفضل حضوراً" و"الأكثر حاجة للمتابعة" ----------
+function renderSummaryHighlights() {
+  const el = document.getElementById('sum-highlights');
+  if (!lastSummaryList.length) { el.innerHTML = ''; return; }
+  const withRate = lastSummaryList.filter((e) => e.attendanceRate != null);
+  const best = withRate.slice().sort((a, b) => b.attendanceRate - a.attendanceRate).slice(0, 3);
+  const needsFollowUp = lastSummaryList.slice().sort((a, b) => b.violations - a.violations).filter((e) => e.violations > 0).slice(0, 3);
+  const listHtml = (list, emptyMsg, valueFn) => list.length
+    ? list.map((e) => `<div class="il-row"><span>${escapeHtml(e.name)}</span><span>${valueFn(e)}</span></div>`).join('')
+    : `<div class="muted" style="font-size:12px">${emptyMsg}</div>`;
+  el.innerHTML = `
+    <div class="kpi-card tone-ok" style="text-align:right">
+      <div class="kpi-label">🏆 الأفضل حضوراً</div>
+      <div class="insight-list" style="margin-top:6px">${listHtml(best, 'لا بيانات كافية', (e) => Math.round(e.attendanceRate * 100) + '%')}</div>
+    </div>
+    <div class="kpi-card tone-warn" style="text-align:right">
+      <div class="kpi-label">⚠️ الأكثر حاجة للمتابعة</div>
+      <div class="insight-list" style="margin-top:6px">${listHtml(needsFollowUp, 'لا توجد مخالفات', (e) => e.violations + ' مخالفة')}</div>
+    </div>
+  `;
+}
+
 function renderSummaryTable() {
   const q = document.getElementById('sum-search').value.trim().toLowerCase();
   let rows = lastSummaryList.filter((e) => !q || String(e.name).toLowerCase().includes(q));
@@ -1934,15 +2022,37 @@ function renderSummaryTable() {
     const cmp = sumSortKey === 'name' ? String(av || '').localeCompare(String(bv || ''), 'ar') : (Number(av) || 0) - (Number(bv) || 0);
     return sumSortDir === 'asc' ? cmp : -cmp;
   });
+  const prevByCivil = {};
+  lastSummaryPrevList.forEach((e) => { prevByCivil[String(e.civil)] = e; });
+
   const tbody = document.querySelector('#summary-table tbody');
-  tbody.innerHTML = rows.map((e, i) => `
+  tbody.innerHTML = rows.map((e, i) => {
+    const civil = String(e.civil);
+    const prev = prevByCivil[civil];
+    let trendHtml = '';
+    if (e.attendanceRate != null && prev && prev.attendanceRate != null) {
+      const diff = Math.round((e.attendanceRate - prev.attendanceRate) * 100);
+      if (diff > 0) trendHtml = `<span class="sum-trend up">▲${diff}%</span>`;
+      else if (diff < 0) trendHtml = `<span class="sum-trend down">▼${Math.abs(diff)}%</span>`;
+      else trendHtml = `<span class="sum-trend muted">–</span>`;
+    }
+    let statusHtml = '';
+    if (summaryActionCivils.has(civil)) statusHtml += `<span class="sum-badge action">يحتاج إجراء</span>`;
+    if (summaryApproachingMap.has(civil)) statusHtml += `<span class="sum-badge approaching">اقترب من إجراء (باقي ${summaryApproachingMap.get(civil)} د)</span>`;
+    if (!statusHtml) statusHtml = '<span class="muted">—</span>';
+
+    return `
       <tr class="${e.violations >= 5 ? 'row-flag' : ''}">
-        <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
-        <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}</td><td>${e.absenceDays}</td>
+        <td class="sum-sticky sum-sticky-1">${i + 1}</td>
+        <td class="sum-sticky sum-sticky-2">${escapeHtml(e.num)}</td>
+        <td class="sum-sticky sum-sticky-3 tn-link" data-civil="${escapeHtml(civil)}">${escapeHtml(e.name)}</td>
+        <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}${trendHtml}</td><td>${e.absenceDays}</td>
         <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
         <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
         <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
-      </tr>`).join('');
+        <td>${statusHtml}</td>
+      </tr>`;
+  }).join('');
   document.getElementById('summary-search-empty').style.display = (lastSummaryList.length && !rows.length) ? 'block' : 'none';
 }
 document.getElementById('sum-search').addEventListener('input', renderSummaryTable);
@@ -1955,6 +2065,67 @@ document.querySelectorAll('#summary-table th.sortable').forEach((th) => {
     th.classList.add('sort-active');
     renderSummaryTable();
   });
+});
+// ربط سريع: النقر على اسم المعلّم في الجدول أو في قسم الإبرازات يفتح تقريره
+document.querySelector('#summary-table tbody').addEventListener('click', (ev) => {
+  const cell = ev.target.closest('.tn-link');
+  if (cell) jumpToEmployeeReport(cell.dataset.civil);
+});
+document.getElementById('sum-highlights').addEventListener('click', (ev) => {
+  const row = ev.target.closest('.il-row');
+  if (!row) return;
+  const nameText = row.querySelector('span').textContent;
+  const match = lastSummaryList.find((e) => e.name === nameText);
+  if (match) jumpToEmployeeReport(String(match.civil));
+});
+
+// ---------- فترات جاهزة ----------
+function applySummaryPeriod_(from, to) {
+  document.getElementById('sum-from').value = from;
+  document.getElementById('sum-to').value = to;
+  refreshSummary();
+}
+document.getElementById('btn-sum-preset-month').addEventListener('click', () => {
+  const d = new Date();
+  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  applySummaryPeriod_(from, todayISO());
+});
+document.getElementById('btn-sum-preset-lastmonth').addEventListener('click', () => {
+  const d = new Date();
+  const lastMonthEnd = new Date(d.getFullYear(), d.getMonth(), 0);
+  const lastMonthStart = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const fmt = (dd) => `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`;
+  applySummaryPeriod_(fmt(lastMonthStart), fmt(lastMonthEnd));
+});
+document.getElementById('btn-sum-preset-year').addEventListener('click', () => {
+  applySummaryPeriod_(REPORT_DEFAULT_FROM, todayISO());
+});
+
+// ---------- طباعة رسمية لكشف الملخص والترتيب ----------
+document.getElementById('btn-print-summary-official').addEventListener('click', () => {
+  if (!lastSummaryList.length) return;
+  const cfg = loadConfig();
+  const from = document.getElementById('sum-from').value;
+  const to = document.getElementById('sum-to').value;
+  const rows = lastSummaryList.slice().sort((a, b) => {
+    const av = a[sumSortKey], bv = b[sumSortKey];
+    const cmp = sumSortKey === 'name' ? String(av || '').localeCompare(String(bv || ''), 'ar') : (Number(av) || 0) - (Number(bv) || 0);
+    return sumSortDir === 'asc' ? cmp : -cmp;
+  });
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف الملخص والترتيب',
+    titleLine: 'كشف ملخص الحضور والغياب والتأخير مرتّباً',
+    subtitleHtml: dateRangeHtml_(from, to),
+  });
+  const trs = rows.map((e, i) => `
+    <tr>
+      <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td class="pr-name">${escapeHtml(e.name)}</td>
+      <td>${e.presentDays}</td><td>${e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '—'}</td>
+      <td>${e.absenceDays}</td><td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
+      <td>${e.violations}</td>
+    </tr>`).join('');
+  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>نسبة الحضور</th><th>غياب</th><th>تأخير (أيام)</th><th>دقائق التأخير</th><th>انصراف مبكر</th><th>المخالفات</th></tr></thead><tbody>${trs}</tbody></table>`;
+  printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${table}${buildReportFooterHtml()}</div>`);
 });
 
 // ---------- التحليلات ----------
@@ -2181,6 +2352,36 @@ function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ---------- حالة "تم/لم يتم" لمسائل الأيام الفردية (سجل الغياب والتأخر) ----------
+let dayNoticeStatuses = {};
+function dayNoticeKey_(type, civil, date) { return `day::${type}::${civil}::${date}`; }
+async function refreshDayNoticeStatuses() {
+  try {
+    const res = await callApi('getActionStatuses', {});
+    dayNoticeStatuses = res.statuses || {};
+  } catch (e) { dayNoticeStatuses = {}; }
+}
+function dayNoticeStatusBtnHtml_(type, civil, date) {
+  const key = dayNoticeKey_(type, civil, date);
+  const done = !!(dayNoticeStatuses[key] && dayNoticeStatuses[key].done);
+  return `<button class="action-status-btn ${done ? 'done' : 'pending'} btn-toggle-day-notice" data-notice-key="${escapeHtml(key)}">${done ? 'تم ✔' : 'لم يتم'}</button>`;
+}
+async function toggleDayNotice_(key, btn) {
+  const wasDone = !!(dayNoticeStatuses[key] && dayNoticeStatuses[key].done);
+  const newDone = !wasDone;
+  const parts = key.split('::'); // day::type::civil::date
+  btn.disabled = true;
+  try {
+    await callApi('markActionDone', { key, civil: parts[2], done: newDone });
+    dayNoticeStatuses[key] = { done: newDone, doneAt: newDone ? new Date().toISOString() : '' };
+    btn.className = `action-status-btn ${newDone ? 'done' : 'pending'} btn-toggle-day-notice`;
+    btn.textContent = newDone ? 'تم ✔' : 'لم يتم';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // شريط تقدّم مصغّر لعرض نسبة مئوية (نسبة الحضور) داخل خلية جدول
 function renderRateCell(rate) {
   if (rate === null || rate === undefined || isNaN(rate)) return '<span class="muted">—</span>';
@@ -2300,11 +2501,7 @@ async function printOfficialReport(dateArg, errorElId) {
       else if (absenceByCivil[civil]) absentRows.push({ num: t.num, name: t.name, civil });
     });
     const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><style>${built.style}</style></head><body>${built.body}</body></html>`);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 300);
+    printInPage(built.style, built.body);
   } catch (err) {
     document.getElementById(errorElId || 'dash-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${escapeHtml(err.message)}</div>`;
   }
@@ -2362,7 +2559,7 @@ function reportTodayStr_() {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildPeriodReportHeader({ schoolName, adminName, subject, titleLine, subtitleHtml }) {
+function buildPeriodReportHeader({ schoolName, adminName, subject, titleLine, subtitleHtml, dateBoxHtml }) {
   return `
     <div class="pr-header">
       <div class="pr-org">
@@ -2373,8 +2570,7 @@ function buildPeriodReportHeader({ schoolName, adminName, subject, titleLine, su
       </div>
       <div class="pr-logo"><img src="${MOE_LOGO_DATA_URI}" alt="وزارة التعليم"></div>
       <div class="pr-datebox">
-        <div>التاريخ: ${reportTodayStr_()}</div>
-        <div>الموضوع: ${escapeHtml(subject)}</div>
+        ${dateBoxHtml || `<div>التاريخ: ${reportTodayStr_()}</div><div>الموضوع: ${escapeHtml(subject)}</div>`}
       </div>
     </div>
     <div class="pr-title">${escapeHtml(titleLine)}</div>
@@ -2718,65 +2914,71 @@ document.querySelector('#penalties-table tbody').addEventListener('click', async
 });
 
 // نموذج ٢٠ — مساءلة غياب لمعلّم عن يوم واحد أو أكثر (تُستدعى من سجل الغياب لكل صف على حدة)
+// معاد صياغته حرفياً وفق النموذج الرسمي "مرفق رقم (2)" الصادر عن الإدارة العامة للتعليم
 function printAbsenceMesaalah_(entry) {
   const cfg = loadConfig();
   const dates = entry.dates.slice().sort((a, b) => a.date.localeCompare(b.date));
   const lastDate = dates[dates.length - 1];
   const d = isoToLocalDate(lastDate.date);
+  const periodPhrase = dates.length > 1
+    ? `من ${formatDateDMY(dates[0].date)} إلى ${formatDateDMY(lastDate.date)} (${dates.length} أيام)`
+    : `يوم ${formatDateDMY(lastDate.date)} (${WEEKDAYS_FULL_AR[d.getDay()]})`;
   const rows = dates.map((r, i) => {
     const dd = isoToLocalDate(r.date);
     return `<tr><td>${i + 1}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[dd.getDay()]}</td><td>${escapeHtml(r.classification) || 'غير مصنف'}</td><td>${escapeHtml(r.reason) || escapeHtml(r.note) || '—'}</td></tr>`;
   }).join('');
   const header = buildPeriodReportHeader({
-    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'مساءلة غياب — نموذج رقم (٢٠)',
-    titleLine: 'مساءلة غياب',
-    subtitleHtml: 'نموذج رقم (٢٠) — و.م.ع.٢٠.١٤٠',
+    schoolName: cfg.schoolName, adminName: cfg.adminName, titleLine: 'مساءلة غياب',
+    dateBoxHtml: `<div>الرقم: ....................</div><div>التاريخ: ${reportTodayStr_()}</div><div>المشفوعات: ....................</div>`,
   });
   const body = `
     <div class="pr-page">
       ${header}
       <table class="pr-table" style="margin-bottom:10pt">
-        <thead><tr><th>المدرسة</th><th>السجل المدني</th></tr></thead>
-        <tbody><tr><td>${escapeHtml(cfg.schoolName || '')}</td><td>${escapeHtml(entry.civil)}</td></tr></tbody>
+        <tbody>
+          <tr><td class="pr-name" style="width:22%">اسم المدرسة</td><td>${escapeHtml(cfg.schoolName || '')}</td><td class="pr-name" style="width:18%">السجل المدني</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td></tr>
+          <tr><td class="pr-name">الاسم رباعي</td><td>${escapeHtml(entry.name)}</td><td class="pr-name">الوظيفة</td><td>معلّم/ـة</td></tr>
+          <tr><td class="pr-name">المستوى / المرتبة</td><td>—</td><td class="pr-name">عدد أيام الغياب</td><td>${dates.length}</td></tr>
+          <tr><td class="pr-name">أيام الغياب</td><td colspan="3">${periodPhrase}</td></tr>
+        </tbody>
       </table>
-      <div class="pr-subtitle" style="text-align:right; font-weight:700">${escapeHtml(entry.name)}</div>
-      <div class="pr-subtitle" style="text-align:right">تغيّب عن العمل ${dates.length > 1 ? dates.length + ' أيام' : 'يوم ' + formatDateDMY(lastDate.date) + ' (' + WEEKDAYS_FULL_AR[d.getDay()] + ')'}</div>
       <table class="pr-table">
         <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th></tr></thead>
         <tbody>${rows}<tr class="pr-total"><td colspan="4">إجمالي أيام الغياب</td><td>${dates.length}</td></tr></tbody>
       </table>
 
-      <div class="pr-section-title">١) طلب الإفادة</div>
+      <div class="pr-section-title">(١) طلب الإفادة</div>
       <p style="font-size:9.5pt; line-height:1.8">
-        المكرم/ ${escapeHtml(entry.name)}<br>
-        السلام عليكم ورحمة الله وبركاته، وبعد:<br>
-        من خلال متابعة سجل العمل، أمل الإفادة عن أسباب ذلك وعليكم تقديم ما يوجّد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
+        المكرم/ وفقه الله<br>
+        السلام عليكم ورحمة الله وبركاته وبعـد:<br>
+        من خلال متابعة الدوام تبين غيابكم خلال الفترة الموضحة أعلاه، آمل الإفادة عن أسباب ذلك وعليكم تقديم ما يؤيد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
       </p>
-      <div class="pr-sign-row"><div>اسم الرئيس المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
+      <div class="pr-sign-row"><div>اسم المدير المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
 
-      <div class="pr-section-title">٢) الإفادة</div>
-      <p style="font-size:9.5pt">المكرم/ ${escapeHtml(cfg.principalName || 'مدير المدرسة')}<br>السلام عليكم ورحمة الله وبركاته، وبعد: أفيدكم أن غيابي كان للأسباب التالية:</p>
+      <div class="pr-section-title">(٢) الإفادة</div>
+      <p style="font-size:9.5pt">المكرم/ مدير وفقه الله<br>السلام عليكم ورحمة الله وبركاته وبعد:<br>أفيدكم أن غيابي كان للأسباب التالية:</p>
       <div class="pr-note-box"></div>
-      <div class="pr-sign-row"><div>اسم المعلّم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ....../....../......</div></div>
+      <p style="font-size:9.5pt">وسأقوم بتقديم ما يثبت ذلك خلال أسبوع من تاريخه.</p>
+      <div class="pr-sign-row"><div>الاسم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
 
-      <div class="pr-section-title">٣) قرار مدير المدرسة</div>
+      <div class="pr-section-title">(٣) المدير المباشر</div>
       <div class="pr-checklist">
-        <div>▢ تحتسب له إجازة بعد التأكد من نظامية التقرير الطبي</div>
-        <div>▢ يحتسب غيابه من رصيده للإجازات الاضطرارية (تُقبل عذره إذا كان رصيده يسمح)</div>
-        <div>▢ يُعتمد الخصم لعدم قبول عذره</div>
-        <div>▢ يحتسب غيابه بدون عذر ويتم اتخاذ الإجراءات النظامية</div>
+        <div>( &nbsp;&nbsp;) تحتسب له إجازة مرضية بعد التأكد من نظامية التقرير</div>
+        <div>( &nbsp;&nbsp;) يحتسب غيابه من رصيده للإجازات العادية أو الاضطرارية لقبول عذره إذا كان رصيده يسمح وإلا يحسم عليه</div>
+        <div>( &nbsp;&nbsp;) يعتمد الحسم لعدم قبول عذره</div>
       </div>
-      <div class="pr-sign-row"><div>اسم الرئيس المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
-      <div style="text-align:left; font-size:9.5pt; margin-top:4pt">${escapeHtml(cfg.principalName || '')}</div>
+      <div class="pr-sign-row"><div>اسم المدير المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
 
       <div class="pr-warning-box">
         <b>ملاحظات هامة:</b><br>
         ١- تستكمل الاستمارة من المدير المباشر وإصدار القرار بموجبه.<br>
-        ٢- إذا سبق إجراء الأسبوع وألحقها غياب تحتسب مدة الغياب كاملة.<br>
-        ٣- يجب أن يوضح غياب المعلّم فور تسلمه الاستمارة ويعيدها لمديره المباشر.<br>
-        ٤- يعتبر متغيّب مدة الغياب مجدداً إذا فُقدت وثيقة العذر منتهية الزمنية لتستكمل الإجراءات ويتم الحسم.
+        ٢- إذا سبق عطلة نهاية الأسبوع غياب وألحقها غياب تحتسب غياب الأسبوع كاملة.<br>
+        ٣- يجب أن يوضح المتغيب أسباب غيابه فور تسلمه الاستمارة ويعيدها لمديره المباشر.<br>
+        ٤- يعطى المتغيب مدة أسبوع لتقديم ما يؤيد عذره فإذا انقضت هذه المدة الزمنية تستكمل الاستمارة ويتم الحسم.<br>
+        ٥- في حال رفض الموظف توقيع المساءلة يتم تدوين ذلك في الخانة المخصصة لتقرير غياب مع التوقيع من قبل المساعد الإداري ووكيل المدرسة.
       </div>
       ${buildReportFooterHtml()}
+      <div style="text-align:left; font-size:9pt; margin-top:6pt">مرفق رقم (2)</div>
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }

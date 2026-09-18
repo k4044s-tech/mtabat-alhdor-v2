@@ -3191,7 +3191,32 @@ document.getElementById('btn-refresh-penalties').addEventListener('click', refre
 document.getElementById('ac-from').addEventListener('change', refreshPenalties);
 document.getElementById('ac-to').addEventListener('change', refreshPenalties);
 document.getElementById('ac-employee').addEventListener('change', refreshPenalties);
-document.getElementById('btn-print-penalties').addEventListener('click', () => window.print());
+document.getElementById('btn-print-penalties').addEventListener('click', () => {
+  if (!lastPenaltiesList.length) return;
+  const cfg = loadConfig();
+  const { from, to } = acPeriod_();
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف الاجراءات (تراكم دقائق التأخير)',
+    titleLine: 'كشف المعلمين الذين يستوجب اتخاذ إجراء بحقهم',
+    subtitleHtml: `${dateRangeHtml_(from, to)} — إجمالي الحالات: ${lastPenaltiesList.length}`,
+  });
+  const doneCount = lastPenaltiesList.filter((e) => e.actionDone).length;
+  const stats = buildStatCardsHtml([
+    { value: lastPenaltiesList.length, label: 'إجمالي من يستوجب إجراء' },
+    { value: doneCount, label: 'تم الإجراء', tone: 'good' },
+    { value: lastPenaltiesList.length - doneCount, label: 'لم يتم الإجراء', tone: (lastPenaltiesList.length - doneCount) ? 'bad' : '' },
+  ]);
+  const rows = lastPenaltiesList.map((e, i) => `
+    <tr>
+      <td>${i + 1}</td><td class="pr-name">${escapeHtml(e.name)}</td>
+      <td>${e.totalLateMinutes}</td><td>${e.absenceDays}</td>
+      <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
+      <td>${e.deductionDays || '—'}</td>
+      <td class="${e.actionDone ? 'pr-excused-cell' : 'pr-absent-cell'}">${e.actionDone ? 'تم الإجراء' : 'لم يتم الإجراء'}</td>
+    </tr>`).join('');
+  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>مجموع التأخر (د)</th><th>مجموع الغياب (أيام)</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table>`;
+  printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+});
 
 let lastPenaltiesList = [];
 async function refreshPenalties() {

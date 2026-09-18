@@ -918,6 +918,7 @@
             <button class="primary rc-btn-wide" id="btn-dr-teachers">تقرير المعلمين</button>
             <button class="ghost" id="btn-dr-late">تقرير التأخر</button>
             <button class="ghost" id="btn-dr-absence">تقرير الغياب</button>
+            <button class="ghost" id="btn-dr-daily-official">الكشف الرسمي اليومي للفترة (يوم في كل صفحة)</button>
           </div>
           <p class="muted" style="font-size:11.5px; margin-top:10px">تُطبَع التقارير مباشرة على مقاس A4 بلا فتح نافذة جديدة.</p>
           <div id="dr-msg"></div>
@@ -2939,6 +2940,39 @@ document.getElementById('btn-dr-absence').addEventListener('click', async () => 
     const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th></tr></thead>
       <tbody>${rows}<tr class="pr-total"><td colspan="5">إجمالي أيام الغياب</td><td>${rowsData.length}</td></tr></tbody></table>`;
     printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- الكشف الرسمي اليومي للفترة: يوم مستورد واحد في كل صفحة ----------
+document.getElementById('btn-dr-daily-official').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    const [teachersRes, importsRes] = await Promise.all([getTeachersCached(), callApi('listImports', {})]);
+    const dates = importsRes.list.map((r) => r.date).filter((d) => d >= p.from && d <= p.to).sort();
+    if (!dates.length) { drFail_(new Error('لا توجد أيام مستوردة ضمن هذه الفترة.')); return; }
+
+    let teachers = teachersRes.teachers;
+    if (p.civil) teachers = teachers.filter((t) => String(t.civil) === p.civil);
+
+    const bodies = [];
+    for (const date of dates) {
+      const dayRes = await callApi('getDay', { date });
+      const attendanceByCivil = {}, absenceByCivil = {};
+      dayRes.attendance.forEach((r) => (attendanceByCivil[String(r.civil)] = r));
+      dayRes.absence.forEach((r) => (absenceByCivil[String(r.civil)] = r));
+      const presentRows = [], absentRows = [];
+      teachers.forEach((t) => {
+        const civil = String(t.civil);
+        if (attendanceByCivil[civil]) presentRows.push(Object.assign({ num: t.num, name: t.name, civil }, attendanceByCivil[civil]));
+        else if (absenceByCivil[civil]) absentRows.push({ num: t.num, name: t.name, civil });
+      });
+      const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
+      bodies.push(built.body);
+    }
+    printInPage(MOE_REPORT_STYLE, bodies.join(''));
     drDone_();
   } catch (err) { drFail_(err); }
 });

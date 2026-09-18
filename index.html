@@ -2687,6 +2687,10 @@ const PERIOD_REPORT_STYLE = `
   .pr-absent-cell { color:#b00000; font-weight:700; }
   .pr-excused-cell { color:#0f7a3d; font-weight:700; }
   .pr-legend { font-size:8.5pt; color:#555; margin-bottom:8pt; text-align:center; }
+  .pr-info-table td:nth-child(odd) { background:#eef6f5; color:#1c6b5f; font-weight:700; text-align:right; white-space:normal; }
+  .pr-callout { background:#f7fafa; border-right:3pt solid #2B9E8F; border-radius:2pt; padding:9pt 13pt; margin:10pt 0 12pt; }
+  .pr-action-badge { display:inline-block; background:#2B9E8F; color:#fff; font-weight:700; padding:5pt 16pt; border-radius:3pt; font-size:11pt; margin:3pt 0 9pt; }
+  .pr-highlight-num { color:#b45f06; font-weight:700; }
   .pr-footer { margin-top:24pt; display:flex; justify-content:space-between; font-size:9.5pt; }
   .pr-note-box { border:1pt solid #ccc; border-radius:4pt; min-height:40pt; padding:6pt; margin:8pt 0; }
   .pr-checklist { font-size:9.5pt; margin:8pt 0; }
@@ -3055,19 +3059,21 @@ function printAction_(entry) {
     subtitleHtml: `${dateRangeHtml_(from, to)}`,
   });
   const infoTable = `
-    <table class="pr-table" style="margin-bottom:10pt">
+    <table class="pr-table pr-info-table" style="margin-bottom:10pt">
       <tbody>
-        <tr><td class="pr-name" style="width:25%">اسم الموظف/ـة</td><td>${escapeHtml(entry.name)}</td><td class="pr-name" style="width:25%">المسمى الوظيفي</td><td>معلّم/ـة</td></tr>
-        <tr><td class="pr-name">رقم الهوية</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td><td class="pr-name">جهة العمل</td><td>${escapeHtml(cfg.schoolName || '')}</td></tr>
+        <tr><td style="width:25%">اسم الموظف/ـة</td><td>${escapeHtml(entry.name)}</td><td style="width:25%">المسمى الوظيفي</td><td>معلّم/ـة</td></tr>
+        <tr><td>رقم الهوية</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td><td>جهة العمل</td><td>${escapeHtml(cfg.schoolName || '')}</td></tr>
       </tbody>
     </table>`;
   const deductionPhrase = entry.deductionDays ? `، بما يعادل ${entry.deductionDays} ${entry.deductionDays === 1 ? 'يوم' : 'أيام'} للحسم` : '';
   const narrative = `
-    <p style="font-size:10pt; line-height:1.9">
-      السلام عليكم ورحمة الله وبركاته، وبعد:<br>
-      من خلال متابعة سجلات الحضور والانصراف خلال الفترة ${dateRangeHtml_(from, to)}، بلغ إجمالي تراكم دقائق تأخير الموظف/ـة المذكور/ة أعلاه عن الحضور للدوام الرسمي (<b>${entry.totalLateMinutes}</b> دقيقة)${deductionPhrase}، وبناءً على الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦)، استوجب ذلك اتخاذ الإجراء التالي:
-    </p>
-    <p style="font-size:10.5pt; font-weight:700; margin:10pt 0 2pt">${escapeHtml(entry.action)}</p>
+    <div class="pr-callout">
+      <p style="font-size:10pt; line-height:1.9; margin:0">
+        السلام عليكم ورحمة الله وبركاته، وبعد:<br>
+        من خلال متابعة سجلات الحضور والانصراف خلال الفترة ${dateRangeHtml_(from, to)}، بلغ إجمالي تراكم دقائق تأخير الموظف/ـة المذكور/ة أعلاه عن الحضور للدوام الرسمي <span class="pr-highlight-num">(${entry.totalLateMinutes} دقيقة)</span>${deductionPhrase}، استوجب ذلك اتخاذ الإجراء التالي:
+      </p>
+    </div>
+    <div class="pr-action-badge">${escapeHtml(entry.action)}</div>
     <p style="font-size:10pt; line-height:1.8">${escapeHtml(entry.actionText || entry.action)}</p>
     ${entry.note ? `<p class="muted" style="font-size:9pt; margin-top:6pt">${escapeHtml(entry.note)}</p>` : ''}`;
   const body = `
@@ -3075,9 +3081,11 @@ function printAction_(entry) {
       ${header}
       ${infoTable}
       ${narrative}
-      <div class="pr-sign-row" style="margin-top:28pt">
-        <div>معدّ/ة البيان<br>الاسم: ${escapeHtml(cfg.preparedBy || '....................')}<br>التوقيع: ..............</div>
-        <div>الختم</div>
+      <div class="pr-sign-row" style="margin-top:22pt">
+        <div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div>
+      </div>
+      <div class="pr-sign-row" style="margin-top:26pt">
+        <div>معدّ/ة البيان<br>الاسم: ${escapeHtml(cfg.preparedBy || '....................')}</div>
         <div>يعتمد من المدير/ة<br>الاسم: ${escapeHtml(cfg.principalName || '....................')}<br>التوقيع: ..............</div>
       </div>
     </div>`;
@@ -3130,12 +3138,12 @@ function printAbsenceMesaalah_(entry) {
   const body = `
     <div class="pr-page">
       ${header}
-      <table class="pr-table" style="margin-bottom:10pt">
+      <table class="pr-table pr-info-table" style="margin-bottom:10pt">
         <tbody>
-          <tr><td class="pr-name" style="width:22%">اسم المدرسة</td><td>${escapeHtml(cfg.schoolName || '')}</td><td class="pr-name" style="width:18%">السجل المدني</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td></tr>
-          <tr><td class="pr-name">الاسم رباعي</td><td>${escapeHtml(entry.name)}</td><td class="pr-name">الوظيفة</td><td>معلّم/ـة</td></tr>
-          <tr><td class="pr-name">المستوى / المرتبة</td><td>—</td><td class="pr-name">عدد أيام الغياب</td><td>${dates.length}</td></tr>
-          <tr><td class="pr-name">أيام الغياب</td><td colspan="3">${periodPhrase}</td></tr>
+          <tr><td style="width:22%">اسم المدرسة</td><td>${escapeHtml(cfg.schoolName || '')}</td><td style="width:18%">السجل المدني</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td></tr>
+          <tr><td>الاسم رباعي</td><td>${escapeHtml(entry.name)}</td><td>الوظيفة</td><td>معلّم/ـة</td></tr>
+          <tr><td>المستوى / المرتبة</td><td>—</td><td>عدد أيام الغياب</td><td>${dates.length}</td></tr>
+          <tr><td>أيام الغياب</td><td colspan="3">${periodPhrase}</td></tr>
         </tbody>
       </table>
       <table class="pr-table">
@@ -3155,7 +3163,7 @@ function printAbsenceMesaalah_(entry) {
       <p style="font-size:9.5pt">المكرم/ مدير وفقه الله<br>السلام عليكم ورحمة الله وبركاته وبعد:<br>أفيدكم أن غيابي كان للأسباب التالية:</p>
       <div class="pr-note-box"></div>
       <p style="font-size:9.5pt">وسأقوم بتقديم ما يثبت ذلك خلال أسبوع من تاريخه.</p>
-      <div class="pr-sign-row"><div>الاسم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+      <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
 
       <div class="pr-section-title">(٣) المدير المباشر</div>
       <div class="pr-checklist">
@@ -3204,7 +3212,7 @@ function printLateEshaarSingle_(row) {
       <p style="font-size:9.5pt; margin-top:10pt">نأمل منكم التكرم بإيضاح أسباب ذلك في المساحة المخصصة أدناه، وإعادتها لإدارة المدرسة.</p>
       <div class="pr-section-title">إفادة الموظف/ة</div>
       <div class="pr-note-box"></div>
-      <div class="pr-sign-row"><div>الاسم: ${escapeHtml(row.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ....../....../......</div></div>
+      <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
       ${buildReportFooterHtml()}
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);

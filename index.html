@@ -419,7 +419,7 @@
       <button data-tab="import"><span class="icon" data-icon="upload"></span><span>الاستيراد</span></button>
       <button data-tab="summary"><span class="icon" data-icon="barChart"></span><span>الملخص والترتيب</span></button>
       <button data-tab="analytics"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
-      <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
+      <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب والتأخر</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
       <button data-tab="reports"><span class="icon" data-icon="fileText"></span><span>التقارير اليومية</span></button>
       <button data-tab="actions"><span class="icon" data-icon="alertTriangle"></span><span>الاجراءات</span></button>
       <button data-tab="settings"><span class="icon" data-icon="settings"></span><span>الإعدادات</span></button>
@@ -541,50 +541,96 @@
             </div>
             <button class="primary" id="btn-refresh-absence" style="align-self:flex-end">تحديث</button>
             <div class="view-toggle" style="align-self:flex-end">
-              <button type="button" class="active" data-absview="table">جدول</button>
-              <button type="button" data-absview="grouped">تجميع حسب المعلّم</button>
+              <button type="button" class="active" data-logtab="absence">الغياب</button>
+              <button type="button" data-logtab="late">التأخر</button>
             </div>
           </div>
         </div>
 
-        <div class="kpi-row" id="abs-kpis"></div>
+        <div id="log-absence-section">
+          <div class="row" style="margin-bottom:10px">
+            <div class="view-toggle">
+              <button type="button" class="active" data-absview="table">جدول</button>
+              <button type="button" data-absview="grouped">تجميع حسب المعلّم</button>
+            </div>
+          </div>
 
-        <div class="card" id="abs-table-view">
-          <div class="bulk-bar no-print" id="abs-bulk-bar">
-            <span class="bulk-count"><span id="abs-bulk-count">0</span> محدّد</span>
-            <select id="abs-bulk-classification">
-              <option value="">تصنيف جماعي…</option>
-              <option value="بعذر">بعذر</option>
-              <option value="بدون عذر">بدون عذر</option>
-            </select>
-            <button class="ghost" id="btn-bulk-apply">تطبيق</button>
-            <button class="ghost" id="btn-bulk-clear">إلغاء التحديد</button>
+          <div class="kpi-row" id="abs-kpis"></div>
+
+          <div class="card" id="abs-table-view">
+            <div class="bulk-bar no-print" id="abs-bulk-bar">
+              <span class="bulk-count"><span id="abs-bulk-count">0</span> محدّد</span>
+              <select id="abs-bulk-classification">
+                <option value="">تصنيف جماعي…</option>
+                <option value="بعذر">بعذر</option>
+                <option value="بدون عذر">بدون عذر</option>
+              </select>
+              <button class="ghost" id="btn-bulk-apply">تطبيق</button>
+              <button class="ghost" id="btn-bulk-clear">إلغاء التحديد</button>
+            </div>
+            <div class="table-toolbar no-print">
+              <input type="search" id="abs-search" placeholder="ابحث بالاسم…">
+              <button type="button" class="filter-chip active" data-cls="">الكل</button>
+              <button type="button" class="filter-chip" data-cls="__unclassified">بحاجة تصنيف</button>
+              <button type="button" class="filter-chip" data-cls="بعذر">بعذر</button>
+              <button type="button" class="filter-chip" data-cls="بدون عذر">بدون عذر</button>
+              <div class="toolbar-spacer"></div>
+              <button class="ghost" id="btn-export-absence-excel">تصدير Excel</button>
+            </div>
+            <div style="max-height:520px; overflow:auto">
+              <table id="absence-table">
+                <thead>
+                  <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th><th></th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
+            <p class="muted" id="absence-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
+            <div id="absence-msg"></div>
           </div>
-          <div class="table-toolbar no-print">
-            <input type="search" id="abs-search" placeholder="ابحث بالاسم…">
-            <button type="button" class="filter-chip active" data-cls="">الكل</button>
-            <button type="button" class="filter-chip" data-cls="__unclassified">بحاجة تصنيف</button>
-            <button type="button" class="filter-chip" data-cls="بعذر">بعذر</button>
-            <button type="button" class="filter-chip" data-cls="بدون عذر">بدون عذر</button>
-            <div class="toolbar-spacer"></div>
-            <button class="ghost" id="btn-export-absence-excel">تصدير Excel</button>
+
+          <div class="card" id="abs-grouped-view" style="display:none">
+            <div id="abs-grouped-list"></div>
+            <p class="muted" id="abs-grouped-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
           </div>
-          <div style="max-height:520px; overflow:auto">
-            <table id="absence-table">
-              <thead>
-                <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th></th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
-          <p class="muted" id="absence-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
-          <div id="absence-msg"></div>
         </div>
 
-        <div class="card" id="abs-grouped-view" style="display:none">
-          <div id="abs-grouped-list"></div>
-          <p class="muted" id="abs-grouped-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
+        <div id="log-late-section" style="display:none">
+          <div class="row" style="margin-bottom:10px">
+            <div class="view-toggle">
+              <button type="button" class="active" data-lateview="table">جدول</button>
+              <button type="button" data-lateview="grouped">تجميع حسب المعلّم</button>
+            </div>
+          </div>
+
+          <div class="kpi-row" id="late-kpis"></div>
+
+          <div class="card" id="late-table-view">
+            <div class="table-toolbar no-print">
+              <input type="search" id="late-search" placeholder="ابحث بالاسم…">
+              <button type="button" class="filter-chip active" data-sev="">الكل</button>
+              <button type="button" class="filter-chip" data-sev="light">بسيط (١٠ د فأقل)</button>
+              <button type="button" class="filter-chip" data-sev="medium">متوسط (١١-٣٠ د)</button>
+              <button type="button" class="filter-chip" data-sev="heavy">كبير (أكثر من ٣٠ د)</button>
+              <div class="toolbar-spacer"></div>
+              <button class="ghost" id="btn-export-late-excel">تصدير Excel</button>
+            </div>
+            <div style="max-height:520px; overflow:auto">
+              <table id="late-table">
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" id="late-empty" style="display:none">لا توجد حالات تأخير في هذه الفترة.</p>
+            <p class="muted" id="late-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
+            <div id="late-msg"></div>
+          </div>
+
+          <div class="card" id="late-grouped-view" style="display:none">
+            <div id="late-grouped-list"></div>
+            <p class="muted" id="late-grouped-empty" style="display:none">لا توجد حالات تأخير في هذه الفترة.</p>
+          </div>
         </div>
       </section>
 
@@ -811,70 +857,12 @@
           <p class="muted" style="font-size:11.5px; margin-top:10px">تُطبَع التقارير مباشرة على مقاس A4 بلا فتح نافذة جديدة.</p>
           <div id="dr-msg"></div>
         </div>
-
-        <div class="card">
-          <h3 style="margin-top:0">تقرير موظف واحد (تفاعلي)</h3>
-          <div class="row">
-            <div>
-              <label>الموظف</label>
-              <select id="er-employee" style="width:220px">
-                <option value="">جميع الموظفين</option>
-              </select>
-            </div>
-            <div>
-              <label>من تاريخ</label>
-              <input type="date" id="er-from">
-            </div>
-            <div>
-              <label>إلى تاريخ</label>
-              <input type="date" id="er-to">
-            </div>
-            <button class="primary" id="btn-refresh-employee-report" style="align-self:flex-end">عرض التقرير</button>
-            <button class="ghost no-print" id="btn-print-employee-report" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة</button>
-          </div>
-        </div>
-        <div class="summary" id="er-totals"></div>
-        <div class="card" id="er-results">
-          <h4>الغياب</h4>
-          <table id="er-absence-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr></thead><tbody></tbody></table>
-          <p class="muted" id="er-absence-empty" style="display:none">لا يوجد غياب في هذه الفترة.</p>
-
-          <h4 style="margin-top:22px">التأخير</h4>
-          <table id="er-late-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr></thead><tbody></tbody></table>
-          <p class="muted" id="er-late-empty" style="display:none">لا يوجد تأخير في هذه الفترة.</p>
-
-          <h4 style="margin-top:22px">الانصراف المبكر</h4>
-          <table id="er-early-table"><thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr></thead><tbody></tbody></table>
-          <p class="muted" id="er-early-empty" style="display:none">لا يوجد انصراف مبكر في هذه الفترة.</p>
-        </div>
-        <div id="employee-report-msg"></div>
-
-        <div class="card">
-          <div class="row">
-            <h3 style="margin:0">سجل الاستيرادات</h3>
-            <button class="ghost" id="btn-refresh-reports">تحديث</button>
-          </div>
-          <div class="kpi-row" id="reports-kpis" style="margin-top:12px"></div>
-          <div class="table-toolbar no-print">
-            <input type="search" id="reports-search" placeholder="ابحث بالتاريخ أو اسم الملف…">
-          </div>
-          <div style="max-height:560px; overflow:auto; margin-top:6px">
-            <table id="reports-table">
-              <thead>
-                <tr><th>التاريخ</th><th>وقت الاستيراد</th><th>الملف</th><th>الفترة</th><th>حاضر</th><th>غائب</th><th>نسبة الحضور</th><th></th><th></th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <p class="muted" id="reports-empty" style="display:none">لا توجد استيرادات بعد.</p>
-          <p class="muted" id="reports-search-empty" style="display:none">لا نتائج مطابقة.</p>
-          <div id="reports-msg"></div>
-        </div>
       </section>
 
       <section id="view-actions" style="display:none">
         <div class="card">
           <h3 style="margin-top:0">الاجراءات</h3>
+          <p class="muted">المعلمون الذين وصل تراكم تأخيرهم إلى الحد الذي يستوجب اتخاذ إجراء بحقهم، وفق الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦) — يظهر فقط من تجاوز تراكم تأخيره ٣٠ دقيقة خلال الفترة المحددة أدناه.</p>
           <div class="row">
             <div>
               <label>من تاريخ</label>
@@ -890,40 +878,13 @@
                 <option value="">جميع المعلمين</option>
               </select>
             </div>
-            <div class="view-toggle" style="align-self:flex-end">
-              <button type="button" class="active" data-actiontab="absence">اجراءات الغياب</button>
-              <button type="button" data-actiontab="late">اجراءات التأخر</button>
-            </div>
+            <button class="primary" id="btn-refresh-penalties" style="align-self:flex-end">عرض الكشف</button>
+            <button class="ghost no-print" id="btn-print-penalties" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة</button>
+            <button class="ghost no-print" id="btn-export-penalties-excel" style="align-self:flex-end">تصدير Excel</button>
           </div>
-        </div>
-
-        <div class="card" id="ac-absence-card">
-          <p class="muted">مساءلة غياب لكل معلّم عن أيام غيابه ضمن الفترة أعلاه (نموذج ٢٠) — يشمل كل الأيام المسجّلة بغضّ النظر عن التصنيف.</p>
-          <div class="row">
-            <button class="primary" id="btn-refresh-ac-absence">عرض الكشف</button>
-            <button class="ghost no-print" id="btn-print-ac-absence"><span class="icon" data-icon="printer"></span> طباعة</button>
-            <button class="ghost no-print" id="btn-export-ac-absence-excel">تصدير Excel</button>
-          </div>
-          <div style="max-height:440px; overflow:auto; margin-top:12px">
-            <table id="ac-absence-table">
-              <thead><tr><th>الرقم</th><th>الاسم</th><th>إجمالي أيام الغياب</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <p class="muted" id="ac-absence-empty" style="display:none">لا يوجد غياب مسجَّل في هذه الفترة.</p>
-          <div id="ac-absence-msg"></div>
-        </div>
-
-        <div class="card" id="ac-late-card" style="display:none">
-          <p class="muted">وفق الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦) — يظهر فقط من تجاوز تراكم تأخيره ٣٠ دقيقة خلال الفترة المحددة أعلاه.</p>
-          <div class="row">
-            <button class="primary" id="btn-refresh-penalties">عرض الكشف</button>
-            <button class="ghost no-print" id="btn-print-penalties"><span class="icon" data-icon="printer"></span> طباعة</button>
-            <button class="ghost no-print" id="btn-export-penalties-excel">تصدير Excel</button>
-          </div>
-          <div style="max-height:440px; overflow:auto; margin-top:12px">
+          <div style="max-height:520px; overflow:auto; margin-top:12px">
             <table id="penalties-table">
-              <thead><tr><th>الرقم</th><th>الاسم</th><th>إجمالي دقائق التأخير</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم المعادلة</th><th></th><th></th></tr></thead>
+              <thead><tr><th>الرقم</th><th>الاسم</th><th>مجموع التأخر (د)</th><th>مجموع الغياب (أيام)</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم المعادلة</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -1046,7 +1007,7 @@ function formatDayLabel(iso) {
 
 // ---------- Tabs ----------
 const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'reports', 'actions', 'settings'];
-const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب', reports: 'التقارير اليومية', actions: 'الاجراءات', settings: 'الإعدادات' };
+const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب والتأخر', reports: 'التقارير اليومية', actions: 'الاجراءات', settings: 'الإعدادات' };
 let currentTab = 'dashboard';
 function showTab(name) {
   currentTab = name;
@@ -1065,6 +1026,7 @@ function showTab(name) {
       document.getElementById('abs-to').value = todayISO();
     }
     refreshAbsence();
+    refreshLate();
   }
   if (name === 'settings') {
     const cfg = loadConfig();
@@ -1093,15 +1055,6 @@ function showTab(name) {
     refreshAnalytics();
   }
   if (name === 'reports') {
-    refreshReports();
-    populateEmployeeSelect().then(() => {
-      if (!document.getElementById('er-from').value) {
-        const d = new Date();
-        document.getElementById('er-from').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-        document.getElementById('er-to').value = todayISO();
-      }
-      refreshEmployeeReport();
-    });
     populateDrEmployeeSelect_();
     if (!document.getElementById('dr-from').value) {
       getDefaultReportToDate_().then((to) => {
@@ -1112,15 +1065,14 @@ function showTab(name) {
   }
   if (name === 'actions') {
     populateAcEmployeeSelect_();
-    const doRefresh = () => { refreshAcAbsence(); refreshPenalties(); };
     if (!document.getElementById('ac-from').value) {
       getDefaultReportToDate_().then((to) => {
         document.getElementById('ac-from').value = REPORT_DEFAULT_FROM;
         document.getElementById('ac-to').value = to;
-        doRefresh();
+        refreshPenalties();
       });
     } else {
-      doRefresh();
+      refreshPenalties();
     }
   }
 }
@@ -1136,10 +1088,8 @@ document.getElementById('btn-print').addEventListener('click', printOfficialRepo
 // ---------- بحث سريع عن معلّم (الشريط الجانبي) ----------
 async function jumpToEmployeeReport(civil) {
   showTab('reports');
-  await populateEmployeeSelect();
-  document.getElementById('er-employee').value = civil;
-  refreshEmployeeReport();
-  refreshPenalties();
+  await populateDrEmployeeSelect_();
+  document.getElementById('dr-employee').value = civil;
 }
 const teacherSearchInput = document.getElementById('teacher-search');
 const teacherSearchResults = document.getElementById('teacher-search-results');
@@ -1531,7 +1481,7 @@ document.getElementById('dash-insights').addEventListener('click', (ev) => {
 
 
 // ---------- Absence log ----------
-document.getElementById('btn-refresh-absence').addEventListener('click', refreshAbsence);
+document.getElementById('btn-refresh-absence').addEventListener('click', () => { refreshAbsence(); refreshLate(); });
 document.getElementById('abs-from').addEventListener('change', refreshAbsence);
 document.getElementById('abs-to').addEventListener('change', refreshAbsence);
 
@@ -1608,6 +1558,7 @@ function renderAbsenceTable() {
         <td><select class="f-reason">${reasonOptions}</select></td>
         <td><input class="f-note" type="text" value="${escapeHtml(r.note || '')}"></td>
         <td><button class="small btn-save-absence">حفظ</button></td>
+        <td><button class="small btn-print-mesaalah-day">مسألة</button></td>
       </tr>`;
   }).join('');
   document.getElementById('absence-search-empty').style.display = (lastAbsenceRows.length && !rows.length) ? 'block' : 'none';
@@ -1653,9 +1604,9 @@ document.getElementById('abs-grouped-list').addEventListener('click', (ev) => {
   head.closest('.teacher-group').classList.toggle('open');
 });
 
-document.querySelectorAll('#view-absence .view-toggle button').forEach((btn) => {
+document.querySelectorAll('button[data-absview]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('#view-absence .view-toggle button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('button[data-absview]').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     absViewMode = btn.dataset.absview;
     document.getElementById('abs-table-view').style.display = absViewMode === 'table' ? 'block' : 'none';
@@ -1664,14 +1615,172 @@ document.querySelectorAll('#view-absence .view-toggle button').forEach((btn) => 
 });
 
 document.getElementById('abs-search').addEventListener('input', renderAbsenceTable);
-document.querySelectorAll('#view-absence .filter-chip').forEach((chip) => {
+document.querySelectorAll('#log-absence-section .filter-chip').forEach((chip) => {
   chip.addEventListener('click', () => {
-    document.querySelectorAll('#view-absence .filter-chip').forEach((c) => c.classList.remove('active'));
+    document.querySelectorAll('#log-absence-section .filter-chip').forEach((c) => c.classList.remove('active'));
     chip.classList.add('active');
     absClassFilter = chip.dataset.cls;
     renderAbsenceTable();
   });
 });
+
+// ---------- التبديل بين "الغياب" و"التأخر" في تبويب سجل الغياب والتأخر ----------
+document.querySelectorAll('button[data-logtab]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-logtab]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.logtab;
+    document.getElementById('log-absence-section').style.display = mode === 'absence' ? 'block' : 'none';
+    document.getElementById('log-late-section').style.display = mode === 'late' ? 'block' : 'none';
+  });
+});
+
+// ==================== سجل التأخر (داخل نفس تبويب سجل الغياب والتأخر) ====================
+let lastLateRows = [];
+let lateSevFilter = '';
+let lateViewMode = 'table';
+
+function lateSeverity_(mins) {
+  mins = Number(mins) || 0;
+  if (mins <= 10) return 'light';
+  if (mins <= 30) return 'medium';
+  return 'heavy';
+}
+
+async function refreshLate() {
+  const from = document.getElementById('abs-from').value;
+  const to = document.getElementById('abs-to').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('late-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل التأخر…</div>';
+  try {
+    const res = await callApi('getAttendanceRange', { from, to });
+    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0);
+    document.getElementById('late-empty').style.display = lastLateRows.length ? 'none' : 'block';
+    renderLateKpis();
+    renderLateTable();
+    renderLateGrouped();
+    msgEl.innerHTML = '';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderLateKpis() {
+  const total = lastLateRows.length;
+  const totalMinutes = lastLateRows.reduce((s, r) => s + Number(r.lateMinutes), 0);
+  const byTeacher = {};
+  lastLateRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + 1; });
+  const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
+  const heavy = lastLateRows.filter((r) => lateSeverity_(r.lateMinutes) === 'heavy').length;
+  document.getElementById('late-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي مرات التأخر</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">إجمالي دقائق التأخر</div><div class="kpi-value">${formatMinutesAsHM(totalMinutes)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">تأخر كبير (أكثر من ٣٠د)</div><div class="kpi-value" style="color:${heavy ? 'var(--bad)' : 'inherit'}">${heavy}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر تأخراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' مرات' : ''}</div></div>
+  `;
+}
+
+function renderLateTable() {
+  const q = document.getElementById('late-search').value.trim().toLowerCase();
+  const rows = lastLateRows.filter((r) => {
+    if (lateSevFilter && lateSeverity_(r.lateMinutes) !== lateSevFilter) return false;
+    if (q && !String(r.name).toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a, b) => b.date.localeCompare(a.date));
+  const tbody = document.querySelector('#late-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td>
+        <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
+        <td class="status-late">${r.lateMinutes}</td>
+        <td><button class="small btn-print-mesaalah-day-late">مسألة</button></td>
+      </tr>`).join('');
+  document.getElementById('late-search-empty').style.display = (lastLateRows.length && !rows.length) ? 'block' : 'none';
+}
+
+// ---------- عرض "تجميع حسب المعلّم" لسجل التأخر ----------
+function renderLateGrouped() {
+  const listEl = document.getElementById('late-grouped-list');
+  const byCivil = {};
+  lastLateRows.forEach((r) => {
+    const key = String(r.civil);
+    if (!byCivil[key]) byCivil[key] = { name: r.name, rows: [] };
+    byCivil[key].rows.push(r);
+  });
+  const groups = Object.values(byCivil).sort((a, b) => b.rows.length - a.rows.length);
+  document.getElementById('late-grouped-empty').style.display = groups.length ? 'none' : 'block';
+  listEl.innerHTML = groups.map((g, i) => {
+    const totalMinutes = g.rows.reduce((s, r) => s + Number(r.lateMinutes), 0);
+    return `
+    <div class="teacher-group" data-idx="${i}">
+      <div class="teacher-group-head">
+        <span class="tg-name">${escapeHtml(g.name)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="tg-count">${g.rows.length} مرات — ${formatMinutesAsHM(totalMinutes)}</span>
+          <span class="tg-chevron">▾</span>
+        </span>
+      </div>
+      <div class="teacher-group-body">
+        <table style="font-size:12.5px">
+          <thead><tr><th>التاريخ</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr></thead>
+          <tbody>
+            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+              <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td>${r.lateMinutes}</td></tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  }).join('');
+}
+document.getElementById('late-grouped-list').addEventListener('click', (ev) => {
+  const head = ev.target.closest('.teacher-group-head');
+  if (!head) return;
+  head.closest('.teacher-group').classList.toggle('open');
+});
+
+document.querySelectorAll('button[data-lateview]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-lateview]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    lateViewMode = btn.dataset.lateview;
+    document.getElementById('late-table-view').style.display = lateViewMode === 'table' ? 'block' : 'none';
+    document.getElementById('late-grouped-view').style.display = lateViewMode === 'grouped' ? 'block' : 'none';
+  });
+});
+
+document.getElementById('late-search').addEventListener('input', renderLateTable);
+document.querySelectorAll('#log-late-section .filter-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#log-late-section .filter-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    lateSevFilter = chip.dataset.sev;
+    renderLateTable();
+  });
+});
+
+document.getElementById('btn-export-late-excel').addEventListener('click', () => {
+  if (!lastLateRows.length) return;
+  const rows = lastLateRows.map((r) => ({
+    'التاريخ': r.date, 'الاسم': r.name, 'بداية الدوام': r.schedStart || '', 'وقت الحضور': r.checkIn || '', 'دقائق التأخير': r.lateMinutes,
+  }));
+  const from = document.getElementById('abs-from').value;
+  const to = document.getElementById('abs-to').value;
+  exportRowsToExcel(`سجل_التأخر_${from}_${to}.xlsx`, 'التأخر', rows);
+});
+
+document.querySelector('#late-table tbody').addEventListener('click', (ev) => {
+  if (!ev.target.classList.contains('btn-print-mesaalah-day-late')) return;
+  const tr = ev.target.closest('tr');
+  const row = lastLateRows.find((r) => String(r.id) === tr.dataset.id);
+  if (row) printLateEshaarSingle_(row);
+});
+
+
 document.getElementById('btn-export-absence-excel').addEventListener('click', () => {
   if (!lastAbsenceRows.length) return;
   const rows = lastAbsenceRows.map((r) => ({
@@ -1737,6 +1846,12 @@ document.getElementById('btn-bulk-apply').addEventListener('click', async () => 
 });
 
 document.querySelector('#absence-table tbody').addEventListener('click', async (ev) => {
+  if (ev.target.classList.contains('btn-print-mesaalah-day')) {
+    const tr = ev.target.closest('tr');
+    const row = lastAbsenceRows.find((r) => String(r.id) === tr.dataset.id);
+    if (row) printAbsenceMesaalah_({ civil: row.civil, name: row.name, dates: [row] });
+    return;
+  }
   if (!ev.target.classList.contains('btn-save-absence')) return;
   const tr = ev.target.closest('tr');
   const id = tr.dataset.id;
@@ -2464,65 +2579,96 @@ document.getElementById('btn-dr-absence').addEventListener('click', async () => 
 });
 
 // ==================== تبويب "الاجراءات" ====================
-document.querySelectorAll('#view-actions .view-toggle button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#view-actions .view-toggle button').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    const mode = btn.dataset.actiontab;
-    document.getElementById('ac-absence-card').style.display = mode === 'absence' ? 'block' : 'none';
-    document.getElementById('ac-late-card').style.display = mode === 'late' ? 'block' : 'none';
-  });
-});
 function acPeriod_() {
   return { from: document.getElementById('ac-from').value, to: document.getElementById('ac-to').value, civil: document.getElementById('ac-employee').value };
 }
+document.getElementById('btn-refresh-penalties').addEventListener('click', refreshPenalties);
+document.getElementById('ac-from').addEventListener('change', refreshPenalties);
+document.getElementById('ac-to').addEventListener('change', refreshPenalties);
+document.getElementById('ac-employee').addEventListener('change', refreshPenalties);
+document.getElementById('btn-print-penalties').addEventListener('click', () => window.print());
 
-// ---------- اجراءات الغياب: مساءلة غياب لكل معلّم ----------
-let lastAcAbsenceList = [];
-document.getElementById('btn-refresh-ac-absence').addEventListener('click', refreshAcAbsence);
-document.getElementById('ac-from').addEventListener('change', () => { refreshAcAbsence(); refreshPenalties(); });
-document.getElementById('ac-to').addEventListener('change', () => { refreshAcAbsence(); refreshPenalties(); });
-document.getElementById('ac-employee').addEventListener('change', () => { refreshAcAbsence(); refreshPenalties(); });
-document.getElementById('btn-print-ac-absence').addEventListener('click', () => window.print());
-
-async function refreshAcAbsence() {
+let lastPenaltiesList = [];
+async function refreshPenalties() {
   const { from, to, civil } = acPeriod_();
-  if (!from || !to) return;
-  const msgEl = document.getElementById('ac-absence-msg');
+  if (!from || !to) {
+    document.getElementById('penalties-msg').innerHTML = '<div class="msg err">حدّد "من/إلى تاريخ" أعلاه أولاً.</div>';
+    return;
+  }
+  const msgEl = document.getElementById('penalties-msg');
   msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
   try {
-    const res = await callApi('getAbsenceRange', { from, to });
-    const rows = res.rows.filter((r) => !civil || String(r.civil) === civil);
-    const byCivil = {};
-    rows.forEach((r) => {
-      const c = String(r.civil);
-      if (!byCivil[c]) byCivil[c] = { civil: c, num: r.num, name: r.name, count: 0, dates: [] };
-      byCivil[c].count++;
-      byCivil[c].dates.push(r);
-    });
-    lastAcAbsenceList = Object.values(byCivil).sort((a, b) => b.count - a.count);
-    document.getElementById('ac-absence-empty').style.display = lastAcAbsenceList.length ? 'none' : 'block';
-    const tbody = document.querySelector('#ac-absence-table tbody');
-    tbody.innerHTML = lastAcAbsenceList.map((e) => `
+    const [penRes, absRes] = await Promise.all([
+      callApi('getAnnualPenalties', { from, to }),
+      callApi('getAbsenceRange', { from, to }),
+    ]);
+    const absCountByCivil = {};
+    absRes.rows.forEach((r) => { const c = String(r.civil); absCountByCivil[c] = (absCountByCivil[c] || 0) + 1; });
+    const list = civil ? penRes.list.filter((e) => String(e.civil) === civil) : penRes.list;
+    lastPenaltiesList = list.map((e) => ({ ...e, absenceDays: absCountByCivil[String(e.civil)] || 0 }));
+    document.getElementById('penalties-empty').style.display = lastPenaltiesList.length ? 'none' : 'block';
+    document.querySelector('#penalties-table tbody').innerHTML = lastPenaltiesList.map((e) => `
       <tr data-civil="${escapeHtml(e.civil)}">
-        <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td><td>${e.count}</td>
-        <td><button class="small btn-print-mesaalah-absence">طباعة مساءلة</button></td>
+        <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
+        <td class="status-late">${e.totalLateMinutes}</td>
+        <td class="${e.absenceDays ? 'status-absent' : ''}">${e.absenceDays}</td>
+        <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
+        <td>${e.deductionDays || '—'}</td>
+        <td><button class="small btn-print-action" style="background:var(--warn); color:#fff">الإجراء</button></td>
       </tr>`).join('');
     msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
-document.getElementById('btn-export-ac-absence-excel').addEventListener('click', () => {
-  if (!lastAcAbsenceList.length) return;
+document.getElementById('btn-export-penalties-excel').addEventListener('click', () => {
+  if (!lastPenaltiesList.length) return;
   const { from, to } = acPeriod_();
-  const rows = lastAcAbsenceList.map((e) => ({ 'الرقم': e.num, 'الاسم': e.name, 'إجمالي أيام الغياب': e.count }));
-  exportRowsToExcel(`مساءلات_الغياب_${from}_${to}.xlsx`, 'الغياب', rows);
+  const rows = lastPenaltiesList.map((e) => ({
+    'الرقم': e.num, 'الاسم': e.name, 'مجموع التأخر (د)': e.totalLateMinutes, 'مجموع الغياب (أيام)': e.absenceDays,
+    'الإجراء الواجب': e.action, 'ملاحظة': e.note || '', 'أيام الحسم المعادلة': e.deductionDays || '',
+  }));
+  exportRowsToExcel(`كشف_الاجراءات_${from}_${to}.xlsx`, 'الاجراءات', rows);
 });
 
-// نموذج ٢٠ — مساءلة غياب لمعلّم واحد عن كل أيام غيابه ضمن الفترة (كصورة ٣ المرفقة)
-function printAbsenceMesaalah_(entry) {
+// نموذج تعهّد موحّد لكل معلّم بلغ حد الإجراء — يجمع مجموع التأخر ومجموع الغياب والإجراء الواجب في مستند واحد قابل للطباعة
+function printAction_(entry) {
+  const cfg = loadConfig();
   const { from, to } = acPeriod_();
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'نموذج تعهّد — إجراء تراكم التأخير والغياب',
+    titleLine: escapeHtml(entry.action),
+    subtitleHtml: `${escapeHtml(entry.name)} — ${dateRangeHtml_(from, to)}`,
+  });
+  const stats = buildStatCardsHtml([
+    { value: formatMinutesAsHM(entry.totalLateMinutes), label: 'مجموع دقائق التأخير', tone: 'warn' },
+    { value: entry.absenceDays, label: 'مجموع أيام الغياب', tone: entry.absenceDays ? 'bad' : '' },
+    { value: escapeHtml(entry.action), label: 'الإجراء الواجب', tone: 'warn' },
+    { value: entry.deductionDays || '—', label: 'أيام الحسم المعادلة' },
+  ]);
+  const body = `
+    <div class="pr-page">
+      ${header}${stats}
+      <p style="font-size:10pt; line-height:1.9">
+        أنا الموقّع أدناه/ة: <b>${escapeHtml(entry.name)}</b> — السجل المدني: <bdi>${escapeHtml(entry.civil)}</bdi><br>
+        بلغ إجمالي تراكم دقائق تأخيري عن الدوام الرسمي خلال الفترة أعلاه <b>${entry.totalLateMinutes}</b> دقيقة، بالإضافة إلى <b>${entry.absenceDays}</b> يوم غياب، وقد صدر بحقي الإجراء الموضّح أعلاه وفق الجدول الرسمي (مرفق ٦) الصادر عن الإدارة العامة للتعليم.
+      </p>
+      <p style="font-size:9.5pt">وأتعهّد بالالتزام بمواعيد الدوام الرسمي مستقبلاً، وفي حال تكرار المخالفة أوافق على تطبيق الإجراء الأعلى المنصوص عليه نظاماً.</p>
+      <div class="pr-sign-row"><div>اسم المعلّم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
+      <div class="pr-sign-row" style="margin-top:24pt"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '')}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
+      ${buildReportFooterHtml()}
+    </div>`;
+  printInPage(PERIOD_REPORT_STYLE, body);
+}
+document.querySelector('#penalties-table tbody').addEventListener('click', (ev) => {
+  if (!ev.target.classList.contains('btn-print-action')) return;
+  const civil = ev.target.closest('tr').dataset.civil;
+  const entry = lastPenaltiesList.find((e) => String(e.civil) === civil);
+  if (entry) printAction_(entry);
+});
+
+// نموذج ٢٠ — مساءلة غياب لمعلّم عن يوم واحد أو أكثر (تُستدعى من سجل الغياب لكل صف على حدة)
+function printAbsenceMesaalah_(entry) {
   const cfg = loadConfig();
   const dates = entry.dates.slice().sort((a, b) => a.date.localeCompare(b.date));
   const lastDate = dates[dates.length - 1];
@@ -2544,7 +2690,7 @@ function printAbsenceMesaalah_(entry) {
         <tbody><tr><td>${escapeHtml(cfg.schoolName || '')}</td><td>${escapeHtml(entry.civil)}</td></tr></tbody>
       </table>
       <div class="pr-subtitle" style="text-align:right; font-weight:700">${escapeHtml(entry.name)}</div>
-      <div class="pr-subtitle" style="text-align:right">تغيّب عن العمل ${dates.length > 1 ? dates.length + ' أيام خلال الفترة ' + dateRangeHtml_(from, to) : 'يوم ' + formatDateDMY(lastDate.date) + ' (' + WEEKDAYS_FULL_AR[d.getDay()] + ')'}</div>
+      <div class="pr-subtitle" style="text-align:right">تغيّب عن العمل ${dates.length > 1 ? dates.length + ' أيام' : 'يوم ' + formatDateDMY(lastDate.date) + ' (' + WEEKDAYS_FULL_AR[d.getDay()] + ')'}</div>
       <table class="pr-table">
         <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th></tr></thead>
         <tbody>${rows}<tr class="pr-total"><td colspan="4">إجمالي أيام الغياب</td><td>${dates.length}</td></tr></tbody>
@@ -2554,7 +2700,7 @@ function printAbsenceMesaalah_(entry) {
       <p style="font-size:9.5pt; line-height:1.8">
         المكرم/ ${escapeHtml(entry.name)}<br>
         السلام عليكم ورحمة الله وبركاته، وبعد:<br>
-        من خلال متابعة سجل العمل خلال الفترة الموضحة أعلاه، أمل الإفادة عن أسباب ذلك وعليكم تقديم ما يوجّد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
+        من خلال متابعة سجل العمل، أمل الإفادة عن أسباب ذلك وعليكم تقديم ما يوجّد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
       </p>
       <div class="pr-sign-row"><div>اسم الرئيس المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
 
@@ -2584,208 +2730,39 @@ function printAbsenceMesaalah_(entry) {
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }
-document.querySelector('#ac-absence-table tbody').addEventListener('click', (ev) => {
-  if (!ev.target.classList.contains('btn-print-mesaalah-absence')) return;
-  const civil = ev.target.closest('tr').dataset.civil;
-  const entry = lastAcAbsenceList.find((e) => e.civil === civil);
-  if (entry) printAbsenceMesaalah_(entry);
-});
 
-// ---------- اجراءات التأخر: كشف الجزاءات + طباعة إشعار/تعهد لكل معلّم ----------
-document.getElementById('btn-refresh-penalties').addEventListener('click', refreshPenalties);
-document.getElementById('btn-print-penalties').addEventListener('click', () => window.print());
-
-let lastPenaltiesList = [];
-async function refreshPenalties() {
-  const { from, to, civil } = acPeriod_();
-  if (!from || !to) {
-    document.getElementById('penalties-msg').innerHTML = '<div class="msg err">حدّد "من/إلى تاريخ" أعلاه أولاً.</div>';
-    return;
-  }
-  const msgEl = document.getElementById('penalties-msg');
-  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
-  try {
-    const res = await callApi('getAnnualPenalties', { from, to });
-    lastPenaltiesList = civil ? res.list.filter((e) => String(e.civil) === civil) : res.list;
-    document.getElementById('penalties-empty').style.display = lastPenaltiesList.length ? 'none' : 'block';
-    document.querySelector('#penalties-table tbody').innerHTML = lastPenaltiesList.map((e) => `
-      <tr data-civil="${escapeHtml(e.civil)}">
-        <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
-        <td class="status-late">${e.totalLateMinutes}</td>
-        <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
-        <td>${e.deductionDays || '—'}</td>
-        <td><button class="small btn-print-eshaar-late">طباعة</button></td>
-        <td><button class="small btn-print-ejraa-late" style="background:var(--warn); color:#fff">إجراء</button></td>
-      </tr>`).join('');
-    msgEl.innerHTML = '';
-  } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-  }
-}
-document.getElementById('btn-export-penalties-excel').addEventListener('click', () => {
-  if (!lastPenaltiesList.length) return;
-  const { from, to } = acPeriod_();
-  const rows = lastPenaltiesList.map((e) => ({
-    'الرقم': e.num, 'الاسم': e.name, 'إجمالي دقائق التأخير': e.totalLateMinutes,
-    'الإجراء الواجب': e.action, 'ملاحظة': e.note || '', 'أيام الحسم المعادلة': e.deductionDays || '',
-  }));
-  exportRowsToExcel(`كشف_الجزاءات_${from}_${to}.xlsx`, 'الجزاءات', rows);
-});
-
-// نموذج إشعار تأخر عن الدوام لمعلّم واحد — يسرد كل أيام تأخره ضمن الفترة (كصورة ٤ المرفقة)
-async function printLateEshaar_(civil) {
-  const { from, to } = acPeriod_();
-  try {
-    const attRes = await callApi('getAttendanceRange', { from, to });
-    const rows = attRes.rows.filter((r) => String(r.civil) === civil && Number(r.lateMinutes) > 0).sort((a, b) => a.date.localeCompare(b.date));
-    if (!rows.length) return;
-    const cfg = loadConfig();
-    const name = rows[0].name;
-    const totalMinutes = rows.reduce((s, r) => s + Number(r.lateMinutes), 0);
-    const header = buildPeriodReportHeader({
-      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'إشعار تأخر عن الدوام',
-      titleLine: 'إشعار تأخر عن الدوام',
-    });
-    const tableRows = rows.map((r, i) => {
-      const d = isoToLocalDate(r.date);
-      return `<tr><td>${i + 1}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td><td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td class="pr-late-cell">${formatMinutesAsHM(r.lateMinutes)}</td></tr>`;
-    }).join('');
-    const body = `
-      <div class="pr-page">
-        ${header}
-        <p style="font-size:10pt; line-height:1.9">
-          المكرم/ة الموظف/ة: <b>${escapeHtml(name)}</b><br>
-          رقم السجل المدني: ${escapeHtml(civil)}<br>
-          السلام عليكم ورحمة الله وبركاته، وبعد...<br>
-          من خلال متابعة سجلات الحضور والانصراف، لوحظ <b>تأخركم عن الحضور للدوام</b> في الأيام الموضحة أدناه، بإجمالي تأخير قدره <b>${formatMinutesAsHM(totalMinutes)}</b>.
-        </p>
-        <table class="pr-table">
-          <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>مدة التأخر</th></tr></thead>
-          <tbody>${tableRows}<tr class="pr-total"><td colspan="5">الإجمالي — ${rows.length} يوم</td><td>${formatMinutesAsHM(totalMinutes)}</td></tr></tbody>
-        </table>
-        <p style="font-size:9.5pt; margin-top:10pt">نأمل منكم التكرم بإيضاح أسباب ذلك في المساحة المخصصة أدناه، وإعادتها لإدارة المدرسة.</p>
-        <div class="pr-section-title">إفادة الموظف/ة</div>
-        <div class="pr-note-box"></div>
-        <div class="pr-sign-row"><div>الاسم: ${escapeHtml(name)}</div><div>التوقيع: ..............</div><div>التاريخ: ....../....../......</div></div>
-        ${buildReportFooterHtml()}
-      </div>`;
-    printInPage(PERIOD_REPORT_STYLE, body);
-  } catch (err) {
-    document.getElementById('penalties-msg').innerHTML = `<div class="msg err">تعذّرت الطباعة: ${escapeHtml(err.message)}</div>`;
-  }
-}
-
-// نموذج الإجراء الواجب (تعهد خطي / تنبيه شفوي...) حسب الدرجة التي بلغها تراكم تأخير المعلّم
-function printLateEjraa_(entry) {
+// نموذج إشعار تأخر عن الدوام ليوم واحد فقط (يُستدعى من سجل التأخر لكل صف على حدة)
+function printLateEshaarSingle_(row) {
   const cfg = loadConfig();
-  const { from, to } = acPeriod_();
+  const d = isoToLocalDate(row.date);
   const header = buildPeriodReportHeader({
-    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'نموذج تعهّد — تراكم دقائق التأخير',
-    titleLine: escapeHtml(entry.action),
-    subtitleHtml: `${dateRangeHtml_(from, to)} — إجمالي دقائق التأخير: ${entry.totalLateMinutes}`,
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'إشعار تأخر عن الدوام',
+    titleLine: 'إشعار تأخر عن الدوام',
   });
+  const tableRow = `<tr><td>1</td><td>${escapeHtml(row.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td><td>${escapeHtml(toArabicAmPmTime(row.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(row.checkIn)) || '—'}</td><td class="pr-late-cell">${formatMinutesAsHM(row.lateMinutes)}</td></tr>`;
   const body = `
     <div class="pr-page">
       ${header}
       <p style="font-size:10pt; line-height:1.9">
-        أنا الموقّع أدناه/ة: <b>${escapeHtml(entry.name)}</b> — السجل المدني: <bdi>${escapeHtml(entry.civil)}</bdi><br>
-        بلغ إجمالي تراكم دقائق تأخيري عن الدوام الرسمي خلال الفترة أعلاه <b>${entry.totalLateMinutes}</b> دقيقة، وقد صدر بحقي الإجراء التالي وفق الجدول الرسمي (مرفق ٦) الصادر عن الإدارة العامة للتعليم:
+        المكرم/ة الموظف/ة: <b>${escapeHtml(row.name)}</b><br>
+        رقم السجل المدني: ${escapeHtml(row.civil)}<br>
+        السلام عليكم ورحمة الله وبركاته، وبعد...<br>
+        لوحظ <b>تأخركم عن الحضور للدوام</b> بتاريخ ${formatDateDMY(row.date)} يوم ${WEEKDAYS_FULL_AR[d.getDay()]}، بمدة تأخر قدرها <b>${formatMinutesAsHM(row.lateMinutes)}</b>.
       </p>
-      <div class="pr-stats"><div class="pr-stat warn"><b>${escapeHtml(entry.action)}</b><span>الإجراء الواجب</span></div>
-        <div class="pr-stat"><b>${entry.deductionDays || '—'}</b><span>أيام الحسم المعادلة</span></div></div>
-      <p style="font-size:9.5pt">وأتعهّد بالالتزام بمواعيد الدوام الرسمي مستقبلاً، وفي حال تكرار المخالفة أوافق على تطبيق الإجراء الأعلى المنصوص عليه نظاماً.</p>
-      <div class="pr-sign-row"><div>اسم المعلّم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
-      <div class="pr-sign-row" style="margin-top:24pt"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '')}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
+      <table class="pr-table">
+        <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>مدة التأخر</th></tr></thead>
+        <tbody>${tableRow}</tbody>
+      </table>
+      <p style="font-size:9.5pt; margin-top:10pt">نأمل منكم التكرم بإيضاح أسباب ذلك في المساحة المخصصة أدناه، وإعادتها لإدارة المدرسة.</p>
+      <div class="pr-section-title">إفادة الموظف/ة</div>
+      <div class="pr-note-box"></div>
+      <div class="pr-sign-row"><div>الاسم: ${escapeHtml(row.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ....../....../......</div></div>
       ${buildReportFooterHtml()}
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }
-document.querySelector('#penalties-table tbody').addEventListener('click', (ev) => {
-  const civil = ev.target.closest('tr') ? ev.target.closest('tr').dataset.civil : null;
-  if (!civil) return;
-  if (ev.target.classList.contains('btn-print-eshaar-late')) printLateEshaar_(civil);
-  if (ev.target.classList.contains('btn-print-ejraa-late')) {
-    const entry = lastPenaltiesList.find((e) => String(e.civil) === civil);
-    if (entry) printLateEjraa_(entry);
-  }
-});
 
 
-// ---------- التقارير (سجل الاستيرادات) ----------
-document.getElementById('btn-refresh-reports').addEventListener('click', refreshReports);
-
-async function refreshReports() {
-  const msgEl = document.getElementById('reports-msg');
-  msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل الاستيرادات…</div>';
-  try {
-    const res = await callApi('listImports', {});
-    lastReportsList = res.list;
-    document.getElementById('reports-empty').style.display = res.list.length ? 'none' : 'block';
-    renderReportsKpis();
-    renderReportsTable();
-    msgEl.innerHTML = '';
-  } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-  }
-}
-
-function renderReportsKpis() {
-  const el = document.getElementById('reports-kpis');
-  if (!lastReportsList.length) { el.innerHTML = ''; return; }
-  const totalPresent = lastReportsList.reduce((s, r) => s + (r.presentCount || 0), 0);
-  const totalAbsent = lastReportsList.reduce((s, r) => s + (r.absentCount || 0), 0);
-  const avgRate = totalPresent + totalAbsent ? totalPresent / (totalPresent + totalAbsent) : null;
-  const lastDate = lastReportsList.reduce((max, r) => (r.date > max ? r.date : max), lastReportsList[0].date);
-  el.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">عدد الأيام المستوردة</div><div class="kpi-value">${lastReportsList.length}</div></div>
-    <div class="kpi-card"><div class="kpi-label">متوسط نسبة الحضور</div><div class="kpi-value">${avgRate != null ? Math.round(avgRate * 100) + '%' : '—'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">آخر استيراد</div><div class="kpi-value" style="font-size:16px">${escapeHtml(lastDate)}</div></div>
-  `;
-}
-
-let lastReportsList = [];
-function renderReportsTable() {
-  const q = document.getElementById('reports-search').value.trim().toLowerCase();
-  const rows = lastReportsList.filter((r) => !q || String(r.date).includes(q) || String(r.fileName || '').toLowerCase().includes(q));
-  const tbody = document.querySelector('#reports-table tbody');
-  tbody.innerHTML = rows.map((r) => {
-    const total = (r.presentCount || 0) + (r.absentCount || 0);
-    const rate = total ? r.presentCount / total : null;
-    return `
-      <tr data-date="${escapeHtml(r.date)}">
-        <td>${escapeHtml(r.date)}</td>
-        <td>${r.importedAt ? escapeHtml(String(r.importedAt).replace('T', ' ').slice(0, 16)) : '—'}</td>
-        <td>${escapeHtml(r.fileName) || '—'}</td>
-        <td>${escapeHtml(r.schedLabel) || '—'} (${escapeHtml(r.schedStart) || '—'}–${escapeHtml(r.schedEnd) || '—'})</td>
-        <td>${r.presentCount}</td>
-        <td>${r.absentCount}</td>
-        <td>${renderRateCell(rate)}</td>
-        <td><button class="small btn-reprint">إعادة الطباعة</button></td>
-        <td><button class="small btn-delete-import" style="background:var(--bad)">حذف</button></td>
-      </tr>`;
-  }).join('');
-  document.getElementById('reports-search-empty').style.display = (lastReportsList.length && !rows.length) ? 'block' : 'none';
-}
-document.getElementById('reports-search').addEventListener('input', renderReportsTable);
-
-document.getElementById('reports-table').addEventListener('click', async (ev) => {
-  const tr = ev.target.closest('tr');
-  if (!tr) return;
-  const date = tr.dataset.date;
-  if (ev.target.classList.contains('btn-reprint')) {
-    printOfficialReport(date, 'reports-msg');
-  } else if (ev.target.classList.contains('btn-delete-import')) {
-    if (!confirm(`حذف كل بيانات ${date} (الحضور والغياب والاستيراد)؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
-    ev.target.disabled = true;
-    try {
-      await callApi('deleteDay', { date });
-      await refreshReports();
-    } catch (err) {
-      document.getElementById('reports-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-      ev.target.disabled = false;
-    }
-  }
-});
 
 // تحديث دوري تلقائي للشاشة المفتوحة حالياً (كل دقيقة، فقط إذا كانت النافذة ظاهرة)
 const AUTO_REFRESHERS = {
@@ -2793,7 +2770,7 @@ const AUTO_REFRESHERS = {
   absence: refreshAbsence,
   summary: refreshSummary,
   analytics: refreshAnalytics,
-  reports: refreshReports,
+  actions: refreshPenalties,
 };
 setInterval(() => {
   if (document.visibilityState !== 'visible') return;
@@ -2801,8 +2778,7 @@ setInterval(() => {
   if (fn) fn();
 }, 60000);
 
-// ---------- تقرير الغياب والتأخر والانصراف (موظف واحد أو الكل) ----------
-let employeeSelectPopulated = false;
+// ---------- قوائم اختيار المعلّم (مشتركة بين التقارير اليومية والاجراءات) ----------
 async function populateTeacherSelect_(selectEl) {
   try {
     const res = await getTeachersCached();
@@ -2813,14 +2789,7 @@ async function populateTeacherSelect_(selectEl) {
       opt.textContent = t.name;
       selectEl.appendChild(opt);
     });
-  } catch (err) {
-    document.getElementById('employee-report-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-  }
-}
-async function populateEmployeeSelect() {
-  if (employeeSelectPopulated) return;
-  await populateTeacherSelect_(document.getElementById('er-employee'));
-  employeeSelectPopulated = true;
+  } catch (err) { /* تجاهل — تبقى القائمة بخيار "الكل" فقط */ }
 }
 let drEmployeeSelectPopulated = false;
 async function populateDrEmployeeSelect_() {
@@ -2834,60 +2803,6 @@ async function populateAcEmployeeSelect_() {
   await populateTeacherSelect_(document.getElementById('ac-employee'));
   acEmployeeSelectPopulated = true;
 }
-
-document.getElementById('btn-refresh-employee-report').addEventListener('click', refreshEmployeeReport);
-document.getElementById('er-from').addEventListener('change', refreshEmployeeReport);
-document.getElementById('er-to').addEventListener('change', refreshEmployeeReport);
-document.getElementById('er-employee').addEventListener('change', refreshEmployeeReport);
-document.getElementById('btn-print-employee-report').addEventListener('click', () => window.print());
-
-async function refreshEmployeeReport() {
-  const from = document.getElementById('er-from').value;
-  const to = document.getElementById('er-to').value;
-  const civil = document.getElementById('er-employee').value;
-  if (!from || !to) return;
-  const msgEl = document.getElementById('employee-report-msg');
-  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
-  try {
-    const res = await callApi('getEmployeeReport', { from, to, civil });
-    const showName = !civil;
-
-    document.getElementById('er-totals').innerHTML = `
-      <span class="pill">أيام الحضور: ${res.totals.presentDays}</span>
-      <span class="pill">أيام الغياب: ${res.totals.absenceDays}</span>
-      <span class="pill">أيام التأخير: ${res.totals.lateDays} (${res.totals.lateMinutesTotal} د)</span>
-      <span class="pill">أيام الانصراف المبكر: ${res.totals.earlyDays} (${res.totals.earlyMinutesTotal} د)</span>
-    `;
-
-    document.getElementById('er-absence-empty').style.display = res.absenceEvents.length ? 'none' : 'block';
-    document.querySelector('#er-absence-table tbody').innerHTML = res.absenceEvents.map((e) => `
-      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.classification) || '—'}</td><td>${escapeHtml(e.reason) || '—'}</td><td>${escapeHtml(e.note) || '—'}</td></tr>
-    `).join('');
-    document.querySelector('#er-absence-table thead').innerHTML = showName
-      ? '<tr><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr>'
-      : '<tr><th>التاريخ</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr>';
-
-    document.getElementById('er-late-empty').style.display = res.lateEvents.length ? 'none' : 'block';
-    document.querySelector('#er-late-table tbody').innerHTML = res.lateEvents.map((e) => `
-      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.checkIn) || '—'}</td><td class="status-late">${e.lateMinutes}</td></tr>
-    `).join('');
-    document.querySelector('#er-late-table thead').innerHTML = showName
-      ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr>'
-      : '<tr><th>التاريخ</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr>';
-
-    document.getElementById('er-early-empty').style.display = res.earlyEvents.length ? 'none' : 'block';
-    document.querySelector('#er-early-table tbody').innerHTML = res.earlyEvents.map((e) => `
-      <tr><td>${escapeHtml(e.date)}</td>${showName ? `<td>${escapeHtml(e.name)}</td>` : ''}<td>${escapeHtml(e.checkOut) || '—'}</td><td class="status-late">${e.earlyMinutes}</td></tr>
-    `).join('');
-    document.querySelector('#er-early-table thead').innerHTML = showName
-      ? '<tr><th>التاريخ</th><th>الاسم</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>'
-      : '<tr><th>التاريخ</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th></tr>';
-    msgEl.innerHTML = '';
-  } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-  }
-}
-
 
 function exportRowsToExcel(filename, sheetName, rows) {
   const ws = XLSX.utils.json_to_sheet(rows);

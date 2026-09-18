@@ -246,8 +246,10 @@
 
   /* ---------- طباعة داخل الصفحة الحالية بلا نافذة جديدة ---------- */
   #print-area { display: none; }
-  body.print-mode > *:not(#print-area) { display: none !important; }
-  body.print-mode #print-area { display: block !important; }
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; }
+  }
 
   /* ---------- تحديد جماعي + إجراءات دفعة واحدة ---------- */
   .bulk-bar {
@@ -2627,10 +2629,11 @@ function printInPage(styleCss, bodyHtml) {
 
   const area = document.getElementById('print-area');
   area.innerHTML = `<style>${styleCss}</style>${bodyHtml}`;
-  document.body.classList.add('print-mode');
+  // لا نُغيّر أي شيء على الشاشة إطلاقاً — #print-area مخفي دائماً على الشاشة (display:none)
+  // ولا يظهر إلا داخل مخرجات الطباعة الفعلية عبر قاعدة @media print، فيبقى التطبيق كما هو
+  // خلف مربع الطباعة تماماً كأي موقع آخر، بدل أن يتحوّل الموقع نفسه لعرض التقرير فقط.
 
   const cleanup = () => {
-    document.body.classList.remove('print-mode');
     area.innerHTML = '';
     window.removeEventListener('afterprint', cleanup);
     window.removeEventListener('focus', onFocus);
@@ -2644,10 +2647,9 @@ function printInPage(styleCss, bodyHtml) {
 
   setTimeout(() => {
     window.print();
-    // 'afterprint' هو الإشارة الأدق (يُطلق سواء طبع المستخدم أو ألغى)، لكن بعض المتصفحات
-    // لا تُطلقه بشكل موثوق دائماً — لذا نضيف أيضاً استعادة التركيز على النافذة (تحدث فور
-    // إغلاق نافذة الطباعة) كإشارة احتياطية، مع تأخير بسيط لتفادي التقاط ظهور مربع الطباعة
-    // نفسه كأنه إغلاق له، وشبكة أمان أخيرة في حال فشلت الإشارتان معاً.
+    // تنظيف محتوى الحاوية بعد انتهاء الطباعة (لا حاجة له لإظهار التطبيق — هو ظاهر أصلاً —
+    // فقط لتفريغ الذاكرة قبل الطباعة التالية). عدّة إشارات احتياطية لأن 'afterprint' وحدها
+    // قد لا تُطلق بشكل موثوق في كل المتصفحات.
     onFocus = () => setTimeout(cleanup, 400);
     window.addEventListener('afterprint', cleanup);
     window.addEventListener('focus', onFocus);

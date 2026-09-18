@@ -2669,25 +2669,20 @@ function printAction_(entry) {
         <tr><td class="pr-name">رقم الهوية</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td><td class="pr-name">جهة العمل</td><td>${escapeHtml(cfg.schoolName || '')}</td></tr>
       </tbody>
     </table>`;
-  const actionRow = `
-      <tr>
-        <td>١</td>
-        <td>${entry.totalLateMinutes} دقيقة${entry.deductionDays ? ' — بما يعادل ' + entry.deductionDays + (entry.deductionDays === 1 ? ' يوم' : ' أيام') : ''}</td>
-        <td>${escapeHtml(entry.action)}</td>
-        <td class="pr-name">${escapeHtml(entry.actionText || entry.action)}</td>
-        <td></td>
-      </tr>`;
-  const table = `
-    <table class="pr-table">
-      <thead><tr><th>م</th><th>عدد دقائق التأخير</th><th>نوع الإجراء</th><th>الإجراء المتخذ</th><th>التوقيع</th></tr></thead>
-      <tbody>${actionRow}</tbody>
-    </table>
+  const deductionPhrase = entry.deductionDays ? `، بما يعادل ${entry.deductionDays} ${entry.deductionDays === 1 ? 'يوم' : 'أيام'} للحسم` : '';
+  const narrative = `
+    <p style="font-size:10pt; line-height:1.9">
+      السلام عليكم ورحمة الله وبركاته، وبعد:<br>
+      من خلال متابعة سجلات الحضور والانصراف خلال الفترة ${dateRangeHtml_(from, to)}، بلغ إجمالي تراكم دقائق تأخير الموظف/ـة المذكور/ة أعلاه عن الحضور للدوام الرسمي (<b>${entry.totalLateMinutes}</b> دقيقة)${deductionPhrase}، وبناءً على الجدول الرسمي الصادر عن الإدارة العامة للتعليم (مرفق ٦)، استوجب ذلك اتخاذ الإجراء التالي:
+    </p>
+    <p style="font-size:10.5pt; font-weight:700; margin:10pt 0 2pt">${escapeHtml(entry.action)}</p>
+    <p style="font-size:10pt; line-height:1.8">${escapeHtml(entry.actionText || entry.action)}</p>
     ${entry.note ? `<p class="muted" style="font-size:9pt; margin-top:6pt">${escapeHtml(entry.note)}</p>` : ''}`;
   const body = `
     <div class="pr-page">
       ${header}
       ${infoTable}
-      ${table}
+      ${narrative}
       <div class="pr-sign-row" style="margin-top:28pt">
         <div>معدّ/ة البيان<br>الاسم: ${escapeHtml(cfg.preparedBy || '....................')}<br>التوقيع: ..............</div>
         <div>الختم</div>

@@ -201,6 +201,12 @@
   .rate-cell .rate-fill.low { background: var(--bad); }
   .rate-cell .rate-text { font-size: 11.5px; color: var(--muted); width: 34px; flex-shrink: 0; text-align: left; }
   tr.row-flag td { background: var(--bad-soft); }
+  .action-status-btn {
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; font-size: 11.5px;
+    font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit;
+  }
+  .action-status-btn.done { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+  .action-status-btn.pending { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
 
   /* ---------- مركز التقارير (شبكة أزرار الطباعة) ---------- */
   .report-center-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
@@ -882,9 +888,10 @@
             <button class="ghost no-print" id="btn-print-penalties" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة</button>
             <button class="ghost no-print" id="btn-export-penalties-excel" style="align-self:flex-end">تصدير Excel</button>
           </div>
+          <div class="kpi-row" id="ac-kpis" style="margin-top:12px"></div>
           <div style="max-height:520px; overflow:auto; margin-top:12px">
             <table id="penalties-table">
-              <thead><tr><th>الرقم</th><th>الاسم</th><th>مجموع التأخر (د)</th><th>مجموع الغياب (أيام)</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم المعادلة</th><th></th></tr></thead>
+              <thead><tr><th>الرقم</th><th>الاسم</th><th>مجموع التأخر (د)</th><th>مجموع الغياب (أيام)</th><th>الإجراء الواجب</th><th>ملاحظة</th><th>أيام الحسم المعادلة</th><th>الحالة</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -2607,19 +2614,31 @@ async function refreshPenalties() {
     const list = civil ? penRes.list.filter((e) => String(e.civil) === civil) : penRes.list;
     lastPenaltiesList = list.map((e) => ({ ...e, absenceDays: absCountByCivil[String(e.civil)] || 0 }));
     document.getElementById('penalties-empty').style.display = lastPenaltiesList.length ? 'none' : 'block';
-    document.querySelector('#penalties-table tbody').innerHTML = lastPenaltiesList.map((e) => `
+    renderPenaltiesTable();
+    msgEl.innerHTML = '';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderPenaltiesTable() {
+  const done = lastPenaltiesList.filter((e) => e.actionDone).length;
+  const pending = lastPenaltiesList.length - done;
+  document.getElementById('ac-kpis').innerHTML = lastPenaltiesList.length ? `
+    <div class="kpi-card"><div class="kpi-label">إجمالي من يستوجب إجراء</div><div class="kpi-value">${lastPenaltiesList.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">تم الإجراء</div><div class="kpi-value" style="color:var(--good)">${done}</div></div>
+    <div class="kpi-card"><div class="kpi-label">لم يتم الإجراء</div><div class="kpi-value" style="color:${pending ? 'var(--bad)' : 'inherit'}">${pending}</div></div>
+  ` : '';
+  document.querySelector('#penalties-table tbody').innerHTML = lastPenaltiesList.map((e) => `
       <tr data-civil="${escapeHtml(e.civil)}">
         <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
         <td class="status-late">${e.totalLateMinutes}</td>
         <td class="${e.absenceDays ? 'status-absent' : ''}">${e.absenceDays}</td>
         <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
         <td>${e.deductionDays || '—'}</td>
+        <td><button class="action-status-btn ${e.actionDone ? 'done' : 'pending'} btn-toggle-action-done">${e.actionDone ? 'تم الإجراء ✔' : 'لم يتم الإجراء'}</button></td>
         <td><button class="small btn-print-action" style="background:var(--warn); color:#fff">الإجراء</button></td>
       </tr>`).join('');
-    msgEl.innerHTML = '';
-  } catch (err) {
-    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
-  }
 }
 document.getElementById('btn-export-penalties-excel').addEventListener('click', () => {
   if (!lastPenaltiesList.length) return;
@@ -2627,44 +2646,80 @@ document.getElementById('btn-export-penalties-excel').addEventListener('click', 
   const rows = lastPenaltiesList.map((e) => ({
     'الرقم': e.num, 'الاسم': e.name, 'مجموع التأخر (د)': e.totalLateMinutes, 'مجموع الغياب (أيام)': e.absenceDays,
     'الإجراء الواجب': e.action, 'ملاحظة': e.note || '', 'أيام الحسم المعادلة': e.deductionDays || '',
+    'الحالة': e.actionDone ? 'تم الإجراء' : 'لم يتم الإجراء',
   }));
   exportRowsToExcel(`كشف_الاجراءات_${from}_${to}.xlsx`, 'الاجراءات', rows);
 });
 
 // نموذج تعهّد موحّد لكل معلّم بلغ حد الإجراء — يجمع مجموع التأخر ومجموع الغياب والإجراء الواجب في مستند واحد قابل للطباعة
+// بيان بعدد دقائق التأخير والإجراء المتخذ بشأنه — إعادة صياغة رسمية لنموذج "مرفق ٦"
+// الصادر عن الإدارة العامة للتعليم / إدارة الموارد البشرية، بأرقام ونصوص الموظف الفعلية.
 function printAction_(entry) {
   const cfg = loadConfig();
   const { from, to } = acPeriod_();
   const header = buildPeriodReportHeader({
-    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'نموذج تعهّد — إجراء تراكم التأخير والغياب',
-    titleLine: escapeHtml(entry.action),
-    subtitleHtml: `${escapeHtml(entry.name)} — ${dateRangeHtml_(from, to)}`,
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'بيان بعدد دقائق التأخير والإجراء المتخذ بشأنها',
+    titleLine: 'بيان بعدد دقائق التأخير التي تم رصدها على الموظف/ـة والإجراء المتخذ بشأنها',
+    subtitleHtml: `${dateRangeHtml_(from, to)}`,
   });
-  const stats = buildStatCardsHtml([
-    { value: formatMinutesAsHM(entry.totalLateMinutes), label: 'مجموع دقائق التأخير', tone: 'warn' },
-    { value: entry.absenceDays, label: 'مجموع أيام الغياب', tone: entry.absenceDays ? 'bad' : '' },
-    { value: escapeHtml(entry.action), label: 'الإجراء الواجب', tone: 'warn' },
-    { value: entry.deductionDays || '—', label: 'أيام الحسم المعادلة' },
-  ]);
+  const infoTable = `
+    <table class="pr-table" style="margin-bottom:10pt">
+      <tbody>
+        <tr><td class="pr-name" style="width:25%">اسم الموظف/ـة</td><td>${escapeHtml(entry.name)}</td><td class="pr-name" style="width:25%">المسمى الوظيفي</td><td>معلّم/ـة</td></tr>
+        <tr><td class="pr-name">رقم الهوية</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td><td class="pr-name">جهة العمل</td><td>${escapeHtml(cfg.schoolName || '')}</td></tr>
+      </tbody>
+    </table>`;
+  const actionRow = `
+      <tr>
+        <td>١</td>
+        <td>${entry.totalLateMinutes} دقيقة${entry.deductionDays ? ' — بما يعادل ' + entry.deductionDays + (entry.deductionDays === 1 ? ' يوم' : ' أيام') : ''}</td>
+        <td>${escapeHtml(entry.action)}</td>
+        <td class="pr-name">${escapeHtml(entry.actionText || entry.action)}</td>
+        <td></td>
+      </tr>`;
+  const table = `
+    <table class="pr-table">
+      <thead><tr><th>م</th><th>عدد دقائق التأخير</th><th>نوع الإجراء</th><th>الإجراء المتخذ</th><th>التوقيع</th></tr></thead>
+      <tbody>${actionRow}</tbody>
+    </table>
+    ${entry.note ? `<p class="muted" style="font-size:9pt; margin-top:6pt">${escapeHtml(entry.note)}</p>` : ''}`;
   const body = `
     <div class="pr-page">
-      ${header}${stats}
-      <p style="font-size:10pt; line-height:1.9">
-        أنا الموقّع أدناه/ة: <b>${escapeHtml(entry.name)}</b> — السجل المدني: <bdi>${escapeHtml(entry.civil)}</bdi><br>
-        بلغ إجمالي تراكم دقائق تأخيري عن الدوام الرسمي خلال الفترة أعلاه <b>${entry.totalLateMinutes}</b> دقيقة، بالإضافة إلى <b>${entry.absenceDays}</b> يوم غياب، وقد صدر بحقي الإجراء الموضّح أعلاه وفق الجدول الرسمي (مرفق ٦) الصادر عن الإدارة العامة للتعليم.
-      </p>
-      <p style="font-size:9.5pt">وأتعهّد بالالتزام بمواعيد الدوام الرسمي مستقبلاً، وفي حال تكرار المخالفة أوافق على تطبيق الإجراء الأعلى المنصوص عليه نظاماً.</p>
-      <div class="pr-sign-row"><div>اسم المعلّم: ${escapeHtml(entry.name)}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
-      <div class="pr-sign-row" style="margin-top:24pt"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '')}</div><div>التوقيع: ..............</div><div>التاريخ: ${reportTodayStr_()}</div></div>
-      ${buildReportFooterHtml()}
+      ${header}
+      ${infoTable}
+      ${table}
+      <div class="pr-sign-row" style="margin-top:28pt">
+        <div>معدّ/ة البيان<br>الاسم: ${escapeHtml(cfg.preparedBy || '....................')}<br>التوقيع: ..............</div>
+        <div>الختم</div>
+        <div>يعتمد من المدير/ة<br>الاسم: ${escapeHtml(cfg.principalName || '....................')}<br>التوقيع: ..............</div>
+      </div>
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }
-document.querySelector('#penalties-table tbody').addEventListener('click', (ev) => {
-  if (!ev.target.classList.contains('btn-print-action')) return;
-  const civil = ev.target.closest('tr').dataset.civil;
+document.querySelector('#penalties-table tbody').addEventListener('click', async (ev) => {
+  const civil = ev.target.closest('tr') ? ev.target.closest('tr').dataset.civil : null;
+  if (!civil) return;
   const entry = lastPenaltiesList.find((e) => String(e.civil) === civil);
-  if (entry) printAction_(entry);
+  if (!entry) return;
+
+  if (ev.target.classList.contains('btn-print-action')) {
+    printAction_(entry);
+    return;
+  }
+
+  if (ev.target.classList.contains('btn-toggle-action-done')) {
+    const btn = ev.target;
+    const newDone = !entry.actionDone;
+    btn.disabled = true;
+    try {
+      await callApi('markActionDone', { civil: entry.civil, tierAction: entry.action, done: newDone });
+      entry.actionDone = newDone;
+      renderPenaltiesTable();
+    } catch (err) {
+      document.getElementById('penalties-msg').innerHTML = `<div class="msg err">تعذّر تحديث الحالة: ${escapeHtml(err.message)}</div>`;
+      btn.disabled = false;
+    }
+  }
 });
 
 // نموذج ٢٠ — مساءلة غياب لمعلّم عن يوم واحد أو أكثر (تُستدعى من سجل الغياب لكل صف على حدة)

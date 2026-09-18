@@ -388,6 +388,48 @@
   .insight-list .il-row span:last-child { color: var(--muted); flex-shrink: 0; }
   .insight-more { background: none; border: none; padding: 0; margin-top: 4px; font-size: 11.5px; color: var(--muted); text-decoration: underline; cursor: pointer; }
   .insight-card .insight-cta { background: none; border: none; padding: 0; margin-top: 6px; font-size: 12px; color: var(--ink); font-weight: 600; text-decoration: underline; cursor: pointer; }
+  .il-row .il-name-link { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+  .insight-trend { font-size: 10.5px; font-weight: 700; margin-inline-start: 5px; }
+  .insight-trend.up { color: var(--bad); }
+  .insight-trend.down { color: var(--good); }
+  .il-quick-actions { display: flex; gap: 4px; margin-top: 2px; }
+  .il-quick-actions button {
+    font-size: 9.5px; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border); background: #fff; cursor: pointer;
+  }
+  .il-quick-actions button:hover { background: var(--accent-soft); }
+  .il-item { display: flex; flex-direction: column; gap: 2px; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+  .il-item:last-child { border-bottom: none; }
+
+  /* ---------- نظرة الأسبوع (لوحة اليوم): شريط أيام + رسم بياني مصغّر ---------- */
+  .week-overview { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 16px; }
+  .week-strip { display: flex; gap: 5px; }
+  .week-day-cell {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 5px; border-radius: 8px;
+    cursor: pointer; min-width: 36px; border: 1px solid var(--border); background: #fff;
+  }
+  .week-day-cell:hover { background: var(--accent-soft); }
+  .week-day-cell.is-today { border-color: var(--ink); border-width: 2px; }
+  .week-day-cell.is-selected { background: var(--ink); }
+  .week-day-cell.is-selected .wd-label, .week-day-cell.is-selected .wd-num { color: #fff; }
+  .wd-label { font-size: 9.5px; color: var(--muted); }
+  .wd-num { font-size: 12px; font-weight: 700; }
+  .wd-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 1px; }
+  .wd-dot.st-green { background: var(--good); }
+  .wd-dot.st-orange { background: var(--warn); }
+  .wd-dot.st-red { background: var(--bad); }
+  .wd-dot.st-gray { background: #d4d4d8; }
+  .week-sparkline-wrap { display: flex; flex-direction: column; gap: 5px; }
+  .week-sparkline-wrap .ws-title { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .week-sparkline { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
+  .spark-bar { width: 7px; border-radius: 2px 2px 0 0; background: var(--good); min-height: 2px; }
+  .spark-bar.st-orange { background: var(--warn); }
+  .spark-bar.st-red { background: var(--bad); }
+  .spark-bar.st-gray { background: #e4e4e7; }
+  .week-kpi { font-size: 12px; color: var(--muted); }
+  .week-kpi b { color: var(--ink); font-size: 15px; }
+
+  /* ---------- شاشة "لا توجد بيانات" حسب سبب اليوم ---------- */
+  .empty-state.holiday-state .icon-circle { background: var(--accent-soft); font-size: 22px; }
 
   /* ---------- شريط بحث/فلاتر فوق الجداول ---------- */
   .table-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -474,6 +516,15 @@
         <div class="dash-title">لوحة اليوم</div>
         <div class="duty-banner" id="duty-banner"></div>
 
+        <div class="week-overview no-print" id="week-overview">
+          <div class="week-strip" id="week-strip"></div>
+          <div class="week-sparkline-wrap">
+            <div class="ws-title">نسبة الحضور — آخر ٧ أيام عمل</div>
+            <div class="week-sparkline" id="week-sparkline"></div>
+          </div>
+          <div class="week-kpi" id="week-kpi"></div>
+        </div>
+
         <div class="insight-grid no-print" id="dash-insights"></div>
 
         <div class="day-nav no-print">
@@ -485,11 +536,16 @@
         </div>
         <div class="summary" id="dash-summary"></div>
         <div class="card" id="dash-empty" style="display:none">
-          <div class="empty-state">
+          <div class="empty-state" id="dash-empty-workday">
             <div class="icon-circle"><span class="icon" data-icon="upload"></span></div>
             <h3>لا توجد بيانات لهذا اليوم</h3>
             <p class="muted">لم يُستورد ملف البصمة لهذا التاريخ بعد.</p>
             <button class="primary" id="btn-goto-import">استيراد ملف اليوم</button>
+          </div>
+          <div class="empty-state holiday-state" id="dash-empty-holiday" style="display:none">
+            <div class="icon-circle">🌙</div>
+            <h3 id="dash-empty-holiday-title">عطلة نهاية أسبوع</h3>
+            <p class="muted">لا حاجة لاستيراد ملف — هذا يوم غير مخصَّص للدوام حسب إعدادات المدرسة.</p>
           </div>
         </div>
         <div class="card" id="dash-table-card" style="display:none">
@@ -1066,6 +1122,16 @@ function addDaysISO(iso, delta) {
   d.setDate(d.getDate() + delta);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
+// يطابق منطق isNonWorkingDay_ في الخادم — يعتمد على currentSettings (تُحمَّل عند بدء
+// التطبيق عبر loadScheduleSettings)؛ إن لم تُحمَّل بعد يستخدم عطلة الجمعة/السبت كافتراض آمن.
+function isNonWorkingDayClient_(dateISO) {
+  const holidays = (currentSettings && currentSettings.holidays) || [];
+  for (const h of holidays) {
+    if (h.from && h.to && dateISO >= h.from && dateISO <= h.to) return true;
+  }
+  const weekend = (currentSettings && currentSettings.weekendDays) || [5, 6];
+  return weekend.includes(isoToLocalDate(dateISO).getDay());
+}
 const WEEKDAYS_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 function formatDayLabel(iso) {
   const d = isoToLocalDate(iso);
@@ -1465,6 +1531,7 @@ async function refreshDashboard() {
   document.getElementById('day-label').textContent = formatDayLabel(date);
   document.getElementById('dash-school-name').textContent = loadConfig().schoolName || 'مدرسة';
   loadDashboardInsights(); // مستقل — له معالجة أخطاء خاصة به فلا يوقف بقية اللوحة
+  refreshWeekOverview(date); // مستقل أيضاً
 
   const msgEl = document.getElementById('dash-msg');
   msgEl.innerHTML = '';
@@ -1483,6 +1550,16 @@ async function refreshDashboard() {
 
     document.getElementById('dash-empty').style.display = hasData ? 'none' : 'block';
     document.getElementById('dash-table-card').style.display = hasData ? 'block' : 'none';
+    if (!hasData) {
+      const isOff = isNonWorkingDayClient_(date);
+      document.getElementById('dash-empty-workday').style.display = isOff ? 'none' : 'block';
+      document.getElementById('dash-empty-holiday').style.display = isOff ? 'block' : 'none';
+      if (isOff) {
+        const dow = isoToLocalDate(date).getDay();
+        const weekend = (currentSettings && currentSettings.weekendDays) || [5, 6];
+        document.getElementById('dash-empty-holiday-title').textContent = weekend.includes(dow) ? 'عطلة نهاية أسبوع' : 'يوم عطلة';
+      }
+    }
 
     if (dayRes.importInfo && dayRes.importInfo.schedStart) {
       document.getElementById('duty-banner').textContent = `الدوام على ${date}: ${dayRes.importInfo.schedStart} — ${dayRes.importInfo.schedEnd}`;
@@ -1568,11 +1645,108 @@ document.getElementById('btn-export-dash-excel').addEventListener('click', () =>
   exportRowsToExcel(`كشف_${document.getElementById('dash-date').value}.xlsx`, 'الكشف', rows);
 });
 
+// ---------- نظرة الأسبوع: شريط أيام + رسم بياني مصغّر لنسبة الحضور ----------
+async function refreshWeekOverview(selectedDate) {
+  const stripEl = document.getElementById('week-strip');
+  const sparkEl = document.getElementById('week-sparkline');
+  const kpiEl = document.getElementById('week-kpi');
+  try {
+    const from = addDaysISO(selectedDate, -13);
+    const res = await callApi('getAnalytics', { from, to: selectedDate });
+    const trendByDate = {};
+    res.dailyTrend.forEach((d) => { trendByDate[d.date] = d; });
+
+    // شريط الأسبوع: من بداية الأسبوع (أول يوم عمل بعد عطلة نهاية الأسبوع) إلى نهايته
+    const weekend = (currentSettings && currentSettings.weekendDays) || [5, 6];
+    const selDow = isoToLocalDate(selectedDate).getDay();
+    // نرجع للخلف حتى أول يوم عمل بعد آخر عطلة نهاية أسبوع (بداية أسبوع العمل الحالي)
+    let startOffset = 0;
+    for (let i = 1; i <= 6; i++) {
+      const dow = (selDow - i + 7) % 7;
+      if (weekend.includes(dow)) break;
+      startOffset = i;
+    }
+    const weekStart = addDaysISO(selectedDate, -startOffset);
+    const weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      weekDays.push(addDaysISO(weekStart, i));
+    }
+
+    const todayStr = todayISO();
+    stripEl.innerHTML = weekDays.map((d) => {
+      let statusClass = 'st-gray';
+      const t = trendByDate[d];
+      if (isNonWorkingDayClient_(d)) statusClass = 'st-gray';
+      else if (d > todayStr) statusClass = 'st-gray';
+      else if (!t) statusClass = 'st-orange'; // يوم عمل بلا استيراد
+      else if (t.absent > 0) statusClass = 'st-red';
+      else if (t.late > 0) statusClass = 'st-orange';
+      else statusClass = 'st-green';
+      const dow = isoToLocalDate(d).getDay();
+      const isToday = d === todayStr;
+      const isSelected = d === selectedDate;
+      return `
+        <div class="week-day-cell ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}" data-date="${d}">
+          <span class="wd-label">${WEEKDAYS_AR[dow].slice(0, 2)}</span>
+          <span class="wd-num">${Number(d.slice(8, 10))}</span>
+          <span class="wd-dot ${statusClass}"></span>
+        </div>`;
+    }).join('');
+
+    // رسم بياني: آخر ٧ أيام عمل فعلية (فيها استيراد) تنتهي عند التاريخ المختار
+    const workDays = Object.keys(trendByDate).filter((d) => d <= selectedDate).sort().slice(-7);
+    const maxBarHeight = 26;
+    sparkEl.innerHTML = workDays.length ? workDays.map((d) => {
+      const t = trendByDate[d];
+      const total = t.present + t.absent;
+      const rate = total ? t.present / total : 1;
+      const h = Math.max(2, Math.round(rate * maxBarHeight));
+      const cls = rate < 0.7 ? 'st-red' : rate < 0.9 ? 'st-orange' : '';
+      return `<div class="spark-bar ${cls}" style="height:${h}px" title="${escapeHtml(d)} — ${Math.round(rate * 100)}%"></div>`;
+    }).join('') : '<span class="muted" style="font-size:11px">لا بيانات كافية</span>';
+
+    // نسبة الحضور العامة لهذا الأسبوع حتى تاريخ اليوم المختار
+    const weekDaysUpToSelected = weekDays.filter((d) => d <= selectedDate && trendByDate[d]);
+    let weekPresent = 0, weekTotal = 0;
+    weekDaysUpToSelected.forEach((d) => {
+      const t = trendByDate[d];
+      weekPresent += t.present; weekTotal += t.present + t.absent;
+    });
+    const weekRate = weekTotal ? Math.round((weekPresent / weekTotal) * 100) : null;
+    kpiEl.innerHTML = weekRate != null
+      ? `نسبة الحضور هذا الأسبوع حتى الآن: <b>${weekRate}%</b>`
+      : `<span class="muted">لا بيانات كافية لهذا الأسبوع بعد</span>`;
+  } catch (err) {
+    stripEl.innerHTML = '';
+    sparkEl.innerHTML = '';
+    kpiEl.innerHTML = `<span class="muted">تعذّر تحميل نظرة الأسبوع</span>`;
+  }
+}
+document.getElementById('week-strip').addEventListener('click', (ev) => {
+  const cell = ev.target.closest('.week-day-cell');
+  if (!cell) return;
+  document.getElementById('dash-date').value = cell.dataset.date;
+  refreshDashboard();
+});
+
 // ---------- بطاقات "بحاجة إلى متابعة" ----------
+// يقارن كل رقم بالقيمة المحفوظة من آخر مرة فُتحت فيها اللوحة (تخزين محلي في المتصفح)
+// ويُرجع سهم تغيّر صغيراً — ▲ بالأحمر إن زاد الرقم (تدهور غالباً)، ▼ بالأخضر إن نقص.
+function insightTrendHtml_(prevMap, key, current) {
+  const prev = prevMap[key];
+  if (prev === undefined || prev === current) return '';
+  const diff = current - prev;
+  return diff > 0
+    ? `<span class="insight-trend up">▲${diff}</span>`
+    : `<span class="insight-trend down">▼${Math.abs(diff)}</span>`;
+}
+
 async function loadDashboardInsights() {
   const el = document.getElementById('dash-insights');
   try {
     const res = await callApi('getAlerts', {});
+    let prevCounts = {};
+    try { prevCounts = JSON.parse(localStorage.getItem('hather_prev_alert_counts') || '{}'); } catch (e) { /* تجاهل */ }
     const cards = [];
 
     if (res.missingImportDate) {
@@ -1596,8 +1770,15 @@ async function loadDashboardInsights() {
     cards.push(`
       <div class="insight-card ${uc.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="listChecks"></span> غياب بحاجة تصنيف</div>
-        <div class="insight-value">${uc.length}</div>
-        <div class="insight-list">${uc.slice(0, 4).map((a) => `<div class="il-row"><span>${escapeHtml(a.name)}</span><span>${escapeHtml(a.date)}</span></div>`).join('') || 'لا يوجد.'}</div>
+        <div class="insight-value">${uc.length}${insightTrendHtml_(prevCounts, 'unclassified', uc.length)}</div>
+        <div class="insight-list">${uc.slice(0, 4).map((a) => `
+          <div class="il-item">
+            <div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${escapeHtml(a.name)}</span><span>${escapeHtml(a.date)}</span></div>
+            <div class="il-quick-actions">
+              <button type="button" class="btn-quick-classify" data-id="${escapeHtml(a.id)}" data-cls="بعذر">تصنيف: بعذر</button>
+              <button type="button" class="btn-quick-classify" data-id="${escapeHtml(a.id)}" data-cls="بدون عذر">بدون عذر</button>
+            </div>
+          </div>`).join('') || 'لا يوجد.'}</div>
         ${uc.length ? '<button type="button" class="insight-cta" data-goto-tab="absence" data-cls-filter="__unclassified">عرض الكل</button>' : ''}
       </div>`);
 
@@ -1605,16 +1786,16 @@ async function loadDashboardInsights() {
     cards.push(`
       <div class="insight-card ${rep.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر (٣٠ يوماً)</div>
-        <div class="insight-value">${rep.length}</div>
-        <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span>${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
+        <div class="insight-value">${rep.length}${insightTrendHtml_(prevCounts, 'repeated', rep.length)}</div>
+        <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(r.civil)}">${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
       </div>`);
 
     const ap = res.approachingPenalty || [];
     cards.push(`
       <div class="insight-card ${ap.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="clock"></span> اقترب من جزاء جديد</div>
-        <div class="insight-value">${ap.length}</div>
-        <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span>${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
+        <div class="insight-value">${ap.length}${insightTrendHtml_(prevCounts, 'approaching', ap.length)}</div>
+        <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
         ${ap.length ? '<button type="button" class="insight-cta" data-goto-tab="reports">فتح كشف الجزاءات</button>' : ''}
       </div>`);
 
@@ -1622,11 +1803,14 @@ async function loadDashboardInsights() {
     cards.push(`
       <div class="insight-card ${nc.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="logOut"></span> بلا بصمة انصراف</div>
-        <div class="insight-value">${nc.length}</div>
-        <div class="insight-list">${nc.slice(0, 4).map((n) => `<div class="il-row"><span>${escapeHtml(n.name)}</span></div>`).join('') || (res.noCheckoutLastImport && res.noCheckoutLastImport.date ? 'لا يوجد.' : 'لا يوجد استيراد بعد.')}</div>
+        <div class="insight-value">${nc.length}${insightTrendHtml_(prevCounts, 'noCheckout', nc.length)}</div>
+        <div class="insight-list">${nc.slice(0, 4).map((n) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(n.civil)}">${escapeHtml(n.name)}</span></div>`).join('') || (res.noCheckoutLastImport && res.noCheckoutLastImport.date ? 'لا يوجد.' : 'لا يوجد استيراد بعد.')}</div>
       </div>`);
 
     el.innerHTML = cards.join('');
+    localStorage.setItem('hather_prev_alert_counts', JSON.stringify({
+      unclassified: uc.length, repeated: rep.length, approaching: ap.length, noCheckout: nc.length,
+    }));
 
     const badge = document.getElementById('badge-absence');
     if (uc.length) { badge.textContent = uc.length; badge.style.display = 'inline-flex'; }
@@ -1635,7 +1819,25 @@ async function loadDashboardInsights() {
     el.innerHTML = `<div class="insight-card tone-bad"><div class="insight-head">تعذّر تحميل التنبيهات</div><div class="insight-list">${escapeHtml(err.message)}</div></div>`;
   }
 }
-document.getElementById('dash-insights').addEventListener('click', (ev) => {
+document.getElementById('dash-insights').addEventListener('click', async (ev) => {
+  const nameLink = ev.target.closest('.il-name-link');
+  if (nameLink) { jumpToEmployeeReport(nameLink.dataset.civil); return; }
+
+  const quickBtn = ev.target.closest('.btn-quick-classify');
+  if (quickBtn) {
+    quickBtn.disabled = true;
+    const originalText = quickBtn.textContent;
+    quickBtn.textContent = '...';
+    try {
+      await callApi('updateAbsence', { id: quickBtn.dataset.id, classification: quickBtn.dataset.cls, reason: '', note: '' });
+      loadDashboardInsights();
+    } catch (err) {
+      quickBtn.disabled = false;
+      quickBtn.textContent = originalText;
+    }
+    return;
+  }
+
   const importBtn = ev.target.closest('[data-goto-import]');
   if (importBtn) {
     document.getElementById('imp-date').value = importBtn.dataset.gotoImport;

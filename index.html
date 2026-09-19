@@ -481,6 +481,7 @@
   .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 29; }
 
   @media (max-width: 860px) {
+    body { font-size: 16px; }
     .topbar { display: flex; }
     .app { display: block; }
     .sidebar {
@@ -494,12 +495,24 @@
     .content-inner { max-width: 100%; }
     .day-nav { flex-direction: column; align-items: stretch; }
     .day-nav .day-label { order: -1; }
-    table { font-size: 12px; }
-    th, td { padding: 7px 6px; }
+    table { font-size: 13.5px; }
+    th, td { padding: 8px 7px; }
     .insight-grid { grid-template-columns: 1fr; }
     .card { padding: 16px; }
+    .muted { font-size: 14px; }
+    .kpi-card .kpi-value { font-size: 26px; }
+    .kpi-card .kpi-label { font-size: 12.5px; }
+    input[type=text], input[type=date], input[type=file], input[type=search], select { font-size: 15px; }
+    button { font-size: 14.5px; }
   }
 </style>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#2B9E8F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="متابعة الحضور">
 </head>
 <body>
 <div id="print-area"></div>
@@ -3780,6 +3793,14 @@ if (!loadConfig().url) {
   showTab('dashboard');
   refreshDashboard();
   loadScheduleSettings();
+}
+
+// تسجيل عامل الخدمة (Service Worker) — شرط تقني من Chrome لتفعيل خيار "تثبيت"
+// التطبيق على سطح المكتب/الشاشة الرئيسية، إضافة إلى ملف manifest.json.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* تجاهل بيئات لا تدعمه (مثل file://) */ });
+  });
 }
 </script>
 </body>

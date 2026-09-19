@@ -313,8 +313,8 @@
   .chart-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
   .chart-legend span { display: flex; align-items: center; gap: 5px; }
   .chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
-  #an-chart svg rect { transition: opacity .1s ease; }
-  #an-chart svg rect:hover { opacity: 0.75; }
+  #an-chart svg circle { transition: r .1s ease; }
+  #an-chart svg circle:hover { r: 4.5; }
   .leaderboard-row {
     display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border);
     cursor: pointer; font-size: 13px;
@@ -976,16 +976,7 @@
 
         <div class="section-header"><span class="sh-title">أسباب الغياب</span></div>
         <div class="card">
-          <div id="an-reasons"></div></div>
-        </div>
-        <div class="card">
-          <h3 style="margin-top:0">تفصيل الاتجاه اليومي</h3>
-          <div style="max-height:320px; overflow:auto">
-            <table id="an-trend-table">
-              <thead><tr><th>التاريخ</th><th>حاضر</th><th>غائب</th><th>متأخر</th><th>انصراف مبكر</th><th>بدون بصمة انصراف</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+          <div id="an-reasons"></div>
         </div>
         <div id="analytics-msg"></div>
       </section>
@@ -2560,38 +2551,49 @@ function barRow(label, value, max) {
 
 function renderTrendChart(dailyTrend) {
   if (!dailyTrend.length) return '<p class="muted" style="padding:20px 0">لا توجد بيانات في هذه الفترة.</p>';
-  const w = 760, h = 200, padL = 6, padR = 6, padB = 22, padT = 6;
+  const w = 760, h = 220, padL = 6, padR = 6, padB = 22, padT = 10;
   const maxVal = Math.max(1, ...dailyTrend.map((d) => Math.max(d.present, d.absent, d.late)));
   const plotW = w - padL - padR;
   const plotH = h - padT - padB;
-  const groupW = plotW / dailyTrend.length;
+  const n = dailyTrend.length;
+  const xStep = n > 1 ? plotW / (n - 1) : 0;
+  const xAt = (i) => padL + i * xStep;
+  const yAt = (val) => padT + plotH - (val / maxVal) * plotH;
+
   const series = [
     { key: 'present', color: '#16a34a' },
     { key: 'absent', color: '#dc2626' },
     { key: 'late', color: '#d97706' },
   ];
-  const barW = Math.max(1.5, (groupW - 4) / series.length);
-  let bars = '';
-  dailyTrend.forEach((d, i) => {
-    const x0 = padL + i * groupW + 2;
-    series.forEach((s, si) => {
-      const val = d[s.key];
-      const bh = (val / maxVal) * plotH;
-      const x = x0 + si * barW;
-      const y = padT + plotH - bh;
-      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" fill="${s.color}" rx="1"><title>${d.date} — ${s.key}: ${val}</title></rect>`;
-    });
+
+  // خطوط أفقية مرجعية خفيفة لتسهيل قراءة القيم
+  let gridLines = '';
+  const gridSteps = 4;
+  for (let g = 0; g <= gridSteps; g++) {
+    const y = padT + (plotH / gridSteps) * g;
+    gridLines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="#f0f0f2" stroke-width="1"/>`;
+  }
+
+  let linesHtml = '';
+  series.forEach((s) => {
+    const pts = dailyTrend.map((d, i) => `${xAt(i).toFixed(1)},${yAt(d[s.key]).toFixed(1)}`).join(' ');
+    const dots = dailyTrend.map((d, i) =>
+      `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(d[s.key]).toFixed(1)}" r="2.6" fill="${s.color}"><title>${d.date} — ${d[s.key]}</title></circle>`
+    ).join('');
+    linesHtml += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
   });
-  const step = Math.max(1, Math.ceil(dailyTrend.length / 10));
+
+  const step = Math.max(1, Math.ceil(n / 10));
   let labels = '';
   dailyTrend.forEach((d, i) => {
-    if (i % step !== 0) return;
-    const x = padL + i * groupW + groupW / 2;
-    labels += `<text x="${x.toFixed(1)}" y="${h - 6}" font-size="9" text-anchor="middle" fill="#a1a1aa">${d.date.slice(5)}</text>`;
+    if (i % step !== 0 && i !== n - 1) return;
+    labels += `<text x="${xAt(i).toFixed(1)}" y="${h - 6}" font-size="9" text-anchor="middle" fill="#a1a1aa">${d.date.slice(5)}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:200px" preserveAspectRatio="none">
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:220px" preserveAspectRatio="none">
+    ${gridLines}
     <line x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}" stroke="#e4e4e7" stroke-width="1"/>
-    ${bars}${labels}
+    ${linesHtml}${labels}
   </svg>`;
 }
 
@@ -2710,12 +2712,6 @@ async function refreshAnalytics() {
       ? res.absenceReasons.map((r) => barRow(r.label, r.value, maxReason)).join('')
       : '<p class="muted">لا توجد بيانات غياب في هذه الفترة.</p>';
 
-    const tbody = document.querySelector('#an-trend-table tbody');
-    tbody.innerHTML = res.dailyTrend.map((d) => `
-      <tr>
-        <td>${d.date}</td><td>${d.present}</td><td>${d.absent}</td>
-        <td>${d.late}</td><td>${d.early}</td><td>${d.noCheckout}</td>
-      </tr>`).join('') || '<tr><td colspan="6" class="muted">لا توجد بيانات في هذه الفترة</td></tr>';
     msgEl.innerHTML = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;

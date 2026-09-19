@@ -892,9 +892,8 @@
                   <th class="sortable" data-key="excused">بعذر<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="unexcused">بدون عذر<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="unclassified">غير مصنف<span class="sort-arrow">▾</span></th>
-                  <th class="sortable" data-key="lateDays">تأخير (أيام)<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="lateMinutes">دقائق التأخير<span class="sort-arrow">▾</span></th>
-                  <th class="sortable" data-key="earlyDays">انصراف مبكر (أيام)<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="earlyMinutes">دقائق الانصراف المبكر<span class="sort-arrow">▾</span></th>
                   <th class="sortable sort-active" data-key="violations">المخالفات<span class="sort-arrow">▾</span></th>
                   <th>الحالة</th>
                 </tr>
@@ -931,6 +930,11 @@
             <span><i style="background:#d97706"></i> تأخر</span>
           </div>
           <div id="an-chart"></div>
+        </div>
+
+        <div class="section-header"><span class="sh-title">الأكثر انضباطاً</span><span class="sh-sub">الأقل غياباً، فتأخراً، فانصرافاً مبكراً</span></div>
+        <div class="card">
+          <div id="an-discipline-chart"></div>
         </div>
 
         <div class="section-header"><span class="sh-title">الأكثر تكراراً</span><span class="sh-sub">انقر أي اسم لفتح تقريره</span></div>
@@ -2340,7 +2344,7 @@ document.getElementById('btn-export-summary-excel').addEventListener('click', ()
   const rows = lastSummaryList.map((e) => ({
     'الرقم': e.num, 'الاسم': e.name, 'حضور': e.presentDays, 'نسبة الحضور': e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '', 'غياب': e.absenceDays,
     'بعذر': e.excused, 'بدون عذر': e.unexcused, 'غير مصنف': e.unclassified,
-    'أيام التأخير': e.lateDays, 'دقائق التأخير': e.lateMinutes, 'انصراف مبكر': e.earlyDays,
+    'دقائق التأخير': e.lateMinutes, 'دقائق الانصراف المبكر': e.earlyMinutes,
     'المخالفات': e.violations,
   }));
   const from = document.getElementById('sum-from').value;
@@ -2385,8 +2389,8 @@ async function refreshSummary() {
     document.getElementById('sum-totals').innerHTML = `
       <div class="kpi-card"><div class="kpi-label">أيام العمل</div><div class="kpi-value">${res.workDays}</div></div>
       <div class="kpi-card ${t.absenceDays ? 'tone-bad' : ''}"><div class="kpi-label">إجمالي أيام الغياب</div><div class="kpi-value" style="color:${t.absenceDays ? 'var(--bad)' : 'inherit'}">${t.absenceDays}</div></div>
-      <div class="kpi-card ${t.lateDays ? 'tone-warn' : ''}"><div class="kpi-label">أيام التأخير</div><div class="kpi-value" style="color:${t.lateDays ? 'var(--warn)' : 'inherit'}">${t.lateDays}</div></div>
-      <div class="kpi-card"><div class="kpi-label">أيام الانصراف المبكر</div><div class="kpi-value">${t.earlyDays}</div></div>
+      <div class="kpi-card ${t.lateMinutes ? 'tone-warn' : ''}"><div class="kpi-label">دقائق التأخير</div><div class="kpi-value" style="color:${t.lateMinutes ? 'var(--warn)' : 'inherit'}">${t.lateMinutes}</div></div>
+      <div class="kpi-card"><div class="kpi-label">دقائق الانصراف المبكر</div><div class="kpi-value">${t.earlyMinutes}</div></div>
     `;
     msgEl.innerHTML = '';
   } catch (err) {
@@ -2455,7 +2459,7 @@ function renderSummaryTable() {
         <td class="sum-sticky sum-sticky-3 tn-link" data-civil="${escapeHtml(civil)}">${avatarHtml_(e.name, 20)}${escapeHtml(e.name)}</td>
         <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}${trendHtml}</td><td>${e.absenceDays}</td>
         <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
-        <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
+        <td>${e.lateMinutes}</td><td>${e.earlyMinutes}</td>
         <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
         <td>${statusHtml}</td>
       </tr>`;
@@ -2528,10 +2532,10 @@ document.getElementById('btn-print-summary-official').addEventListener('click', 
     <tr>
       <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td class="pr-name">${escapeHtml(e.name)}</td>
       <td>${e.presentDays}</td><td>${e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '—'}</td>
-      <td>${e.absenceDays}</td><td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
+      <td>${e.absenceDays}</td><td>${e.lateMinutes}</td><td>${e.earlyMinutes}</td>
       <td>${e.violations}</td>
     </tr>`).join('');
-  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>نسبة الحضور</th><th>غياب</th><th>تأخير (أيام)</th><th>دقائق التأخير</th><th>انصراف مبكر</th><th>المخالفات</th></tr></thead><tbody>${trs}</tbody></table>`;
+  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>نسبة الحضور</th><th>غياب</th><th>دقائق التأخير</th><th>دقائق الانصراف المبكر</th><th>المخالفات</th></tr></thead><tbody>${trs}</tbody></table>`;
   printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${table}${buildReportFooterHtml()}</div>`);
 });
 
@@ -2646,6 +2650,49 @@ function renderHeatmap(dailyTrend, from, to) {
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px;height:auto">${rects}</svg>`;
 }
 
+// ---------- الأكثر انضباطاً: عمود لكل معلّم، مرتّب أولاً بالغياب ثم التأخر ثم الانصراف
+// المبكر (أقل = أفضل انضباطاً) — يظهر أفضل ١٠ معلّمين حسب هذا الترتيب.
+function renderDisciplineChart(list) {
+  if (!list.length) return '<p class="muted" style="padding:20px 0">لا توجد بيانات في هذه الفترة.</p>';
+  const sorted = list.slice().sort((a, b) =>
+    (a.absenceDays - b.absenceDays) || (a.lateMinutes - b.lateMinutes) || (a.earlyMinutes - b.earlyMinutes)
+  ).slice(0, 10);
+
+  const w = 760, h = 220, padL = 6, padR = 6, padB = 46, padT = 10;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+  const colW = plotW / sorted.length;
+  const barW = Math.max(8, colW - 14);
+  // قيمة العمود بصرية فقط لإظهار حجم الفارق بين المعلمين — الترتيب الفعلي أعلاه يعتمد
+  // على المقارنة المتدرجة (غياب ثم تأخر ثم انصراف) لا على هذا الرقم المُجمَّع.
+  const score = (e) => e.absenceDays * 60 + e.lateMinutes + e.earlyMinutes;
+  const maxScore = Math.max(1, ...sorted.map(score));
+
+  let bars = '';
+  sorted.forEach((e, i) => {
+    const val = score(e);
+    const bh = (val / maxScore) * plotH;
+    const x = padL + i * colW + (colW - barW) / 2;
+    const y = padT + plotH - bh;
+    const shade = Math.round(60 + (i / Math.max(1, sorted.length - 1)) * 100);
+    const color = `rgb(22, ${154 - shade * 0.3}, ${94 - shade * 0.2})`;
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" fill="${color}" rx="2"><title>${escapeHtml(e.name)} — غياب: ${e.absenceDays} يوم، تأخير: ${e.lateMinutes} د، انصراف مبكر: ${e.earlyMinutes} د</title></rect>`;
+  });
+
+  let labels = '';
+  sorted.forEach((e, i) => {
+    const x = padL + i * colW + colW / 2;
+    const shortName = String(e.name).split(' ').slice(0, 2).join(' ');
+    labels += `<text x="${x.toFixed(1)}" y="${h - padB + 14}" font-size="9.5" text-anchor="end" fill="#52525b" transform="rotate(-35 ${x.toFixed(1)} ${(h - padB + 14).toFixed(1)})">${escapeHtml(shortName)}</text>`;
+    labels += `<text x="${x.toFixed(1)}" y="${(padT + plotH - (score(e) / maxScore) * plotH - 4).toFixed(1)}" font-size="9" text-anchor="middle" fill="#71717a">#${i + 1}</text>`;
+  });
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:220px" preserveAspectRatio="none">
+    <line x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}" stroke="#e4e4e7" stroke-width="1"/>
+    ${bars}${labels}
+  </svg>`;
+}
+
 function renderWeekdayPattern(dailyTrend) {
   if (!dailyTrend.length) return '<p class="muted">لا توجد بيانات في هذه الفترة.</p>';
   const buckets = [0, 0, 0, 0, 0, 0, 0];
@@ -2697,8 +2744,9 @@ async function refreshAnalytics() {
 
     const byViolations = summaryRes.list.slice();
     renderLeaderboard('top-absent', byViolations.slice().sort((a, b) => b.absenceDays - a.absenceDays), 'absenceDays', ' يوم');
-    renderLeaderboard('top-late', byViolations.slice().sort((a, b) => b.lateDays - a.lateDays), 'lateDays', ' يوم');
-    renderLeaderboard('top-early', byViolations.slice().sort((a, b) => b.earlyDays - a.earlyDays), 'earlyDays', ' يوم');
+    renderLeaderboard('top-late', byViolations.slice().sort((a, b) => b.lateMinutes - a.lateMinutes), 'lateMinutes', ' د');
+    renderLeaderboard('top-early', byViolations.slice().sort((a, b) => b.earlyMinutes - a.earlyMinutes), 'earlyMinutes', ' د');
+    document.getElementById('an-discipline-chart').innerHTML = renderDisciplineChart(byViolations);
 
     const sev = res.latenessSeverity;
     document.getElementById('an-severity').innerHTML = `
@@ -3146,9 +3194,8 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
         { value: presentDays, label: 'أيام الحضور' },
         { value: absenceDays, label: 'أيام الغياب', tone: absenceDays ? 'bad' : '' },
         { value: unexcused, label: 'بدون عذر', tone: unexcused ? 'bad' : '' },
-        { value: lateDays, label: 'أيام التأخر', tone: lateDays ? 'warn' : '' },
-        { value: lateMinutes, label: 'دقائق التأخر (د)' },
-        { value: earlyMinutes, label: 'انصراف مبكر (د)' },
+        { value: lateMinutes, label: 'دقائق التأخر', tone: lateMinutes ? 'warn' : '' },
+        { value: earlyMinutes, label: 'دقائق الانصراف المبكر' },
         { value: noCheckout, label: 'بدون بصمة' },
       ]);
       const table = `<table class="pr-table"><thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>الحضور</th><th>الانصراف</th><th>التأخر (د)</th><th>مبكر (د)</th><th>الحالة</th><th>السبب/الملاحظة</th></tr></thead><tbody>${rows}</tbody></table>`;

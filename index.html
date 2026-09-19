@@ -322,8 +322,8 @@
   .leaderboard-row:last-child { border-bottom: none; }
   .leaderboard-row:hover .lb-name { text-decoration: underline; }
   .leaderboard-row .lb-rank {
-    width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--muted);
-    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0;
   }
   .leaderboard-row .lb-name { flex: 1; }
   .leaderboard-row .lb-value { font-weight: 600; color: var(--bad); }
@@ -920,10 +920,11 @@
             <button class="primary" id="btn-refresh-analytics" style="align-self:flex-end">تحديث</button>
           </div>
         </div>
+        <div class="section-header"><span class="sh-title">نظرة عامة على الفترة</span></div>
         <div class="kpi-row" id="an-kpis"></div>
 
+        <div class="section-header"><span class="sh-title">الاتجاه اليومي</span></div>
         <div class="card">
-          <h3 style="margin-top:0">الاتجاه اليومي</h3>
           <div class="chart-legend">
             <span><i style="background:#16a34a"></i> حاضر</span>
             <span><i style="background:#dc2626"></i> غياب</span>
@@ -932,6 +933,7 @@
           <div id="an-chart"></div>
         </div>
 
+        <div class="section-header"><span class="sh-title">الأكثر تكراراً</span><span class="sh-sub">انقر أي اسم لفتح تقريره</span></div>
         <div class="row" style="align-items:stretch">
           <div class="card leaderboard" style="flex:1 1 220px">
             <h4>الأكثر غياباً</h4>
@@ -947,6 +949,7 @@
           </div>
         </div>
 
+        <div class="section-header"><span class="sh-title">خرائط وأنماط</span></div>
         <div class="card">
           <h3 style="margin-top:0">خريطة الفترة</h3>
           <p class="muted">كل مربع يوم مستورَد — الأغمق يعني مخالفات أكثر (غياب/تأخير/بدون بصمة).</p>
@@ -970,9 +973,10 @@
             <div class="summary" id="an-severity"></div>
           </div>
         </div>
+
+        <div class="section-header"><span class="sh-title">أسباب الغياب</span></div>
         <div class="card">
-          <h3 style="margin-top:0">أكثر أسباب الغياب</h3>
-          <div id="an-reasons"></div>
+          <div id="an-reasons"></div></div>
         </div>
         <div class="card">
           <h3 style="margin-top:0">تفصيل الاتجاه اليومي</h3>
@@ -2663,8 +2667,8 @@ function renderLeaderboard(containerId, list, key, unit) {
   }
   el.innerHTML = top.map((e, i) => `
     <div class="leaderboard-row" data-civil="${escapeHtml(e.civil)}">
-      <span class="lb-rank">${i + 1}</span>
-      <span class="lb-name">${escapeHtml(e.name)}</span>
+      <span class="lb-rank">${rankMedal_(i + 1) || (i + 1)}</span>
+      <span class="lb-name">${avatarHtml_(e.name, 20)}${escapeHtml(e.name)}</span>
       <span class="lb-value">${e[key]}${unit}</span>
     </div>`).join('');
   el.querySelectorAll('.leaderboard-row').forEach((row) => {

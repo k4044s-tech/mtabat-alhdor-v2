@@ -2405,23 +2405,26 @@ async function refreshSummary() {
 function renderSummaryHighlights() {
   const el = document.getElementById('sum-highlights');
   if (!lastSummaryList.length) { el.innerHTML = ''; return; }
-  // نفس أولوية "الأكثر انضباطاً" في التحليلات: الغياب أولاً، فالتأخير، فالانصراف المبكر —
-  // بدل الاعتماد فقط على نسبة الحضور التي قد تكون ١٠٠٪ رغم تراكم تأخير كبير جداً.
-  const best = lastSummaryList.slice().sort((a, b) =>
-    (a.absenceDays - b.absenceDays) || (a.lateMinutes - b.lateMinutes) || (a.earlyMinutes - b.earlyMinutes)
-  ).slice(0, 3);
-  const needsFollowUp = lastSummaryList.slice().sort((a, b) => b.violations - a.violations).filter((e) => e.violations > 0).slice(0, 3);
-  const listHtml = (list, emptyMsg, valueFn) => list.length
-    ? list.map((e, i) => `<div class="il-row"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span>${valueFn(e)}</span></div>`).join('')
+  // نفس الأولوية بالضبط للقائمتين: الغياب أولاً (بالأيام)، فالتأخير (بالدقائق)، فالانصراف
+  // المبكر (بالدقائق) — "الأكثر انضباطاً" تصاعدياً (الأقل)، و"الأكثر حاجة للمتابعة" هي
+  // نفس الترتيب معكوساً (الأكثر) بدل رقم "مخالفات" مُجمَّع كان يجمع أياماً مع أعداد تأخير
+  // بلا معنى واضح. القيمة المعروضة هي التفصيل الحقيقي نفسه الذي بُني عليه الترتيب.
+  const cmp = (a, b) => (a.absenceDays - b.absenceDays) || (a.lateMinutes - b.lateMinutes) || (a.earlyMinutes - b.earlyMinutes);
+  const best = lastSummaryList.slice().sort(cmp).slice(0, 3);
+  const needsFollowUp = lastSummaryList.slice().sort((a, b) => -cmp(a, b))
+    .filter((e) => e.absenceDays > 0 || e.lateMinutes > 0 || e.earlyMinutes > 0).slice(0, 3);
+  const breakdown = (e) => `غياب ${e.absenceDays}ي · تأخير ${e.lateMinutes}د · مبكر ${e.earlyMinutes}د`;
+  const listHtml = (list, emptyMsg) => list.length
+    ? list.map((e, i) => `<div class="il-row"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span style="font-size:11px">${breakdown(e)}</span></div>`).join('')
     : `<div class="muted" style="font-size:12px">${emptyMsg}</div>`;
   el.innerHTML = `
     <div class="kpi-card tone-ok" style="text-align:right">
       <div class="kpi-label">🏆 الأكثر انضباطاً</div>
-      <div class="insight-list" style="margin-top:6px">${listHtml(best, 'لا بيانات كافية', (e) => e.violations > 0 ? e.violations + ' مخالفة' : 'بلا مخالفات')}</div>
+      <div class="insight-list" style="margin-top:6px">${listHtml(best, 'لا بيانات كافية')}</div>
     </div>
     <div class="kpi-card tone-warn" style="text-align:right">
       <div class="kpi-label">⚠️ الأكثر حاجة للمتابعة</div>
-      <div class="insight-list" style="margin-top:6px">${listHtml(needsFollowUp, 'لا توجد مخالفات', (e) => e.violations + ' مخالفة')}</div>
+      <div class="insight-list" style="margin-top:6px">${listHtml(needsFollowUp, 'لا توجد مخالفات')}</div>
     </div>
   `;
 }

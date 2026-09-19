@@ -1302,8 +1302,15 @@ function normalizeTimeString(v) {
   return `${String(h12).padStart(2, '0')}:${min} ${ampm}`;
 }
 
+// يوحّد أشكال الألف المختلفة (أ إ آ) إلى ألف عادية قبل المطابقة — بعض إصدارات برنامج
+// البصمة تُصدّر عناوين الأعمدة بهمزة ("الإنصراف") وبعضها بلا همزة ("الانصراف")، والفرق
+// حرف مختلف تماماً في الترميز فيفشل أي بحث نصي مباشر لا يوحّد الشكلين أولاً.
+function normalizeArabicAlif_(s) {
+  return String(s || '').replace(/[أإآ]/g, 'ا');
+}
 function findCol(headers, includesText) {
-  return headers.findIndex((h) => String(h || '').includes(includesText));
+  const needle = normalizeArabicAlif_(includesText);
+  return headers.findIndex((h) => normalizeArabicAlif_(h).includes(needle));
 }
 
 let currentImportFileName = '';
@@ -1356,8 +1363,8 @@ async function parseBiometricFile_(file) {
 
   const civilCol = findCol(headers, 'السجل المدني');
   const nameCol = findCol(headers, 'اسم');
-  const inCol = headers.findIndex((h) => h.includes('حضور'));
-  const outCol = headers.findIndex((h) => h.includes('انصراف'));
+  const inCol = findCol(headers, 'حضور');
+  const outCol = findCol(headers, 'انصراف');
 
   const rows = [];
   for (let i = headerRowIdx + 1; i < grid.length; i++) {
@@ -3361,10 +3368,6 @@ function printAbsenceMesaalah_(entry) {
   const periodPhrase = dates.length > 1
     ? `من ${formatDateDMY(dates[0].date)} إلى ${formatDateDMY(lastDate.date)} (${dates.length} أيام)`
     : `يوم ${formatDateDMY(lastDate.date)} (${WEEKDAYS_FULL_AR[d.getDay()]})`;
-  const rows = dates.map((r, i) => {
-    const dd = isoToLocalDate(r.date);
-    return `<tr><td>${i + 1}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[dd.getDay()]}</td><td>${escapeHtml(r.classification) || 'غير مصنف'}</td><td>${escapeHtml(r.reason) || escapeHtml(r.note) || '—'}</td></tr>`;
-  }).join('');
   const header = buildPeriodReportHeader({
     schoolName: cfg.schoolName, adminName: cfg.adminName, titleLine: 'مساءلة غياب',
     dateBoxHtml: `<div>الرقم: ....................</div><div>التاريخ: ${reportTodayStr_()}</div><div>المشفوعات: ....................</div>`,
@@ -3379,10 +3382,6 @@ function printAbsenceMesaalah_(entry) {
           <tr><td>المستوى / المرتبة</td><td>—</td><td>عدد أيام الغياب</td><td>${dates.length}</td></tr>
           <tr><td>أيام الغياب</td><td colspan="3">${periodPhrase}</td></tr>
         </tbody>
-      </table>
-      <table class="pr-table">
-        <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th></tr></thead>
-        <tbody>${rows}<tr class="pr-total"><td colspan="4">إجمالي أيام الغياب</td><td>${dates.length}</td></tr></tbody>
       </table>
 
       <div class="pr-section-title">(١) طلب الإفادة</div>

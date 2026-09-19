@@ -202,14 +202,41 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---------- بطاقات مؤشرات (KPI) أعلى الشاشات ---------- */
-  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
-  .kpi-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
-  .kpi-card .kpi-label { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
-  .kpi-card .kpi-value { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 6px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .kpi-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04); transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .kpi-card:hover { box-shadow: 0 4px 12px rgba(16,24,40,.08); transform: translateY(-1px); }
+  .kpi-card .kpi-label { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+  .kpi-card .kpi-icon {
+    width: 22px; height: 22px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--ink); flex-shrink: 0;
+  }
+  .kpi-card .kpi-icon svg { width: 13px; height: 13px; }
+  .kpi-card .kpi-value { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: baseline; gap: 6px; }
   .kpi-card .kpi-delta { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
   .kpi-card .kpi-delta.up { color: var(--good); }
   .kpi-card .kpi-delta.down { color: var(--bad); }
-  .kpi-card .kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .kpi-card .kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .kpi-card.tone-good { border-color: #bbf7d0; background: linear-gradient(180deg, var(--good-soft), #fff 60%); }
+  .kpi-card.tone-bad { border-color: #fecaca; background: linear-gradient(180deg, var(--bad-soft), #fff 60%); }
+  .kpi-card.tone-warn { border-color: #fde68a; background: linear-gradient(180deg, var(--warn-soft), #fff 60%); }
+
+  /* ---------- عنوان قسم داخل الصفحة (فاصل بصري بين الأقسام) ---------- */
+  .section-header { display: flex; align-items: center; gap: 8px; margin: 22px 0 12px; }
+  .section-header .sh-title { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+  .section-header .sh-sub { font-size: 11.5px; color: var(--muted); }
+  .section-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .section-header:first-child { margin-top: 0; }
+
+  /* ---------- صورة رمزية دائرية بجانب الأسماء ---------- */
+  .avatar-chip {
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff;
+    font-weight: 700; flex-shrink: 0; vertical-align: middle; margin-inline-end: 7px; line-height: 1;
+  }
+  .name-with-avatar { display: inline-flex; align-items: center; }
+  .rank-medal { font-size: 15px; margin-inline-end: 3px; }
 
   /* ---------- شريط تقدّم مصغّر داخل الجداول (نسبة الحضور) ---------- */
   .rate-cell { display: flex; align-items: center; gap: 7px; min-width: 90px; }
@@ -376,7 +403,7 @@
 
   /* ---------- بطاقات "بحاجة إلى متابعة" (لوحة اليوم) ---------- */
   .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-bottom: 18px; }
-  .insight-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .insight-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 15px 17px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
   .insight-card.tone-ok { border-color: #bbf7d0; background: var(--good-soft); }
   .insight-card.tone-warn { border-color: #fde68a; background: var(--warn-soft); }
   .insight-card.tone-bad { border-color: #fecaca; background: var(--bad-soft); }
@@ -516,6 +543,12 @@
         <div class="dash-title">لوحة اليوم</div>
         <div class="duty-banner" id="duty-banner"></div>
 
+        <div class="kpi-row" id="dash-overview-kpis"></div>
+
+        <div class="section-header"><span class="sh-title">بحاجة إلى متابعة</span></div>
+        <div class="insight-grid no-print" id="dash-insights"></div>
+
+        <div class="section-header"><span class="sh-title">نظرة الأسبوع</span></div>
         <div class="week-overview no-print" id="week-overview">
           <div class="week-strip" id="week-strip"></div>
           <div class="week-sparkline-wrap">
@@ -525,8 +558,7 @@
           <div class="week-kpi" id="week-kpi"></div>
         </div>
 
-        <div class="insight-grid no-print" id="dash-insights"></div>
-
+        <div class="section-header"><span class="sh-title">كشف اليوم</span></div>
         <div class="day-nav no-print">
           <button class="nav-arrow" id="btn-prev-day">◀ السابق</button>
           <div class="day-label" id="day-label">—</div>
@@ -534,8 +566,7 @@
           <input type="date" id="dash-date">
           <button class="ghost" id="btn-print"><span class="icon" data-icon="printer"></span> طباعة الكشف الرسمي</button>
         </div>
-        <div class="summary" id="dash-summary"></div>
-        <div class="card" id="dash-empty" style="display:none">
+        <div id="dash-empty" class="card" style="display:none">
           <div class="empty-state" id="dash-empty-workday">
             <div class="icon-circle"><span class="icon" data-icon="upload"></span></div>
             <h3>لا توجد بيانات لهذا اليوم</h3>
@@ -835,10 +866,13 @@
           </div>
         </div>
 
-        <div class="summary" id="sum-totals"></div>
+        <div class="section-header"><span class="sh-title">نظرة عامة على الفترة</span></div>
+        <div class="kpi-row" id="sum-totals"></div>
 
+        <div class="section-header"><span class="sh-title">الأفضل والأكثر حاجة للمتابعة</span></div>
         <div class="kpi-row" id="sum-highlights"></div>
 
+        <div class="section-header"><span class="sh-title">الترتيب الكامل</span></div>
         <div class="card">
           <div class="table-toolbar no-print">
             <input type="search" id="sum-search" placeholder="ابحث بالاسم…">
@@ -1532,6 +1566,31 @@ document.getElementById('btn-next-day').addEventListener('click', () => {
   refreshDashboard();
 });
 
+function renderDashOverviewKpisHtml_(present, absent, late, total) {
+  const rate = total ? Math.round((present / total) * 100) : 0;
+  return `
+    <div class="kpi-card">
+      <div class="kpi-label">معلّمون في الكشف</div>
+      <div class="kpi-value">${total}</div>
+    </div>
+    <div class="kpi-card tone-good">
+      <div class="kpi-label">حاضر اليوم</div>
+      <div class="kpi-value" style="color:var(--good)">${present}</div>
+    </div>
+    <div class="kpi-card ${absent ? 'tone-bad' : ''}">
+      <div class="kpi-label">غائب اليوم</div>
+      <div class="kpi-value" style="color:${absent ? 'var(--bad)' : 'inherit'}">${absent}</div>
+    </div>
+    <div class="kpi-card ${late ? 'tone-warn' : ''}">
+      <div class="kpi-label">متأخر اليوم</div>
+      <div class="kpi-value" style="color:${late ? 'var(--warn)' : 'inherit'}">${late}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">نسبة الحضور</div>
+      <div class="kpi-value">${rate}%</div>
+    </div>
+  `;
+}
 async function refreshDashboard() {
   let date = document.getElementById('dash-date').value;
   if (!date) { date = todayISO(); document.getElementById('dash-date').value = date; }
@@ -1576,7 +1635,7 @@ async function refreshDashboard() {
     }
 
     if (!hasData) {
-      document.getElementById('dash-summary').innerHTML = `<span class="pill">0 معلماً في الكشف</span>`;
+      document.getElementById('dash-overview-kpis').innerHTML = '';
       lastDashboardRows = [];
       renderDashboardTable();
       return;
@@ -1604,12 +1663,7 @@ async function refreshDashboard() {
       return { num: t.num, name: t.name, civil, checkIn: '', checkOut: '', hoursRaw: '', lateMinutes: 0, status: 'none', statusLabel: 'لا توجد بيانات', reason: '' };
     });
 
-    document.getElementById('dash-summary').innerHTML = `
-      <span class="pill">${teachers.length} معلماً في الكشف</span>
-      <span class="pill">حاضر: ${present}</span>
-      <span class="pill">غائب: ${absent}</span>
-      <span class="pill">متأخر: ${late}</span>
-    `;
+    document.getElementById('dash-overview-kpis').innerHTML = renderDashOverviewKpisHtml_(present, absent, late, teachers.length);
     renderDashboardTable();
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
@@ -1780,7 +1834,7 @@ async function loadDashboardInsights() {
         <div class="insight-value">${uc.length}${insightTrendHtml_(prevCounts, 'unclassified', uc.length)}</div>
         <div class="insight-list">${uc.slice(0, 4).map((a) => `
           <div class="il-item">
-            <div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${escapeHtml(a.name)}</span><span>${escapeHtml(a.date)}</span></div>
+            <div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${avatarHtml_(a.name, 18)}${escapeHtml(a.name)}</span><span>${escapeHtml(a.date)}</span></div>
             <div class="il-quick-actions">
               <button type="button" class="btn-quick-classify" data-id="${escapeHtml(a.id)}" data-cls="بعذر">تصنيف: بعذر</button>
               <button type="button" class="btn-quick-classify" data-id="${escapeHtml(a.id)}" data-cls="بدون عذر">بدون عذر</button>
@@ -1794,7 +1848,7 @@ async function loadDashboardInsights() {
       <div class="insight-card ${rep.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر (٣٠ يوماً)</div>
         <div class="insight-value">${rep.length}${insightTrendHtml_(prevCounts, 'repeated', rep.length)}</div>
-        <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(r.civil)}">${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
+        <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(r.civil)}">${avatarHtml_(r.name, 18)}${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
       </div>`);
 
     const ap = res.approachingPenalty || [];
@@ -1802,7 +1856,7 @@ async function loadDashboardInsights() {
       <div class="insight-card ${ap.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="clock"></span> اقترب من جزاء جديد</div>
         <div class="insight-value">${ap.length}${insightTrendHtml_(prevCounts, 'approaching', ap.length)}</div>
-        <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
+        <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${avatarHtml_(a.name, 18)}${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
         ${ap.length ? '<button type="button" class="insight-cta" data-goto-tab="reports">فتح كشف الجزاءات</button>' : ''}
       </div>`);
 
@@ -1811,7 +1865,7 @@ async function loadDashboardInsights() {
       <div class="insight-card ${nc.length ? 'tone-warn' : 'tone-ok'}">
         <div class="insight-head"><span class="icon" data-icon="logOut"></span> بلا بصمة انصراف</div>
         <div class="insight-value">${nc.length}${insightTrendHtml_(prevCounts, 'noCheckout', nc.length)}</div>
-        <div class="insight-list">${nc.slice(0, 4).map((n) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(n.civil)}">${escapeHtml(n.name)}</span></div>`).join('') || (res.noCheckoutLastImport && res.noCheckoutLastImport.date ? 'لا يوجد.' : 'لا يوجد استيراد بعد.')}</div>
+        <div class="insight-list">${nc.slice(0, 4).map((n) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(n.civil)}">${avatarHtml_(n.name, 18)}${escapeHtml(n.name)}</span></div>`).join('') || (res.noCheckoutLastImport && res.noCheckoutLastImport.date ? 'لا يوجد.' : 'لا يوجد استيراد بعد.')}</div>
       </div>`);
 
     el.innerHTML = cards.join('');
@@ -2334,10 +2388,10 @@ async function refreshSummary() {
     renderSummaryTable();
     const t = res.totals;
     document.getElementById('sum-totals').innerHTML = `
-      <span class="pill">أيام العمل: ${res.workDays}</span>
-      <span class="pill">إجمالي أيام الغياب: ${t.absenceDays}</span>
-      <span class="pill">أيام التأخير: ${t.lateDays}</span>
-      <span class="pill">أيام الانصراف المبكر: ${t.earlyDays}</span>
+      <div class="kpi-card"><div class="kpi-label">أيام العمل</div><div class="kpi-value">${res.workDays}</div></div>
+      <div class="kpi-card ${t.absenceDays ? 'tone-bad' : ''}"><div class="kpi-label">إجمالي أيام الغياب</div><div class="kpi-value" style="color:${t.absenceDays ? 'var(--bad)' : 'inherit'}">${t.absenceDays}</div></div>
+      <div class="kpi-card ${t.lateDays ? 'tone-warn' : ''}"><div class="kpi-label">أيام التأخير</div><div class="kpi-value" style="color:${t.lateDays ? 'var(--warn)' : 'inherit'}">${t.lateDays}</div></div>
+      <div class="kpi-card"><div class="kpi-label">أيام الانصراف المبكر</div><div class="kpi-value">${t.earlyDays}</div></div>
     `;
     msgEl.innerHTML = '';
   } catch (err) {
@@ -2353,7 +2407,7 @@ function renderSummaryHighlights() {
   const best = withRate.slice().sort((a, b) => b.attendanceRate - a.attendanceRate).slice(0, 3);
   const needsFollowUp = lastSummaryList.slice().sort((a, b) => b.violations - a.violations).filter((e) => e.violations > 0).slice(0, 3);
   const listHtml = (list, emptyMsg, valueFn) => list.length
-    ? list.map((e) => `<div class="il-row"><span>${escapeHtml(e.name)}</span><span>${valueFn(e)}</span></div>`).join('')
+    ? list.map((e, i) => `<div class="il-row"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span>${valueFn(e)}</span></div>`).join('')
     : `<div class="muted" style="font-size:12px">${emptyMsg}</div>`;
   el.innerHTML = `
     <div class="kpi-card tone-ok" style="text-align:right">
@@ -2394,11 +2448,16 @@ function renderSummaryTable() {
     if (summaryApproachingMap.has(civil)) statusHtml += `<span class="sum-badge approaching">اقترب من إجراء (باقي ${summaryApproachingMap.get(civil)} د)</span>`;
     if (!statusHtml) statusHtml = '<span class="muted">—</span>';
 
+    // الميدالية تُعرض فقط عند الترتيب حسب مقياس "جيد" تصاعدياً بالمعنى الإيجابي (الأفضل
+    // أولاً)، لا عند الترتيب حسب المخالفات — فميدالية ذهبية لصاحب أكثر مخالفات مضلِّلة.
+    const isPositiveSort = (sumSortKey === 'attendanceRate' || sumSortKey === 'presentDays') && sumSortDir === 'desc';
+    const medal = isPositiveSort ? rankMedal_(i + 1) : '';
+
     return `
       <tr class="${e.violations >= 5 ? 'row-flag' : ''}">
-        <td class="sum-sticky sum-sticky-1">${i + 1}</td>
+        <td class="sum-sticky sum-sticky-1">${medal ? `<span class="rank-medal">${medal}</span>` : (i + 1)}</td>
         <td class="sum-sticky sum-sticky-2">${escapeHtml(e.num)}</td>
-        <td class="sum-sticky sum-sticky-3 tn-link" data-civil="${escapeHtml(civil)}">${escapeHtml(e.name)}</td>
+        <td class="sum-sticky sum-sticky-3 tn-link" data-civil="${escapeHtml(civil)}">${avatarHtml_(e.name, 20)}${escapeHtml(e.name)}</td>
         <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}${trendHtml}</td><td>${e.absenceDays}</td>
         <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
         <td>${e.lateDays}</td><td>${e.lateMinutes}</td><td>${e.earlyDays}</td>
@@ -2704,6 +2763,23 @@ function formatMinutesAsHM(mins) {
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ---------- صورة رمزية دائرية (حرف أول + لون ثابت مشتق من الاسم) ----------
+const AVATAR_PALETTE = ['#2B9E8F', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#06B6D4'];
+function avatarColor_(name) {
+  let hash = 0;
+  const s = String(name || '');
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+function avatarHtml_(name, size) {
+  const initial = String(name || '؟').trim().charAt(0) || '؟';
+  const px = size || 26;
+  return `<span class="avatar-chip" style="width:${px}px;height:${px}px;font-size:${Math.round(px * 0.42)}px;background:${avatarColor_(name)}">${escapeHtml(initial)}</span>`;
+}
+function rankMedal_(rank) {
+  return rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
 }
 
 // ---------- حالة "تم/لم يتم" لمسائل الأيام الفردية (سجل الغياب والتأخر) ----------

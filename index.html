@@ -2110,14 +2110,14 @@ function renderLateKpis() {
   const total = lastLateRows.length;
   const totalMinutes = lastLateRows.reduce((s, r) => s + Number(r.lateMinutes), 0);
   const byTeacher = {};
-  lastLateRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + 1; });
+  lastLateRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + Number(r.lateMinutes); });
   const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
   const heavy = lastLateRows.filter((r) => lateSeverity_(r.lateMinutes) === 'heavy').length;
   document.getElementById('late-kpis').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">إجمالي مرات التأخر</div><div class="kpi-value">${total}</div></div>
     <div class="kpi-card"><div class="kpi-label">إجمالي دقائق التأخر</div><div class="kpi-value">${formatMinutesAsHM(totalMinutes)}</div></div>
     <div class="kpi-card"><div class="kpi-label">تأخر كبير (أكثر من ٣٠د)</div><div class="kpi-value" style="color:${heavy ? 'var(--bad)' : 'inherit'}">${heavy}</div></div>
-    <div class="kpi-card"><div class="kpi-label">الأكثر تأخراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' مرات' : ''}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر تأخراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' دقيقة' : ''}</div></div>
   `;
 }
 
@@ -2151,16 +2151,17 @@ function renderLateGrouped() {
     if (!byCivil[key]) byCivil[key] = { name: r.name, rows: [] };
     byCivil[key].rows.push(r);
   });
-  const groups = Object.values(byCivil).sort((a, b) => b.rows.length - a.rows.length);
+  const groups = Object.values(byCivil).map((g) => ({
+    ...g, totalMinutes: g.rows.reduce((s, r) => s + Number(r.lateMinutes), 0),
+  })).sort((a, b) => b.totalMinutes - a.totalMinutes);
   document.getElementById('late-grouped-empty').style.display = groups.length ? 'none' : 'block';
   listEl.innerHTML = groups.map((g, i) => {
-    const totalMinutes = g.rows.reduce((s, r) => s + Number(r.lateMinutes), 0);
     return `
     <div class="teacher-group" data-idx="${i}">
       <div class="teacher-group-head">
         <span class="tg-name">${escapeHtml(g.name)}</span>
         <span style="display:flex;align-items:center;gap:8px">
-          <span class="tg-count">${g.rows.length} مرات — ${formatMinutesAsHM(totalMinutes)}</span>
+          <span class="tg-count">${formatMinutesAsHM(g.totalMinutes)} — ${g.rows.length} مرات</span>
           <span class="tg-chevron">▾</span>
         </span>
       </div>

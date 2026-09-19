@@ -1868,7 +1868,7 @@ const ABSENCE_REASONS = [
   'الإجازة العادية', 'الإجازة الاضطرارية', 'الإجازة المرضية', 'إجازة مرافقة مريض',
   'الإجازة الدراسية', 'إجازة الامتحان الدراسي', 'الإجازة الاستثنائية', 'إجازة الوفاة',
   'إجازة الوضع / الولادة', 'إجازة الأمومة / رعاية المولود', 'إجازة الأبوة',
-  'إجازة المشاركة الوطنية', 'إجازة التعويض',
+  'إجازة المشاركة الوطنية', 'إجازة التعويض', 'مهمة عمل', 'انتداب', 'تدريب',
 ];
 
 let lastAbsenceRows = [];
@@ -2783,6 +2783,19 @@ function moeRowHtml(r, isLateStart) {
   </tr>`;
 }
 
+// يحسب حجم الخط/الحشو المناسبين لعدد صفوف الكشف بحيث يبقى الجميع في صفحة A4 واحدة —
+// مستخرجة كدالة مستقلة لأن الكشف اليومي للفترة (يوم في كل صفحة) يحتاج نفس الحساب
+// لكامل قائمة المعلمين مرة واحدة، بدل حسابه لكل يوم على حدة فيضيع مع تجاهل التنسيق.
+function moeSizeVars_(rowCount) {
+  let cell, pad;
+  if (rowCount <= 24) { cell = 13.5; pad = 3.8; }
+  else if (rowCount <= 32) { cell = 12.5; pad = 1.6; }
+  else if (rowCount <= 40) { cell = 11.5; pad = 0.6; }
+  else if (rowCount <= 48) { cell = 10; pad = 0.3; }
+  else { cell = 9.5; pad = 0.2; }
+  return `:root{--moe-cell:${cell}pt;--moe-pad:${pad}pt;--moe-base:${cell}pt;}`;
+}
+
 function buildMinistryReportHtml({ schoolName, adminName, dateISO, presentRows, absentRows }) {
   const present = [...presentRows].sort((a, b) => {
     const ai = a.checkIn ? a.checkIn : null, bi = b.checkIn ? b.checkIn : null;
@@ -2796,15 +2809,7 @@ function buildMinistryReportHtml({ schoolName, adminName, dateISO, presentRows, 
   const firstLateIdx = presentRanked.findIndex((r) => Number(r.lateMinutes) > 0);
   const lateStartRank = firstLateIdx >= 0 ? presentRanked[firstLateIdx].rank : -1;
   const all = presentRanked.concat(absentRanked);
-  const rowCount = all.length;
-
-  let cell, pad;
-  if (rowCount <= 24) { cell = 13.5; pad = 3.8; }
-  else if (rowCount <= 32) { cell = 12.5; pad = 1.6; }
-  else if (rowCount <= 40) { cell = 11.5; pad = 0.6; }
-  else if (rowCount <= 48) { cell = 10; pad = 0.3; }
-  else { cell = 9.5; pad = 0.2; }
-  const vars = `:root{--moe-cell:${cell}pt;--moe-pad:${pad}pt;--moe-base:${cell}pt;}`;
+  const vars = moeSizeVars_(all.length);
 
   const body = all.map((r) => moeRowHtml(r, r.rank === lateStartRank)).join('');
   const table = `<table class="moe-table"><colgroup><col class="c-num"><col class="c-name"><col class="c-civil"><col class="c-in"><col class="c-out"><col class="c-hrs"></colgroup>
@@ -3001,14 +3006,13 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
   if (!p) return;
   try {
     const cfg = loadConfig();
-    const [teachersRes, attRes, absRes] = await Promise.all([
+    const [teachersRes, bundleRes] = await Promise.all([
       getTeachersCached(),
-      callApi('getAttendanceRange', p),
-      callApi('getAbsenceRange', p),
+      callApi('getRangeBundle', p),
     ]);
     const attByCivil = {}, absByCivil = {};
-    attRes.rows.forEach((r) => { const c = String(r.civil); (attByCivil[c] || (attByCivil[c] = [])).push(r); });
-    absRes.rows.forEach((r) => { const c = String(r.civil); (absByCivil[c] || (absByCivil[c] = [])).push(r); });
+    bundleRes.attendance.forEach((r) => { const c = String(r.civil); (attByCivil[c] || (attByCivil[c] = [])).push(r); });
+    bundleRes.absence.forEach((r) => { const c = String(r.civil); (absByCivil[c] || (absByCivil[c] = [])).push(r); });
 
     let teachers = teachersRes.teachers.slice().sort((a, b) => Number(a.num) - Number(b.num));
     if (p.civil) teachers = teachers.filter((t) => String(t.civil) === p.civil);
@@ -3178,7 +3182,10 @@ document.getElementById('btn-dr-daily-official').addEventListener('click', async
       const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
       bodies.push(built.body);
     }
-    printInPage(MOE_REPORT_STYLE, bodies.join(''));
+    // نستخدم مقاس خط واحد موحَّد لكل الأيام مبنياً على إجمالي عدد المعلمين (لا حجم كل يوم
+    // على حدة) — يضمن ثبات المظهر بين الصفحات ويصلح خللاً كان يتجاهل حساب المقاس تماماً
+    // فيطبع دائماً بأكبر خط افتراضي، مما يدفع الكشوف الكبيرة (٣٠+ معلماً) لصفحة ثانية زائدة.
+    printInPage(MOE_REPORT_STYLE + '\n' + moeSizeVars_(teachers.length), bodies.join(''));
     drDone_();
   } catch (err) { drFail_(err); }
 });

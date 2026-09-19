@@ -315,6 +315,8 @@
   .chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
   #an-chart svg circle { transition: r .1s ease; }
   #an-chart svg circle:hover { r: 4.5; }
+  #an-discipline-chart svg rect { transition: opacity .12s ease; }
+  #an-discipline-chart svg rect:hover { opacity: 0.82; }
   .leaderboard-row {
     display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border);
     cursor: pointer; font-size: 13px;
@@ -2402,16 +2404,19 @@ async function refreshSummary() {
 function renderSummaryHighlights() {
   const el = document.getElementById('sum-highlights');
   if (!lastSummaryList.length) { el.innerHTML = ''; return; }
-  const withRate = lastSummaryList.filter((e) => e.attendanceRate != null);
-  const best = withRate.slice().sort((a, b) => b.attendanceRate - a.attendanceRate).slice(0, 3);
+  // نفس أولوية "الأكثر انضباطاً" في التحليلات: الغياب أولاً، فالتأخير، فالانصراف المبكر —
+  // بدل الاعتماد فقط على نسبة الحضور التي قد تكون ١٠٠٪ رغم تراكم تأخير كبير جداً.
+  const best = lastSummaryList.slice().sort((a, b) =>
+    (a.absenceDays - b.absenceDays) || (a.lateMinutes - b.lateMinutes) || (a.earlyMinutes - b.earlyMinutes)
+  ).slice(0, 3);
   const needsFollowUp = lastSummaryList.slice().sort((a, b) => b.violations - a.violations).filter((e) => e.violations > 0).slice(0, 3);
   const listHtml = (list, emptyMsg, valueFn) => list.length
     ? list.map((e, i) => `<div class="il-row"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span>${valueFn(e)}</span></div>`).join('')
     : `<div class="muted" style="font-size:12px">${emptyMsg}</div>`;
   el.innerHTML = `
     <div class="kpi-card tone-ok" style="text-align:right">
-      <div class="kpi-label">🏆 الأفضل حضوراً</div>
-      <div class="insight-list" style="margin-top:6px">${listHtml(best, 'لا بيانات كافية', (e) => Math.round(e.attendanceRate * 100) + '%')}</div>
+      <div class="kpi-label">🏆 الأكثر انضباطاً</div>
+      <div class="insight-list" style="margin-top:6px">${listHtml(best, 'لا بيانات كافية', (e) => e.violations > 0 ? e.violations + ' مخالفة' : 'بلا مخالفات')}</div>
     </div>
     <div class="kpi-card tone-warn" style="text-align:right">
       <div class="kpi-label">⚠️ الأكثر حاجة للمتابعة</div>
@@ -2657,37 +2662,33 @@ function renderDisciplineChart(list) {
   const sorted = list.slice().sort((a, b) =>
     (a.absenceDays - b.absenceDays) || (a.lateMinutes - b.lateMinutes) || (a.earlyMinutes - b.earlyMinutes)
   ).slice(0, 10);
+  const n = sorted.length;
 
-  const w = 760, h = 220, padL = 6, padR = 6, padB = 46, padT = 10;
+  const w = 760, h = 230, padL = 10, padR = 10, padB = 34, padT = 26;
   const plotW = w - padL - padR;
   const plotH = h - padT - padB;
-  const colW = plotW / sorted.length;
-  const barW = Math.max(8, colW - 14);
-  // قيمة العمود بصرية فقط لإظهار حجم الفارق بين المعلمين — الترتيب الفعلي أعلاه يعتمد
-  // على المقارنة المتدرجة (غياب ثم تأخر ثم انصراف) لا على هذا الرقم المُجمَّع.
-  const score = (e) => e.absenceDays * 60 + e.lateMinutes + e.earlyMinutes;
-  const maxScore = Math.max(1, ...sorted.map(score));
+  const colW = plotW / n;
+  const barW = Math.max(14, colW * 0.56);
 
-  let bars = '';
+  // ارتفاع العمود يعكس الترتيب نفسه (تنازلياً وبانتظام) لا رقماً مجمَّعاً من وحدات مختلفة
+  // (أيام غياب مقابل دقائق) لا يصحّ جمعها بصرياً — فيبقى الرسم متدرجاً بوضوح من الأفضل
+  // إلى الأقل كما هو المطلوب، بينما تبقى الأرقام الحقيقية متاحة عند تمرير الفأرة.
+  const heightFrac = (i) => n > 1 ? 1 - (i / (n - 1)) * 0.72 : 1;
+
+  let bars = '', labels = '';
   sorted.forEach((e, i) => {
-    const val = score(e);
-    const bh = (val / maxScore) * plotH;
+    const bh = heightFrac(i) * plotH;
     const x = padL + i * colW + (colW - barW) / 2;
     const y = padT + plotH - bh;
-    const shade = Math.round(60 + (i / Math.max(1, sorted.length - 1)) * 100);
-    const color = `rgb(22, ${154 - shade * 0.3}, ${94 - shade * 0.2})`;
-    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" fill="${color}" rx="2"><title>${escapeHtml(e.name)} — غياب: ${e.absenceDays} يوم، تأخير: ${e.lateMinutes} د، انصراف مبكر: ${e.earlyMinutes} د</title></rect>`;
+    const lightness = 30 + (i / Math.max(1, n - 1)) * 32;
+    const color = `hsl(158, 55%, ${lightness}%)`;
+    const firstName = String(e.name).trim().split(/\s+/)[0];
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" fill="${color}" rx="4"><title>${escapeHtml(e.name)} — غياب: ${e.absenceDays} يوم، تأخير: ${e.lateMinutes} د، انصراف مبكر: ${e.earlyMinutes} د</title></rect>`;
+    labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 7).toFixed(1)}" font-size="10" font-weight="700" text-anchor="middle" fill="#3f3f46">#${i + 1}</text>`;
+    labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${h - padB + 16}" font-size="10" text-anchor="middle" fill="#52525b">${escapeHtml(firstName)}</text>`;
   });
 
-  let labels = '';
-  sorted.forEach((e, i) => {
-    const x = padL + i * colW + colW / 2;
-    const shortName = String(e.name).split(' ').slice(0, 2).join(' ');
-    labels += `<text x="${x.toFixed(1)}" y="${h - padB + 14}" font-size="9.5" text-anchor="end" fill="#52525b" transform="rotate(-35 ${x.toFixed(1)} ${(h - padB + 14).toFixed(1)})">${escapeHtml(shortName)}</text>`;
-    labels += `<text x="${x.toFixed(1)}" y="${(padT + plotH - (score(e) / maxScore) * plotH - 4).toFixed(1)}" font-size="9" text-anchor="middle" fill="#71717a">#${i + 1}</text>`;
-  });
-
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:220px" preserveAspectRatio="none">
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:230px" preserveAspectRatio="none">
     <line x1="${padL}" y1="${padT + plotH}" x2="${w - padR}" y2="${padT + plotH}" stroke="#e4e4e7" stroke-width="1"/>
     ${bars}${labels}
   </svg>`;

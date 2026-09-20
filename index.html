@@ -543,6 +543,7 @@
       <button data-tab="summary"><span class="icon" data-icon="barChart"></span><span>الملخص والترتيب</span></button>
       <button data-tab="analytics"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
       <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب والتأخر</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
+      <button data-tab="departure"><span class="icon" data-icon="logOut"></span><span>سجل الانصراف</span></button>
       <button data-tab="reports"><span class="icon" data-icon="fileText"></span><span>التقارير اليومية</span></button>
       <button data-tab="actions"><span class="icon" data-icon="alertTriangle"></span><span>الاجراءات</span></button>
       <button data-tab="settings"><span class="icon" data-icon="settings"></span><span>الإعدادات</span></button>
@@ -785,6 +786,80 @@
           <div class="card" id="late-grouped-view" style="display:none">
             <div id="late-grouped-list"></div>
             <p class="muted" id="late-grouped-empty" style="display:none">لا توجد حالات تأخير في هذه الفترة.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-departure" style="display:none">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="dep-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="dep-to">
+            </div>
+            <button class="primary" id="btn-refresh-departure" style="align-self:flex-end">تحديث</button>
+            <div class="view-toggle" style="align-self:flex-end">
+              <button type="button" class="active" data-deptab="early">الخروج قبل نهاية الدوام</button>
+              <button type="button" data-deptab="nocheckout">عدم تسجيل انصراف</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="dep-early-section">
+          <p class="muted" style="font-size:12px; margin:0 0 10px">يظهر من انصرف قبل إكمال ٤ ساعات عمل في اليوم، بغضّ النظر عن موعد نهاية الدوام.</p>
+          <div class="row" style="margin-bottom:10px">
+            <div class="view-toggle">
+              <button type="button" class="active" data-earlyview="table">جدول</button>
+              <button type="button" data-earlyview="grouped">تجميع حسب المعلّم</button>
+            </div>
+          </div>
+
+          <div class="kpi-row" id="dep-early-kpis"></div>
+
+          <div class="card" id="dep-early-table-view">
+            <div class="table-toolbar no-print">
+              <input type="search" id="dep-early-search" placeholder="ابحث بالاسم…">
+              <div class="toolbar-spacer"></div>
+              <button class="ghost" id="btn-export-dep-early-excel">تصدير Excel</button>
+            </div>
+            <div style="max-height:520px; overflow:auto">
+              <table id="dep-early-table">
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th><th>الحالة</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" id="dep-early-empty" style="display:none">لا توجد حالات انصراف قبل إكمال ٤ ساعات في هذه الفترة.</p>
+            <p class="muted" id="dep-early-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
+            <div id="dep-early-msg"></div>
+          </div>
+
+          <div class="card" id="dep-early-grouped-view" style="display:none">
+            <div id="dep-early-grouped-list"></div>
+            <p class="muted" id="dep-early-grouped-empty" style="display:none">لا توجد حالات في هذه الفترة.</p>
+          </div>
+        </div>
+
+        <div id="dep-nocheckout-section" style="display:none">
+          <div class="kpi-row" id="dep-nc-kpis"></div>
+          <div class="card">
+            <div class="table-toolbar no-print">
+              <input type="search" id="dep-nc-search" placeholder="ابحث بالاسم…">
+              <div class="toolbar-spacer"></div>
+              <button class="ghost" id="btn-export-dep-nc-excel">تصدير Excel</button>
+            </div>
+            <div style="max-height:520px; overflow:auto">
+              <table id="dep-nc-table">
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>بداية الدوام</th><th>نهاية الدوام</th><th>الحالة</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" id="dep-nc-empty" style="display:none">لا توجد حالات عدم تسجيل انصراف في هذه الفترة.</p>
+            <p class="muted" id="dep-nc-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
+            <div id="dep-nc-msg"></div>
           </div>
         </div>
       </section>
@@ -1209,6 +1284,17 @@ function showTab(name) {
       });
     } else {
       refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
+    }
+  }
+  if (name === 'departure') {
+    if (!document.getElementById('dep-from').value) {
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('dep-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('dep-to').value = to;
+        refreshDayNoticeStatuses().then(() => refreshDeparture());
+      });
+    } else {
+      refreshDayNoticeStatuses().then(() => refreshDeparture());
     }
   }
   if (name === 'settings') {
@@ -3134,6 +3220,294 @@ function printInPage(styleCss, bodyHtml) {
 
 function dateRangeHtml_(from, to) {
   return `من ${formatDateDMY(from)} إلى ${formatDateDMY(to)}`;
+}
+
+// ==================== تبويب "سجل الانصراف" ====================
+function parseHoursRawToMinutes_(hoursRaw) {
+  if (!hoursRaw) return null;
+  const m = String(hoursRaw).match(/^(\d+):(\d{2})$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+let lastDepEarlyRows = [];
+let lastDepNcRows = [];
+
+async function refreshDeparture() {
+  const from = document.getElementById('dep-from').value;
+  const to = document.getElementById('dep-to').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('dep-early-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
+  try {
+    const res = await callApi('getAttendanceRange', { from, to });
+    // "الخروج قبل نهاية الدوام" هنا لا يعني قبل موعد الدوام المحدَّد، بل قبل إكمال أربع
+    // ساعات عمل فعلية ذلك اليوم — بناءً على طلب صريح، فمعلّم انصرف قبل موعده بدقائق قليلة
+    // بعد ساعات عمل كافية لا يُحسب هنا، بخلاف من عمل ساعتين فقط مثلاً.
+    lastDepEarlyRows = res.rows.filter((r) => {
+      if (String(r.noCheckout) === 'true') return false;
+      const mins = parseHoursRawToMinutes_(r.hoursRaw);
+      return mins != null && mins < 240;
+    });
+    lastDepNcRows = res.rows.filter((r) => String(r.noCheckout) === 'true');
+
+    document.getElementById('dep-early-empty').style.display = lastDepEarlyRows.length ? 'none' : 'block';
+    document.getElementById('dep-nc-empty').style.display = lastDepNcRows.length ? 'none' : 'block';
+    renderDepEarlyKpis();
+    renderDepEarlyTable();
+    renderDepEarlyGrouped();
+    renderDepNcKpis();
+    renderDepNcTable();
+    msgEl.innerHTML = '';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+document.getElementById('btn-refresh-departure').addEventListener('click', () => { refreshDayNoticeStatuses().then(() => refreshDeparture()); });
+
+document.querySelectorAll('button[data-deptab]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-deptab]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.deptab;
+    document.getElementById('dep-early-section').style.display = mode === 'early' ? 'block' : 'none';
+    document.getElementById('dep-nocheckout-section').style.display = mode === 'nocheckout' ? 'block' : 'none';
+  });
+});
+
+// ---------- الخروج قبل نهاية الدوام ----------
+function renderDepEarlyKpis() {
+  const total = lastDepEarlyRows.length;
+  const byTeacher = {};
+  lastDepEarlyRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + 1; });
+  const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
+  const avgMinutes = total ? Math.round(lastDepEarlyRows.reduce((s, r) => s + (parseHoursRawToMinutes_(r.hoursRaw) || 0), 0) / total) : 0;
+  document.getElementById('dep-early-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي الحالات</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">متوسط ساعات العمل</div><div class="kpi-value">${formatMinutesAsHM(avgMinutes)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر تكراراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' مرات' : ''}</div></div>
+  `;
+}
+
+function renderDepEarlyTable() {
+  const q = document.getElementById('dep-early-search').value.trim().toLowerCase();
+  const rows = lastDepEarlyRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const tbody = document.querySelector('#dep-early-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
+        <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td>
+        <td class="status-late">${escapeHtml(r.hoursRaw) || '—'}</td>
+        <td>${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}</td>
+        <td><button class="small btn-print-mesaalah-day-early">مسألة</button></td>
+      </tr>`).join('');
+  document.getElementById('dep-early-search-empty').style.display = (lastDepEarlyRows.length && !rows.length) ? 'block' : 'none';
+}
+
+function renderDepEarlyGrouped() {
+  const listEl = document.getElementById('dep-early-grouped-list');
+  const byCivil = {};
+  lastDepEarlyRows.forEach((r) => {
+    const key = String(r.civil);
+    if (!byCivil[key]) byCivil[key] = { name: r.name, rows: [] };
+    byCivil[key].rows.push(r);
+  });
+  const groups = Object.values(byCivil).sort((a, b) => b.rows.length - a.rows.length);
+  document.getElementById('dep-early-grouped-empty').style.display = groups.length ? 'none' : 'block';
+  listEl.innerHTML = groups.map((g, i) => `
+    <div class="teacher-group" data-idx="${i}">
+      <div class="teacher-group-head">
+        <span class="tg-name">${avatarHtml_(g.name, 20)}${escapeHtml(g.name)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="tg-count">${g.rows.length} مرات</span>
+          <span class="tg-chevron">▾</span>
+        </span>
+      </div>
+      <div class="teacher-group-body">
+        <table style="font-size:12.5px">
+          <thead><tr><th>التاريخ</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th></tr></thead>
+          <tbody>
+            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+              <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td><td>${escapeHtml(r.hoursRaw) || '—'}</td></tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
+document.getElementById('dep-early-grouped-list').addEventListener('click', (ev) => {
+  const head = ev.target.closest('.teacher-group-head');
+  if (!head) return;
+  head.closest('.teacher-group').classList.toggle('open');
+});
+
+document.querySelectorAll('button[data-earlyview]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-earlyview]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.earlyview;
+    document.getElementById('dep-early-table-view').style.display = mode === 'table' ? 'block' : 'none';
+    document.getElementById('dep-early-grouped-view').style.display = mode === 'grouped' ? 'block' : 'none';
+  });
+});
+document.getElementById('dep-early-search').addEventListener('input', renderDepEarlyTable);
+document.getElementById('btn-export-dep-early-excel').addEventListener('click', () => {
+  if (!lastDepEarlyRows.length) return;
+  const rows = lastDepEarlyRows.map((r) => ({
+    'التاريخ': r.date, 'الاسم': r.name, 'وقت الحضور': r.checkIn || '', 'وقت الانصراف': r.checkOut || '', 'ساعات العمل': r.hoursRaw || '',
+  }));
+  const from = document.getElementById('dep-from').value, to = document.getElementById('dep-to').value;
+  exportRowsToExcel(`انصراف_مبكر_${from}_${to}.xlsx`, 'انصراف مبكر', rows);
+});
+document.querySelector('#dep-early-table tbody').addEventListener('click', (ev) => {
+  if (ev.target.classList.contains('btn-print-mesaalah-day-early')) {
+    const tr = ev.target.closest('tr');
+    const row = lastDepEarlyRows.find((r) => String(r.id) === tr.dataset.id);
+    if (row) {
+      printEarlyLeaveEshaarSingle_(row);
+      callApi('markActionDone', { key: dayNoticeKey_('earlyleave', row.civil, row.date), civil: row.civil, done: true })
+        .then(() => { dayNoticeStatuses[dayNoticeKey_('earlyleave', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderDepEarlyTable(); })
+        .catch(() => {});
+    }
+    return;
+  }
+  if (ev.target.classList.contains('btn-toggle-day-notice')) {
+    toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
+  }
+});
+
+// ---------- عدم تسجيل انصراف ----------
+function renderDepNcKpis() {
+  const total = lastDepNcRows.length;
+  const byTeacher = {};
+  lastDepNcRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + 1; });
+  const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('dep-nc-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي الحالات</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر تكراراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' مرات' : ''}</div></div>
+  `;
+}
+
+function renderDepNcTable() {
+  const q = document.getElementById('dep-nc-search').value.trim().toLowerCase();
+  const rows = lastDepNcRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const tbody = document.querySelector('#dep-nc-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</td>
+        <td>${dayNoticeStatusBtnHtml_('nocheckout', r.civil, r.date)}</td>
+        <td><button class="small btn-print-mesaalah-day-nc">مسألة</button></td>
+      </tr>`).join('');
+  document.getElementById('dep-nc-search-empty').style.display = (lastDepNcRows.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('dep-nc-search').addEventListener('input', renderDepNcTable);
+document.getElementById('btn-export-dep-nc-excel').addEventListener('click', () => {
+  if (!lastDepNcRows.length) return;
+  const rows = lastDepNcRows.map((r) => ({
+    'التاريخ': r.date, 'الاسم': r.name, 'وقت الحضور': r.checkIn || '', 'بداية الدوام': r.schedStart || '', 'نهاية الدوام': r.schedEnd || '',
+  }));
+  const from = document.getElementById('dep-from').value, to = document.getElementById('dep-to').value;
+  exportRowsToExcel(`عدم_تسجيل_انصراف_${from}_${to}.xlsx`, 'بلا انصراف', rows);
+});
+document.querySelector('#dep-nc-table tbody').addEventListener('click', (ev) => {
+  if (ev.target.classList.contains('btn-print-mesaalah-day-nc')) {
+    const tr = ev.target.closest('tr');
+    const row = lastDepNcRows.find((r) => String(r.id) === tr.dataset.id);
+    if (row) {
+      printNoCheckoutMesaalah_(row);
+      callApi('markActionDone', { key: dayNoticeKey_('nocheckout', row.civil, row.date), civil: row.civil, done: true })
+        .then(() => { dayNoticeStatuses[dayNoticeKey_('nocheckout', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderDepNcTable(); })
+        .catch(() => {});
+    }
+    return;
+  }
+  if (ev.target.classList.contains('btn-toggle-day-notice')) {
+    toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
+  }
+});
+
+// نموذج إشعار انصراف مبكر — على غرار إشعار التأخر تماماً، لكن معياره اكتمال ٤ ساعات عمل
+function printEarlyLeaveEshaarSingle_(row) {
+  const cfg = loadConfig();
+  const d = isoToLocalDate(row.date);
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'إشعار انصراف مبكر عن الدوام',
+    titleLine: 'إشعار انصراف مبكر عن الدوام',
+  });
+  const tableRow = `<tr><td>1</td><td>${escapeHtml(row.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td><td>${escapeHtml(toArabicAmPmTime(row.checkIn)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(row.checkOut)) || '—'}</td><td class="pr-late-cell">${escapeHtml(row.hoursRaw) || '—'}</td></tr>`;
+  const body = `
+    <div class="pr-page">
+      ${header}
+      <p style="font-size:10pt; line-height:1.9">
+        المكرم/ة الموظف/ة: <b>${escapeHtml(row.name)}</b><br>
+        رقم السجل المدني: ${escapeHtml(row.civil)}<br>
+        السلام عليكم ورحمة الله وبركاته، وبعد...<br>
+        لوحظ <b>انصرافكم قبل نهاية الدوام</b> بتاريخ ${formatDateDMY(row.date)} يوم ${WEEKDAYS_FULL_AR[d.getDay()]}، دون إكمال أربع ساعات عمل، إذ بلغت مدة عملكم ذلك اليوم <b>${escapeHtml(row.hoursRaw)}</b> فقط.
+      </p>
+      <table class="pr-table">
+        <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th></tr></thead>
+        <tbody>${tableRow}</tbody>
+      </table>
+      <p style="font-size:9.5pt; margin-top:10pt">نأمل منكم التكرم بإيضاح أسباب ذلك في المساحة المخصصة أدناه، وإعادتها لإدارة المدرسة.</p>
+      <div class="pr-section-title">إفادة الموظف/ة</div>
+      <div class="pr-note-box"></div>
+      <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
+      ${buildReportFooterHtml()}
+    </div>`;
+  printInPage(PERIOD_REPORT_STYLE, body);
+}
+
+// مساءلة عدم تسجيل الانصراف — إعادة صياغة للنموذج الرسمي المرفق حرفياً
+function printNoCheckoutMesaalah_(row) {
+  const cfg = loadConfig();
+  const d = isoToLocalDate(row.date);
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName,
+    titleLine: 'مساءلة بشأن عدم تسجيل الانصراف في برنامج حضوري',
+    dateBoxHtml: `<div>التاريخ: ${reportTodayStr_()}</div>`,
+  });
+  const body = `
+    <div class="pr-page">
+      ${header}
+      <table class="pr-table pr-info-table" style="margin-bottom:10pt">
+        <tbody>
+          <tr><td style="width:25%">اسم الموظف/ة</td><td>${escapeHtml(row.name)}</td><td style="width:25%">المسمى الوظيفي</td><td>معلّم/ـة</td></tr>
+          <tr><td>التاريخ</td><td>${formatDateDMY(row.date)}</td><td>اليوم</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:10pt; line-height:1.9">
+        السلام عليكم ورحمة الله وبركاته، وبعد:<br>
+        لوحظ عدم قيامكم بتسجيل الانصراف في برنامج حضوري في اليوم والتاريخ الموضحين أعلاه، رغم انتهاء وقت الدوام الرسمي.<br>
+        عليه، نأمل منكم توضيح سبب عدم تسجيل الانصراف، والإفادة عن ذلك كتابةً أدناه، مع التأكيد على أهمية الالتزام بتسجيل الحضور والانصراف وفق الأنظمة والتعليمات المنظمة للدوام الرسمي.
+      </p>
+      <div class="pr-section-title">إفادة الموظف/ة</div>
+      <div class="pr-note-box" style="min-height:64pt"></div>
+      <p style="font-size:10pt; margin-top:8pt">سبب عدم تسجيل الانصراف:</p>
+      <div class="pr-checklist">
+        <div>( &nbsp;&nbsp;) نسيان تسجيل الانصراف</div>
+        <div>( &nbsp;&nbsp;) عطل أو مشكلة تقنية في برنامج حضوري</div>
+        <div>( &nbsp;&nbsp;) عدم توفر الاتصال بالإنترنت</div>
+        <div>( &nbsp;&nbsp;) تكليف أو مهمة رسمية</div>
+        <div>( &nbsp;&nbsp;) سبب آخر: ....................................................</div>
+      </div>
+      <p style="font-size:9.5pt; margin-top:8pt">وأقر بأن الإفادة الموضحة أعلاه صحيحة، وأتعهد بالالتزام بتسجيل الحضور والانصراف في برنامج حضوري وفق التعليمات المعتمدة.</p>
+      <div class="pr-sign-row"><div>اسم الموظف/ة: ${escapeHtml(row.name)}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+
+      <div class="pr-section-title">إفادة الإدارة</div>
+      <div class="pr-checklist">
+        <div>( &nbsp;&nbsp;) تم الاطلاع على الإفادة وقبول العذر</div>
+        <div>( &nbsp;&nbsp;) تم الاطلاع على الإفادة واتخاذ الإجراء وفق الأنظمة والتعليمات</div>
+        <div>( &nbsp;&nbsp;) أخرى: ....................................................</div>
+      </div>
+      <div class="pr-sign-row"><div>اسم المسؤول/ة: ....................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+    </div>`;
+  printInPage(PERIOD_REPORT_STYLE, body);
 }
 
 // ==================== تبويب "التقارير اليومية" ====================

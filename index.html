@@ -271,13 +271,6 @@
   .report-center-buttons button { width: 100%; text-align: center; }
   .report-center-buttons .rc-btn-wide { font-size: 14px; padding: 12px; }
 
-  /* ---------- طباعة داخل الصفحة الحالية بلا نافذة جديدة ---------- */
-  #print-area { display: none; }
-  @media print {
-    body > *:not(#print-area) { display: none !important; }
-    #print-area { display: block !important; }
-  }
-
   /* ---------- تحديد جماعي + إجراءات دفعة واحدة ---------- */
   .bulk-bar {
     display: none; align-items: center; gap: 10px; background: var(--accent); color: var(--accent-fg);
@@ -515,7 +508,6 @@
 <meta name="apple-mobile-web-app-title" content="متابعة الحضور">
 </head>
 <body>
-<div id="print-area"></div>
 <div class="topbar no-print">
   <button class="hamburger" id="btn-open-sidebar" aria-label="فتح القائمة">
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
@@ -3180,25 +3172,27 @@ function buildReportFooterHtml() {
   </div>`;
 }
 
-// طباعة داخل الصفحة الحالية بلا فتح نافذة/تبويب جديد: نملأ حاوية مخفية (#print-area)
-// بمحتوى المستند مع أنماطه الخاصة، ثم نستدعي طباعة المتصفح مباشرة — قاعدة CSS مرافقة
-// تُخفي كل شيء آخر أثناء الطباعة فتظهر هذه الحاوية فقط.
+// طباعة داخل إطار (iframe) مخفي تماماً بدل الاعتماد على إخفاء/إظهار جزء من الصفحة
+// الرئيسية عبر @media print. هذا يُصلح خللاً معروفاً في متصفح Safari على iOS: عندما
+// يعتمد المحتوى المطبوع على قاعدة @media print لإظهار عنصر كان مخفياً أصلاً على الشاشة
+// (display:none)، فبعض إصدارات iOS تفشل في إعادة رسمه بشكل صحيح فور تغيير نسبة التحجيم
+// في نافذة الطباعة، فتظهر صفحة بيضاء. الإطار هنا مستند مستقل تماماً له محتواه دائماً —
+// لا إخفاء ولا استعلام وسائط متعددة يعتمد عليه أصلاً، فلا يوجد ما "يفشل في إعادة رسمه".
 let printCleanupState = null;
 function printInPage(styleCss, bodyHtml) {
   // ننظّف أي طباعة سابقة عالقة قبل بدء طباعة جديدة (حماية إضافية)
   if (printCleanupState) printCleanupState();
 
-  const area = document.getElementById('print-area');
-  area.innerHTML = `<style>${styleCss}</style>${bodyHtml}`;
-  // لا نُغيّر أي شيء على الشاشة إطلاقاً — #print-area مخفي دائماً على الشاشة (display:none)
-  // ولا يظهر إلا داخل مخرجات الطباعة الفعلية عبر قاعدة @media print، فيبقى التطبيق كما هو
-  // خلف مربع الطباعة تماماً كأي موقع آخر، بدل أن يتحوّل الموقع نفسه لعرض التقرير فقط.
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed; top:-10000px; left:-10000px; width:1px; height:1px; border:0; opacity:0;';
+  document.body.appendChild(iframe);
 
   const cleanup = () => {
-    area.innerHTML = '';
     window.removeEventListener('afterprint', cleanup);
     window.removeEventListener('focus', onFocus);
     clearTimeout(safetyTimer);
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
     printCleanupState = null;
   };
   printCleanupState = cleanup;
@@ -3206,16 +3200,25 @@ function printInPage(styleCss, bodyHtml) {
   let onFocus = () => {};
   let safetyTimer = null;
 
-  setTimeout(() => {
-    window.print();
-    // تنظيف محتوى الحاوية بعد انتهاء الطباعة (لا حاجة له لإظهار التطبيق — هو ظاهر أصلاً —
-    // فقط لتفريغ الذاكرة قبل الطباعة التالية). عدّة إشارات احتياطية لأن 'afterprint' وحدها
-    // قد لا تُطلق بشكل موثوق في كل المتصفحات.
-    onFocus = () => setTimeout(cleanup, 400);
-    window.addEventListener('afterprint', cleanup);
-    window.addEventListener('focus', onFocus);
-    safetyTimer = setTimeout(cleanup, 20000);
-  }, 60);
+  iframe.onload = () => {
+    setTimeout(() => {
+      const win = iframe.contentWindow;
+      win.focus();
+      win.print();
+      // 'afterprint' على مستوى النافذة الرئيسية هو الإشارة الأدق عادةً، مع عودة التركيز
+      // للنافذة الرئيسية كإشارة احتياطية (تحدث فور إغلاق نافذة الطباعة)، وشبكة أمان أخيرة
+      // في حال فشلت الإشارتان معاً.
+      onFocus = () => setTimeout(cleanup, 400);
+      window.addEventListener('afterprint', cleanup);
+      window.addEventListener('focus', onFocus);
+      safetyTimer = setTimeout(cleanup, 20000);
+    }, 60);
+  };
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><style>${styleCss}</style></head><body>${bodyHtml}</body></html>`);
+  doc.close();
 }
 
 function dateRangeHtml_(from, to) {

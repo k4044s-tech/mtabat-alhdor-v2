@@ -2086,7 +2086,7 @@ function renderAbsenceTable() {
     if (absClassFilter && absClassFilter !== '__unclassified' && r.classification !== absClassFilter) return false;
     if (q && !String(r.name).toLowerCase().includes(q)) return false;
     return true;
-  });
+  }).sort((a, b) => b.date.localeCompare(a.date)); // الأحدث تاريخاً أولاً
   const tbody = document.querySelector('#absence-table tbody');
   tbody.innerHTML = rows.map((r) => {
     const classOptions = CLASSIFICATIONS.map((c) => `<option value="${escapeHtml(c)}" ${c === (r.classification || '') ? 'selected' : ''}>${escapeHtml(c) || '—'}</option>`).join('');
@@ -2134,7 +2134,7 @@ function renderAbsenceGrouped() {
         <table style="font-size:12.5px">
           <thead><tr><th>التاريخ</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th></tr></thead>
           <tbody>
-            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+            ${g.rows.sort((a, b) => b.date.localeCompare(a.date)).map((r) => `
               <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.classification) || '—'}</td><td>${escapeHtml(r.reason) || '—'}</td><td>${escapeHtml(r.note) || '—'}</td></tr>
             `).join('')}
           </tbody>
@@ -2274,7 +2274,7 @@ function renderLateGrouped() {
         <table style="font-size:12.5px">
           <thead><tr><th>التاريخ</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th></tr></thead>
           <tbody>
-            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+            ${g.rows.sort((a, b) => b.date.localeCompare(a.date)).map((r) => `
               <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td>${r.lateMinutes}</td></tr>
             `).join('')}
           </tbody>
@@ -3368,7 +3368,7 @@ function renderDepEarlyGrouped() {
         <table style="font-size:12.5px">
           <thead><tr><th>التاريخ</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th></tr></thead>
           <tbody>
-            ${g.rows.sort((a, b) => a.date.localeCompare(b.date)).map((r) => `
+            ${g.rows.sort((a, b) => b.date.localeCompare(a.date)).map((r) => `
               <tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td><td>${escapeHtml(r.hoursRaw) || '—'}</td></tr>
             `).join('')}
           </tbody>

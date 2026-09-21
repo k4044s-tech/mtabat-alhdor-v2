@@ -1491,6 +1491,9 @@ async function parseBiometricFile_(file) {
   const nameCol = findCol(headers, 'اسم');
   const inCol = findCol(headers, 'حضور');
   const outCol = findCol(headers, 'انصراف');
+  if (inCol === -1 || outCol === -1) {
+    return { rows: null, error: `تعذّر إيجاد عمود ${inCol === -1 ? '"وقت الحضور"' : '"وقت الانصراف"'} في الملف — تأكّد من أن أسماء الأعمدة لم تتغيّر في تصدير جهاز البصمة.` };
+  }
 
   const rows = [];
   for (let i = headerRowIdx + 1; i < grid.length; i++) {
@@ -1584,6 +1587,16 @@ document.getElementById('btn-batch-import-all').addEventListener('click', async 
   const badDate = eligible.find((f) => !/^\d{4}-\d{2}-\d{2}$/.test(f.date || ''));
   if (badDate) {
     msgEl.innerHTML = `<div class="msg err">تحقّق من تاريخ الملف "${escapeHtml(badDate.fileName)}" — يجب أن يكون بصيغة YYYY-MM-DD.</div>`;
+    return;
+  }
+  const seenDates = {};
+  const dupFile = eligible.find((f) => {
+    if (seenDates[f.date]) return true;
+    seenDates[f.date] = true;
+    return false;
+  });
+  if (dupFile) {
+    msgEl.innerHTML = `<div class="msg err">تاريخ "${escapeHtml(dupFile.date)}" مكرَّر بين ملفين في هذه الدفعة — عدّل أحد التاريخين قبل المتابعة، وإلا سيستبدل الملف الثاني بيانات الأول بصمت.</div>`;
     return;
   }
   btn.disabled = true;
@@ -1810,13 +1823,12 @@ async function refreshWeekOverview(selectedDate) {
     res.dailyTrend.forEach((d) => { trendByDate[d.date] = d; });
 
     // شريط الأسبوع: من بداية الأسبوع (أول يوم عمل بعد عطلة نهاية الأسبوع) إلى نهايته
-    const weekend = (currentSettings && currentSettings.weekendDays) || [5, 6];
-    const selDow = isoToLocalDate(selectedDate).getDay();
-    // نرجع للخلف حتى أول يوم عمل بعد آخر عطلة نهاية أسبوع (بداية أسبوع العمل الحالي)
+    // نستخدم isNonWorkingDayClient_ (عطلة أسبوعية + عطل مخصَّصة معاً) بدل فحص weekendDays
+    // وحدها، وإلا فعطلة رسمية متعددة الأيام قبل التاريخ المختار تُفسِد حساب بداية الأسبوع.
+    // نرجع للخلف حتى أول يوم عمل بعد آخر عطلة (أسبوعية أو مخصَّصة) — بداية أسبوع العمل الحالي
     let startOffset = 0;
     for (let i = 1; i <= 6; i++) {
-      const dow = (selDow - i + 7) % 7;
-      if (weekend.includes(dow)) break;
+      if (isNonWorkingDayClient_(addDaysISO(selectedDate, -i))) break;
       startOffset = i;
     }
     const weekStart = addDaysISO(selectedDate, -startOffset);
@@ -1852,7 +1864,9 @@ async function refreshWeekOverview(selectedDate) {
     sparkEl.innerHTML = workDays.length ? workDays.map((d) => {
       const t = trendByDate[d];
       const total = t.present + t.absent;
-      const rate = total ? t.present / total : 1;
+      // يوم بلا أي سجل حضور أو غياب فعلي (total=0) هو "لا بيانات"، وليس يوماً مثالياً ١٠٠٪
+      if (!total) return `<div class="spark-bar st-gray" style="height:2px" title="${escapeHtml(d)} — لا بيانات"></div>`;
+      const rate = t.present / total;
       const h = Math.max(2, Math.round(rate * maxBarHeight));
       const cls = rate < 0.7 ? 'st-red' : rate < 0.9 ? 'st-orange' : '';
       return `<div class="spark-bar ${cls}" style="height:${h}px" title="${escapeHtml(d)} — ${Math.round(rate * 100)}%"></div>`;
@@ -2525,7 +2539,15 @@ function renderSummaryTable() {
   let rows = lastSummaryList.filter((e) => !q || String(e.name).toLowerCase().includes(q));
   rows = rows.slice().sort((a, b) => {
     const av = a[sumSortKey], bv = b[sumSortKey];
-    const cmp = sumSortKey === 'name' ? String(av || '').localeCompare(String(bv || ''), 'ar') : (Number(av) || 0) - (Number(bv) || 0);
+    if (sumSortKey === 'name') return sumSortDir === 'asc' ? String(av || '').localeCompare(String(bv || ''), 'ar') : -String(av || '').localeCompare(String(bv || ''), 'ar');
+    // "لا توجد بيانات" (null/undefined) تُدفَع دائماً لنهاية القائمة بدل معاملتها كصفر —
+    // معلّم بلا بيانات كافية لحساب نسبة الحضور ليس بالضرورة "الأسوأ أداءً".
+    const aMissing = av === null || av === undefined;
+    const bMissing = bv === null || bv === undefined;
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    const cmp = Number(av) - Number(bv);
     return sumSortDir === 'asc' ? cmp : -cmp;
   });
   const prevByCivil = {};
@@ -3023,11 +3045,24 @@ function moeSizeVars_(rowCount) {
   return `:root{--moe-cell:${cell}pt;--moe-pad:${pad}pt;--moe-base:${cell}pt;}`;
 }
 
+// يحوّل وقتاً بصيغة "HH:MM AM/PM" (مخرجات normalizeTimeString) إلى دقائق منذ منتصف
+// الليل للمقارنة الزمنية الصحيحة — مقارنة النص مباشرة (localeCompare) كانت تضع "١٢:٠٣ ص"
+// قبل "٦:٤٥ ص" لأن '1' أصغر من '6' نصياً، رغم كونه أبعد زمنياً في سياق حضور الصباح.
+function clockTimeToMinutes_(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10) % 12;
+  if (m[3].toUpperCase() === 'PM') h += 12;
+  return h * 60 + parseInt(m[2], 10);
+}
+
 function buildMinistryReportHtml({ schoolName, adminName, dateISO, presentRows, absentRows }) {
   const present = [...presentRows].sort((a, b) => {
-    const ai = a.checkIn ? a.checkIn : null, bi = b.checkIn ? b.checkIn : null;
-    if (!ai && !bi) return 0; if (!ai) return 1; if (!bi) return -1;
-    return ai.localeCompare(bi);
+    const ai = a.checkIn ? clockTimeToMinutes_(a.checkIn) : null;
+    const bi = b.checkIn ? clockTimeToMinutes_(b.checkIn) : null;
+    if (ai == null && bi == null) return 0; if (ai == null) return 1; if (bi == null) return -1;
+    return ai - bi;
   });
   const absent = [...absentRows].sort((a, b) => (a.num || 999) - (b.num || 999) || String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
   let rank = 0;
@@ -3077,6 +3112,7 @@ async function printOfficialReport(dateArg, errorElId) {
       const civil = String(t.civil);
       if (attendanceByCivil[civil]) presentRows.push(Object.assign({ num: t.num, name: t.name, civil }, attendanceByCivil[civil]));
       else if (absenceByCivil[civil]) absentRows.push({ num: t.num, name: t.name, civil });
+      else absentRows.push({ num: t.num, name: t.name, civil }); // معلّم نشط بلا أي سجل ذلك اليوم — يُحتسب غائباً بدل أن يختفي من الكشف الرسمي بصمت
     });
     const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
     printInPage(built.style, built.body);
@@ -3703,6 +3739,7 @@ document.getElementById('btn-dr-daily-official').addEventListener('click', async
         const civil = String(t.civil);
         if (attendanceByCivil[civil]) presentRows.push(Object.assign({ num: t.num, name: t.name, civil }, attendanceByCivil[civil]));
         else if (absenceByCivil[civil]) absentRows.push({ num: t.num, name: t.name, civil });
+        else absentRows.push({ num: t.num, name: t.name, civil }); // نفس إصلاح الكشف اليومي الفردي — لا يختفي أحد بصمت
       });
       const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
       bodies.push(built.body);
@@ -3998,17 +4035,18 @@ async function populateTeacherSelect_(selectEl) {
     });
   } catch (err) { /* تجاهل — تبقى القائمة بخيار "الكل" فقط */ }
 }
-let drEmployeeSelectPopulated = false;
+// نخزّن الوعد (promise) قيد التنفيذ نفسه كحارس، لا مجرد علامة منطقية تُضبَط بعد الاكتمال —
+// وإلا فاستدعاءان متزامنان (تبديل التبويب المعتاد + قفزة البحث السريع بالشريط الجانبي)
+// يريان العلامة "false" معاً قبل أن يكمل أيّهما، فتُعبَّأ القائمة مرتين وتتكرر الأسماء.
+let drEmployeeSelectPromise = null;
 async function populateDrEmployeeSelect_() {
-  if (drEmployeeSelectPopulated) return;
-  await populateTeacherSelect_(document.getElementById('dr-employee'));
-  drEmployeeSelectPopulated = true;
+  if (!drEmployeeSelectPromise) drEmployeeSelectPromise = populateTeacherSelect_(document.getElementById('dr-employee'));
+  await drEmployeeSelectPromise;
 }
-let acEmployeeSelectPopulated = false;
+let acEmployeeSelectPromise = null;
 async function populateAcEmployeeSelect_() {
-  if (acEmployeeSelectPopulated) return;
-  await populateTeacherSelect_(document.getElementById('ac-employee'));
-  acEmployeeSelectPopulated = true;
+  if (!acEmployeeSelectPromise) acEmployeeSelectPromise = populateTeacherSelect_(document.getElementById('ac-employee'));
+  await acEmployeeSelectPromise;
 }
 
 function exportRowsToExcel(filename, sheetName, rows) {
@@ -4137,8 +4175,26 @@ document.getElementById('btn-add-holiday').addEventListener('click', () => {
   renderHolidays();
 });
 
+// يكشف أي فترتي دوام متداخلتين بالتاريخ — قبل هذا الإصلاح كانت الفترتان المتداخلتان
+// تُحفظان بصمت وتفوز آخر فترة بالمصفوفة عند حساب دوام أي يوم ضمن التداخل، بلا أي تنبيه.
+function findOverlappingSchedulePeriods_(periods) {
+  const dated = (periods || []).filter((p) => p.dateFrom && p.dateTo);
+  for (let i = 0; i < dated.length; i++) {
+    for (let j = i + 1; j < dated.length; j++) {
+      const a = dated[i], b = dated[j];
+      if (a.dateFrom <= b.dateTo && b.dateFrom <= a.dateTo) return [a, b];
+    }
+  }
+  return null;
+}
+
 document.getElementById('btn-save-schedule').addEventListener('click', async () => {
   const statusEl = document.getElementById('schedule-status');
+  const overlap = findOverlappingSchedulePeriods_(currentSettings.schedulePeriods);
+  if (overlap) {
+    statusEl.textContent = `تعذّر الحفظ: الفترتان "${overlap[0].label || overlap[0].id}" و"${overlap[1].label || overlap[1].id}" متداخلتان بالتاريخ — عدّل إحداهما أولاً حتى لا تتنازعا على تحديد دوام نفس اليوم.`;
+    return;
+  }
   statusEl.textContent = 'جارٍ الحفظ...';
   try {
     await callApi('saveSettings', { settings: currentSettings });
@@ -4168,8 +4224,10 @@ if (!loadConfig().url) {
   showTab('settings');
 } else {
   showTab('dashboard');
-  refreshDashboard();
-  loadScheduleSettings();
+  // ننتظر وصول الإعدادات الفعلية (العطل المخصَّصة وأيام نهاية الأسبوع) قبل حساب اللوحة —
+  // وإلا فقد تُصنَّف عطلة رسمية حقيقية كـ"استيراد ناقص" لأن currentSettings ما زالت على
+  // قيمتها الافتراضية (بلا عطل) لحظة أول عرض للوحة.
+  loadScheduleSettings().then(() => refreshDashboard());
 }
 
 // تسجيل عامل الخدمة (Service Worker) — شرط تقني من Chrome لتفعيل خيار "تثبيت"

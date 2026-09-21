@@ -1037,15 +1037,18 @@
 
         <div class="section-header"><span class="sh-title">خرائط وأنماط</span></div>
         <div class="card">
-          <h3 style="margin-top:0">خريطة الفترة</h3>
-          <p class="muted">كل مربع يوم مستورَد — الأغمق يعني مخالفات أكثر (غياب/تأخير/بدون بصمة).</p>
-          <div class="chart-legend">
-            <span><i style="background:#f4f4f5;border:1px solid #e4e4e7"></i> منتظم</span>
-            <span><i style="background:#fca5a5"></i> بسيط</span>
-            <span><i style="background:#ef4444"></i> متوسط</span>
-            <span><i style="background:#7f1d1d"></i> شديد</span>
+          <h3 style="margin-top:0">اتجاه الأداء خلال الفترة</h3>
+          <p class="muted">مقارنة كل معلّم بين النصف الأول والنصف الثاني من الفترة المحددة — من ازداد تراجعاً فعلياً ومن تحسّن، لا مجرد لقطة ثابتة ليوم بيوم.</p>
+          <div class="row" style="align-items:stretch; margin-top:10px">
+            <div class="card leaderboard" style="flex:1 1 260px; box-shadow:none">
+              <h4>⚠️ في تراجع</h4>
+              <div id="an-trend-declining"></div>
+            </div>
+            <div class="card leaderboard" style="flex:1 1 260px; box-shadow:none">
+              <h4>✅ في تحسّن</h4>
+              <div id="an-trend-improving"></div>
+            </div>
           </div>
-          <div id="an-heatmap"></div>
         </div>
 
         <div class="row" style="align-items:stretch">
@@ -2723,53 +2726,62 @@ function renderTrendChart(dailyTrend) {
   </svg>`;
 }
 
-function severityBucket(d) {
-  const score = d.absent * 3 + d.late + d.early + d.noCheckout;
-  if (score <= 0) return 0;
-  if (score <= 2) return 1;
-  if (score <= 5) return 2;
-  return 3;
-}
-const HEATMAP_COLORS = ['#f4f4f5', '#fca5a5', '#ef4444', '#7f1d1d'];
-
-function renderHeatmap(dailyTrend, from, to) {
-  if (!dailyTrend.length) return '<p class="muted" style="padding:10px 0">لا توجد بيانات في هذه الفترة.</p>';
-  const byDate = {};
-  dailyTrend.forEach((d) => { byDate[d.date] = d; });
-  const start = isoToLocalDate(from);
-  const end = isoToLocalDate(to);
-  // نبدأ الشبكة من بداية أسبوع أول تاريخ (السبت) حتى تصطف الأعمدة كتقويم حقيقي
-  const gridStart = new Date(start);
-  gridStart.setDate(gridStart.getDate() - ((gridStart.getDay() + 1) % 7));
-  const cells = [];
-  for (let d = new Date(gridStart); d <= end; d.setDate(d.getDate() + 1)) {
-    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    cells.push({ iso, inRange: d >= start && d <= end, data: byDate[iso] });
+// ---------- اتجاه الأداء: مقارنة كل معلّم بين نصفي الفترة (من ازداد ومن تحسّن فعلياً) ----------
+async function refreshPerformanceTrend_(from, to) {
+  const declEl = document.getElementById('an-trend-declining');
+  const impEl = document.getElementById('an-trend-improving');
+  const totalDays = Math.round((isoToLocalDate(to) - isoToLocalDate(from)) / 86400000) + 1;
+  if (totalDays < 4) {
+    declEl.innerHTML = impEl.innerHTML = '<p class="muted" style="padding:8px 0">الفترة قصيرة جداً للمقارنة.</p>';
+    return;
   }
-  const cell = 15, gap = 3;
-  const weeks = Math.ceil(cells.length / 7);
-  const w = weeks * (cell + gap);
-  const h = 7 * (cell + gap);
-  let rects = '';
-  cells.forEach((c, i) => {
-    const col = Math.floor(i / 7);
-    const row = i % 7;
-    const x = col * (cell + gap);
-    const y = row * (cell + gap);
-    let fill = '#fff';
-    let title = c.iso;
-    if (c.inRange) {
-      if (c.data) {
-        fill = HEATMAP_COLORS[severityBucket(c.data)];
-        title = `${c.iso} — حاضر:${c.data.present} غياب:${c.data.absent} تأخر:${c.data.late}`;
-      } else {
-        fill = '#fafafa';
-        title = `${c.iso} — لا يوجد استيراد`;
-      }
-    }
-    rects += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="3" fill="${fill}" stroke="#e4e4e7"><title>${title}</title></rect>`;
+  const midDate = addDaysISO(from, Math.floor(totalDays / 2) - 1);
+  const secondHalfStart = addDaysISO(midDate, 1);
+  try {
+    const [firstRes, secondRes] = await Promise.all([
+      callApi('getMonthlySummary', { from, to: midDate }),
+      callApi('getMonthlySummary', { from: secondHalfStart, to }),
+    ]);
+    renderPerformanceTrend_(firstRes, secondRes);
+  } catch (err) {
+    declEl.innerHTML = impEl.innerHTML = `<p class="muted" style="padding:8px 0">تعذّر التحميل: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderPerformanceTrend_(firstRes, secondRes) {
+  const firstByCivil = {}; firstRes.list.forEach((e) => (firstByCivil[e.civil] = e));
+  const secondByCivil = {}; secondRes.list.forEach((e) => (secondByCivil[e.civil] = e));
+  const firstWorkDays = firstRes.workDays || 1;
+  const secondWorkDays = secondRes.workDays || 1;
+  const allCivils = new Set([...Object.keys(firstByCivil), ...Object.keys(secondByCivil)]);
+
+  const deltas = [];
+  allCivils.forEach((civil) => {
+    const f = firstByCivil[civil], s = secondByCivil[civil];
+    const name = (s || f).name;
+    const firstCount = f ? f.violations : 0;
+    const secondCount = s ? s.violations : 0;
+    // نقارن بمعدّل المخالفات لكل يوم عمل (لا العدد الخام) لأن نصفي الفترة قد يختلفان طولاً
+    const delta = (secondCount / secondWorkDays) - (firstCount / firstWorkDays);
+    if (firstCount > 0 || secondCount > 0) deltas.push({ civil, name, delta, firstCount, secondCount });
   });
-  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:${w}px;height:auto">${rects}</svg>`;
+
+  const declining = deltas.filter((d) => d.delta > 0.01).sort((a, b) => b.delta - a.delta).slice(0, 5);
+  const improving = deltas.filter((d) => d.delta < -0.01).sort((a, b) => a.delta - b.delta).slice(0, 5);
+
+  const rowHtml = (list, isBad) => list.length
+    ? list.map((d) => `
+      <div class="leaderboard-row" data-civil="${escapeHtml(d.civil)}">
+        <span class="lb-name">${avatarHtml_(d.name, 20)}${escapeHtml(d.name)}</span>
+        <span class="lb-value" style="color:${isBad ? 'var(--bad)' : 'var(--good)'}">${d.firstCount} ← ${d.secondCount}</span>
+      </div>`).join('')
+    : `<p class="muted" style="padding:8px 0">لا يوجد تغيّر ملحوظ.</p>`;
+
+  document.getElementById('an-trend-declining').innerHTML = rowHtml(declining, true);
+  document.getElementById('an-trend-improving').innerHTML = rowHtml(improving, false);
+  document.querySelectorAll('#an-trend-declining .leaderboard-row, #an-trend-improving .leaderboard-row').forEach((row) => {
+    row.addEventListener('click', () => jumpToEmployeeReport(row.dataset.civil));
+  });
 }
 
 // ---------- الأكثر انضباطاً: عمود لكل معلّم، مرتّب أولاً بالغياب ثم التأخر ثم الانصراف
@@ -2857,8 +2869,8 @@ async function refreshAnalytics() {
 
     renderAnalyticsKpis(res);
     document.getElementById('an-chart').innerHTML = renderTrendChart(res.dailyTrend);
-    document.getElementById('an-heatmap').innerHTML = renderHeatmap(res.dailyTrend, from, to);
     document.getElementById('an-weekday-pattern').innerHTML = renderWeekdayPattern(res.dailyTrend);
+    refreshPerformanceTrend_(from, to); // مستقل — لا يوقف بقية التحليلات إن تأخّر أو فشل
 
     const byViolations = summaryRes.list.slice();
     renderLeaderboard('top-absent', byViolations.slice().sort((a, b) => b.absenceDays - a.absenceDays), 'absenceDays', ' يوم');

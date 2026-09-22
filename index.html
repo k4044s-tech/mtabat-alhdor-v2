@@ -742,7 +742,7 @@
             <div style="max-height:520px; overflow:auto">
               <table id="absence-table">
                 <thead>
-                  <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>ملاحظات</th><th>الحالة</th><th></th><th></th></tr>
+                  <tr><th style="width:26px"><input type="checkbox" id="abs-select-all"></th><th>التاريخ</th><th>الاسم</th><th>التصنيف</th><th>السبب</th><th>الاستئذان</th><th>ملاحظات</th><th>الحالة</th><th></th><th></th></tr>
                 </thead>
                 <tbody></tbody>
               </table>
@@ -780,7 +780,7 @@
             </div>
             <div style="max-height:520px; overflow:auto">
               <table id="late-table">
-                <thead><tr><th>التاريخ</th><th>الاسم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th>الحالة</th><th></th></tr></thead>
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th>الاستئذان</th><th>الحالة</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -871,6 +871,7 @@
       </section>
 
       <section id="view-permissions" style="display:none">
+        <div class="duty-banner" id="perm-last-date-banner" style="display:none"></div>
         <div class="card">
           <div class="row">
             <div>
@@ -2237,6 +2238,7 @@ function renderAbsenceTable() {
         <td>${escapeHtml(r.name)}</td>
         <td><select class="f-classification">${classOptions}</select></td>
         <td><select class="f-reason">${reasonOptions}</select></td>
+        <td>${permissionBadgeHtml_(r.permissionStatus, r.permissionType)}</td>
         <td><input class="f-note" type="text" value="${escapeHtml(r.note || '')}"></td>
         <td>${dayNoticeStatusBtnHtml_('absence', r.civil, r.date)}</td>
         <td><button class="small btn-save-absence">حفظ</button></td>
@@ -2381,6 +2383,7 @@ function renderLateTable() {
         <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td>
         <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
         <td class="status-late">${r.lateMinutes}</td>
+        <td>${permissionBadgeHtml_(r.permissionStatus, r.permissionType)}</td>
         <td>${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-late">مسألة</button></td>
       </tr>`).join('');
@@ -3111,6 +3114,15 @@ function dayNoticeStatusBtnHtml_(type, civil, date) {
   const done = !!(dayNoticeStatuses[key] && dayNoticeStatuses[key].done);
   return `<button class="action-status-btn ${done ? 'done' : 'pending'} btn-toggle-day-notice" data-notice-key="${escapeHtml(key)}">${done ? 'تم ✔' : 'لم يتم'}</button>`;
 }
+
+// شارة صغيرة تظهر بجداول الغياب والتأخر تُبيّن هل لهذا اليوم طلب استئذان مرتبط أم لا،
+// وحالته (مقبول/مرفوض/تحت الإجراء) — سياق مفيد للإداري قبل أي إجراء يدوي، بغضّ النظر
+// عن كون الطلب استثنى الحالة فعلياً من القائمة أو لا.
+function permissionBadgeHtml_(status, type) {
+  if (!status) return '<span class="muted">—</span>';
+  const cls = status === 'مقبول' ? 'status-ok' : status === 'مرفوض' ? 'status-absent' : 'status-late';
+  return `<span class="${cls}" title="${escapeHtml(type || '')}">${escapeHtml(status)}</span>`;
+}
 async function toggleDayNotice_(key, btn) {
   const wasDone = !!(dayNoticeStatuses[key] && dayNoticeStatuses[key].done);
   const newDone = !wasDone;
@@ -3728,6 +3740,13 @@ async function refreshPermissions() {
     const res = await callApi('getPermissionsRange', { from, to });
     lastPermissionsRows = res.rows;
     document.getElementById('permissions-empty').style.display = lastPermissionsRows.length ? 'none' : 'block';
+    const bannerEl = document.getElementById('perm-last-date-banner');
+    if (res.lastEnteredDate) {
+      bannerEl.textContent = `📅 آخر تاريخ مُدخل في بيانات الاستئذانات: ${res.lastEnteredDate}`;
+      bannerEl.style.display = 'inline-block';
+    } else {
+      bannerEl.style.display = 'none';
+    }
     renderPermissionsKpis();
     renderPermTypeFilters();
     renderPermissionsTable();
@@ -3790,7 +3809,7 @@ function renderPermissionsTable() {
         <td><bdi>${escapeHtml(r.requestId)}</bdi></td>
         <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
         <td>${escapeHtml(r.fromDate)}</td>
-        <td>${escapeHtml(r.toDate) !== escapeHtml(r.fromDate) ? escapeHtml(r.toDate) : '—'}</td>
+        <td>${escapeHtml(r.toDate)}</td>
         <td>${escapeHtml(r.fromTime) || '—'}</td>
         <td>${escapeHtml(r.toTime) || '—'}</td>
         <td>${escapeHtml(r.type) || '—'}</td>
@@ -3833,7 +3852,7 @@ document.getElementById('btn-print-permissions').addEventListener('click', () =>
   const trs = rows.map((r, i) => `
     <tr>
       <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.fromDate)}</td><td>${escapeHtml(r.toDate) !== escapeHtml(r.fromDate) ? escapeHtml(r.toDate) : '—'}</td>
+      <td>${escapeHtml(r.fromDate)}</td><td>${escapeHtml(r.toDate)}</td>
       <td>${escapeHtml(r.fromTime) || '—'}</td><td>${escapeHtml(r.toTime) || '—'}</td>
       <td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.status)}</td>
     </tr>`).join('');

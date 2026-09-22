@@ -809,7 +809,8 @@
             </div>
             <button class="primary" id="btn-refresh-departure" style="align-self:flex-end">تحديث</button>
             <div class="view-toggle" style="align-self:flex-end">
-              <button type="button" class="active" data-deptab="early">الخروج قبل نهاية الدوام</button>
+              <button type="button" class="active" data-deptab="early">قبل إكمال ٤ ساعات عمل</button>
+              <button type="button" data-deptab="earlyend">قبل نهاية الدوام الرسمي</button>
               <button type="button" data-deptab="nocheckout">عدم تسجيل انصراف</button>
             </div>
           </div>
@@ -846,6 +847,27 @@
           <div class="card" id="dep-early-grouped-view" style="display:none">
             <div id="dep-early-grouped-list"></div>
             <p class="muted" id="dep-early-grouped-empty" style="display:none">لا توجد حالات في هذه الفترة.</p>
+          </div>
+        </div>
+
+        <div id="dep-earlyend-section" style="display:none">
+          <p class="muted" style="font-size:12px; margin:0 0 10px">يظهر من انصرف قبل موعد نهاية الدوام الرسمي — بغضّ النظر عن اكتمال ٤ ساعات عمل من عدمه.</p>
+          <div class="kpi-row" id="dep-earlyend-kpis"></div>
+          <div class="card">
+            <div class="table-toolbar no-print">
+              <input type="search" id="dep-earlyend-search" placeholder="ابحث بالاسم…">
+              <div class="toolbar-spacer"></div>
+              <button class="ghost" id="btn-export-dep-earlyend-excel">تصدير Excel</button>
+            </div>
+            <div style="max-height:520px; overflow:auto">
+              <table id="dep-earlyend-table">
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>نهاية الدوام</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th><th>الاستئذان</th><th>الحالة</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" id="dep-earlyend-empty" style="display:none">لا توجد حالات انصراف قبل نهاية الدوام الرسمي في هذه الفترة.</p>
+            <p class="muted" id="dep-earlyend-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
+            <div id="dep-earlyend-msg"></div>
           </div>
         </div>
 
@@ -3446,6 +3468,8 @@ function parseHoursRawToMinutes_(hoursRaw) {
 
 let lastDepEarlyRows = [];
 let lastDepEarlyExcusedCount = 0;
+let lastDepEarlyEndRows = [];
+let lastDepEarlyEndExcusedMinutes = 0;
 let lastDepNcRows = [];
 
 async function refreshDeparture() {
@@ -3471,12 +3495,20 @@ async function refreshDeparture() {
       return mins != null && mins < 240;
     }).length;
     lastDepNcRows = res.rows.filter((r) => String(r.noCheckout) === 'true');
+    // "قبل نهاية الدوام الرسمي": معيار مختلف تماماً عن الأعلى — دقائق الانصراف قبل الموعد
+    // الرسمي مباشرة (earlyMinutes، صافية بالفعل من أي استئذان معتمد يغطيها جزئياً أو كلياً)،
+    // بغضّ النظر عن إجمالي ساعات العمل بذلك اليوم.
+    lastDepEarlyEndRows = res.rows.filter((r) => Number(r.earlyMinutes) > 0);
+    lastDepEarlyEndExcusedMinutes = res.rows.reduce((s, r) => s + (Number(r.excusedEarlyMinutes) || 0), 0);
 
     document.getElementById('dep-early-empty').style.display = lastDepEarlyRows.length ? 'none' : 'block';
+    document.getElementById('dep-earlyend-empty').style.display = lastDepEarlyEndRows.length ? 'none' : 'block';
     document.getElementById('dep-nc-empty').style.display = lastDepNcRows.length ? 'none' : 'block';
     renderDepEarlyKpis();
     renderDepEarlyTable();
     renderDepEarlyGrouped();
+    renderDepEarlyEndKpis();
+    renderDepEarlyEndTable();
     renderDepNcKpis();
     renderDepNcTable();
     msgEl.innerHTML = '';
@@ -3492,6 +3524,7 @@ document.querySelectorAll('button[data-deptab]').forEach((btn) => {
     btn.classList.add('active');
     const mode = btn.dataset.deptab;
     document.getElementById('dep-early-section').style.display = mode === 'early' ? 'block' : 'none';
+    document.getElementById('dep-earlyend-section').style.display = mode === 'earlyend' ? 'block' : 'none';
     document.getElementById('dep-nocheckout-section').style.display = mode === 'nocheckout' ? 'block' : 'none';
   });
 });
@@ -3600,6 +3633,96 @@ document.querySelector('#dep-early-table tbody').addEventListener('click', (ev) 
     toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
   }
 });
+
+// ---------- قبل نهاية الدوام الرسمي ----------
+function renderDepEarlyEndKpis() {
+  const total = lastDepEarlyEndRows.length;
+  const totalMinutes = lastDepEarlyEndRows.reduce((s, r) => s + Number(r.earlyMinutes), 0);
+  const byTeacher = {};
+  lastDepEarlyEndRows.forEach((r) => { byTeacher[r.name] = (byTeacher[r.name] || 0) + Number(r.earlyMinutes); });
+  const top = Object.entries(byTeacher).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('dep-earlyend-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي الحالات</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">إجمالي دقائق الانصراف المبكر</div><div class="kpi-value">${formatMinutesAsHM(totalMinutes)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">الأكثر تكراراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' دقيقة' : ''}</div></div>
+    ${lastDepEarlyEndExcusedMinutes ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد (د)</div><div class="kpi-value" style="color:var(--good)">${lastDepEarlyEndExcusedMinutes}</div><div class="kpi-sub">مطروحة من الأرقام أعلاه</div></div>` : ''}
+  `;
+}
+
+function renderDepEarlyEndTable() {
+  const q = document.getElementById('dep-earlyend-search').value.trim().toLowerCase();
+  const rows = lastDepEarlyEndRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const tbody = document.querySelector('#dep-earlyend-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.date)}</td>
+        <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</td>
+        <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td>
+        <td class="status-late">${r.earlyMinutes}</td>
+        <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
+        <td>${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}</td>
+        <td><button class="small btn-print-mesaalah-day-earlyend">مسألة</button></td>
+      </tr>`).join('');
+  document.getElementById('dep-earlyend-search-empty').style.display = (lastDepEarlyEndRows.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('dep-earlyend-search').addEventListener('input', renderDepEarlyEndTable);
+document.getElementById('btn-export-dep-earlyend-excel').addEventListener('click', () => {
+  if (!lastDepEarlyEndRows.length) return;
+  const rows = lastDepEarlyEndRows.map((r) => ({
+    'التاريخ': r.date, 'الاسم': r.name, 'نهاية الدوام': r.schedEnd || '', 'وقت الانصراف': r.checkOut || '', 'دقائق الانصراف المبكر': r.earlyMinutes,
+  }));
+  const from = document.getElementById('dep-from').value, to = document.getElementById('dep-to').value;
+  exportRowsToExcel(`انصراف_قبل_نهاية_الدوام_${from}_${to}.xlsx`, 'قبل نهاية الدوام', rows);
+});
+document.querySelector('#dep-earlyend-table tbody').addEventListener('click', (ev) => {
+  if (ev.target.classList.contains('btn-print-mesaalah-day-earlyend')) {
+    const tr = ev.target.closest('tr');
+    const row = lastDepEarlyEndRows.find((r) => String(r.id) === tr.dataset.id);
+    if (row) {
+      printEarlyEndEshaarSingle_(row);
+      callApi('markActionDone', { key: dayNoticeKey_('earlyend', row.civil, row.date), civil: row.civil, done: true })
+        .then(() => { dayNoticeStatuses[dayNoticeKey_('earlyend', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderDepEarlyEndTable(); })
+        .catch(() => {});
+    }
+    return;
+  }
+  if (ev.target.classList.contains('btn-toggle-day-notice')) {
+    toggleDayNotice_(ev.target.dataset.noticeKey, ev.target);
+  }
+});
+
+// نموذج إشعار انصراف قبل نهاية الدوام الرسمي — يختلف عن إشعار "قبل إكمال ٤ ساعات" بأن
+// معياره موعد الدوام الرسمي نفسه، لا إجمالي ساعات العمل بذلك اليوم.
+function printEarlyEndEshaarSingle_(row) {
+  const cfg = loadConfig();
+  const d = isoToLocalDate(row.date);
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'إشعار انصراف قبل نهاية الدوام الرسمي',
+    titleLine: 'إشعار انصراف قبل نهاية الدوام الرسمي',
+  });
+  const tableRow = `<tr><td>1</td><td>${escapeHtml(row.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td><td>${escapeHtml(toArabicAmPmTime(row.schedEnd)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(row.checkOut)) || '—'}</td><td class="pr-late-cell">${formatMinutesAsHM(row.earlyMinutes)}</td></tr>`;
+  const body = `
+    <div class="pr-page">
+      ${header}
+      <p style="font-size:10pt; line-height:1.9">
+        المكرم/ة الموظف/ة: <b>${escapeHtml(row.name)}</b><br>
+        رقم السجل المدني: ${escapeHtml(row.civil)}<br>
+        السلام عليكم ورحمة الله وبركاته، وبعد...<br>
+        لوحظ <b>انصرافكم قبل موعد نهاية الدوام الرسمي</b> بتاريخ ${formatDateDMY(row.date)} يوم ${WEEKDAYS_FULL_AR[d.getDay()]}، إذ كان موعد نهاية الدوام <b>${escapeHtml(toArabicAmPmTime(row.schedEnd)) || '—'}</b> بينما كان انصرافكم الفعلي <b>${escapeHtml(toArabicAmPmTime(row.checkOut)) || '—'}</b>، بفارق <b>${formatMinutesAsHM(row.earlyMinutes)}</b>.
+      </p>
+      <table class="pr-table">
+        <thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>نهاية الدوام</th><th>وقت الانصراف</th><th>مدة الانصراف المبكر</th></tr></thead>
+        <tbody>${tableRow}</tbody>
+      </table>
+      <p style="font-size:9.5pt; margin-top:10pt">نأمل منكم التكرم بإيضاح أسباب ذلك في المساحة المخصصة أدناه، وإعادتها لإدارة المدرسة.</p>
+      <div class="pr-section-title">إفادة الموظف/ة</div>
+      <div class="pr-note-box"></div>
+      <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
+      ${buildReportFooterHtml()}
+    </div>`;
+  printInPage(PERIOD_REPORT_STYLE, body);
+}
 
 // ---------- عدم تسجيل انصراف ----------
 function renderDepNcKpis() {

@@ -981,6 +981,13 @@
           <button class="primary" id="btn-save-schedule">حفظ إعدادات الدوام والعطل</button>
           <span class="muted" id="schedule-status"></span>
         </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">صيانة</h3>
+          <p class="muted">استخدم هذا الزر بعد أي تحديث لملف Code.gs في Apps Script — تحديثات الكود لا تُفرِغ الذاكرة المؤقتة تلقائياً كما تفعل عمليات الاستيراد والتعديل، فقد تستمر البيانات القديمة بالظهور حتى ست ساعات بلا هذه الخطوة.</p>
+          <button class="ghost" id="btn-clear-cache">تفريغ الذاكرة المؤقتة</button>
+          <span class="muted" id="clear-cache-status"></span>
+        </div>
       </section>
 
       <section id="view-summary" style="display:none">
@@ -2322,7 +2329,7 @@ document.querySelectorAll('button[data-logtab]').forEach((btn) => {
 
 // ==================== سجل التأخر (داخل نفس تبويب سجل الغياب والتأخر) ====================
 let lastLateRows = [];
-let lastLateExcusedCount = 0;
+let lastLateExcusedMinutes = 0;
 let lateSevFilter = '';
 let lateViewMode = 'table';
 
@@ -2341,8 +2348,10 @@ async function refreshLate() {
   msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل التأخر…</div>';
   try {
     const res = await callApi('getAttendanceRange', { from, to });
-    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0 && !r.excusedLate);
-    lastLateExcusedCount = res.rows.filter((r) => Number(r.lateMinutes) > 0 && r.excusedLate).length;
+    // lateMinutes هنا صافية بالفعل من الخادم (بعد طرح ما يغطّيه استئذان معتمد نسبياً) —
+    // صف بقي فيه تأخير حقيقي (ولو جزئياً بعد الاستثناء) يبقى ظاهراً برقمه المخفَّض.
+    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0);
+    lastLateExcusedMinutes = res.rows.reduce((s, r) => s + (Number(r.excusedLateMinutes) || 0), 0);
     document.getElementById('late-empty').style.display = lastLateRows.length ? 'none' : 'block';
     renderLateKpis();
     renderLateTable();
@@ -2365,7 +2374,7 @@ function renderLateKpis() {
     <div class="kpi-card"><div class="kpi-label">إجمالي دقائق التأخر</div><div class="kpi-value">${formatMinutesAsHM(totalMinutes)}</div></div>
     <div class="kpi-card"><div class="kpi-label">تأخر كبير (أكثر من ٣٠د)</div><div class="kpi-value" style="color:${heavy ? 'var(--bad)' : 'inherit'}">${heavy}</div></div>
     <div class="kpi-card"><div class="kpi-label">الأكثر تأخراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' دقيقة' : ''}</div></div>
-    ${lastLateExcusedCount ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد</div><div class="kpi-value" style="color:var(--good)">${lastLateExcusedCount}</div><div class="kpi-sub">لا تظهر بالجدول أدناه</div></div>` : ''}
+    ${lastLateExcusedMinutes ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد (د)</div><div class="kpi-value" style="color:var(--good)">${lastLateExcusedMinutes}</div><div class="kpi-sub">مطروحة من الأرقام أدناه</div></div>` : ''}
   `;
 }
 
@@ -3907,6 +3916,7 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
       ].sort((a, b) => a.date.localeCompare(b.date));
 
       let presentDays = 0, absenceDays = 0, lateDays = 0, lateMinutes = 0, earlyMinutes = 0, noCheckout = 0, excused = 0, unexcused = 0;
+      let excusedLateMinutes = 0, excusedEarlyMinutes = 0;
       const rows = events.map((e, i) => {
         const d = isoToLocalDate(e.date);
         const dayName = WEEKDAYS_FULL_AR[d.getDay()];
@@ -3915,13 +3925,16 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
           const late = Number(e.lateMinutes) || 0, early = Number(e.earlyMinutes) || 0;
           if (late > 0) { lateDays++; lateMinutes += late; }
           if (early > 0) earlyMinutes += early;
+          excusedLateMinutes += Number(e.excusedLateMinutes) || 0;
+          excusedEarlyMinutes += Number(e.excusedEarlyMinutes) || 0;
           if (String(e.noCheckout) === 'true') noCheckout++;
+          const excusedNote = (e.excusedLateMinutes || e.excusedEarlyMinutes) ? ` (استُثني ${(Number(e.excusedLateMinutes) || 0) + (Number(e.excusedEarlyMinutes) || 0)}د باستئذان)` : '';
           return `<tr>
             <td>${i + 1}</td><td>${escapeHtml(e.date)}</td><td>${escapeHtml(dayName)}</td>
             <td class="${late > 0 ? 'pr-late-cell' : ''}">${escapeHtml(toArabicAmPmTime(e.checkIn)) || '—'}</td>
             <td>${String(e.noCheckout) === 'true' ? '—' : (escapeHtml(toArabicAmPmTime(e.checkOut)) || '—')}</td>
             <td>${late || '—'}</td><td>${early || '—'}</td>
-            <td>${late > 0 ? 'متأخر' : 'حاضر'}</td><td>—</td>
+            <td>${late > 0 ? 'متأخر' : 'حاضر'}</td><td>${excusedNote || '—'}</td>
           </tr>`;
         }
         absenceDays++;
@@ -3938,14 +3951,18 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
         titleLine: 'كشف حضور وانصراف معلم',
         subtitleHtml: `<bdi>${escapeHtml(t.name)}</bdi> — السجل المدني: <bdi>${escapeHtml(t.civil)}</bdi> — ${dateRangeHtml_(p.from, p.to)}`,
       });
-      const stats = buildStatCardsHtml([
+      const statCards = [
         { value: presentDays, label: 'أيام الحضور' },
         { value: absenceDays, label: 'أيام الغياب', tone: absenceDays ? 'bad' : '' },
         { value: unexcused, label: 'بدون عذر', tone: unexcused ? 'bad' : '' },
         { value: lateMinutes, label: 'دقائق التأخر', tone: lateMinutes ? 'warn' : '' },
         { value: earlyMinutes, label: 'دقائق الانصراف المبكر' },
         { value: noCheckout, label: 'بدون بصمة' },
-      ]);
+      ];
+      if (excusedLateMinutes + excusedEarlyMinutes > 0) {
+        statCards.push({ value: excusedLateMinutes + excusedEarlyMinutes, label: 'مستثنى باستئذان معتمد (د)' });
+      }
+      const stats = buildStatCardsHtml(statCards);
       const table = `<table class="pr-table"><thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>الحضور</th><th>الانصراف</th><th>التأخر (د)</th><th>مبكر (د)</th><th>الحالة</th><th>السبب/الملاحظة</th></tr></thead><tbody>${rows}</tbody></table>`;
       return `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`;
     });
@@ -3961,10 +3978,15 @@ document.getElementById('btn-dr-late').addEventListener('click', async () => {
   try {
     const cfg = loadConfig();
     const attRes = await callApi('getAttendanceRange', p);
+    // مدة التأخر هنا تُعرَض كاملة كما سُجِّلت فعلياً (لا صافية بعد الاستثناء) — التقرير سجل
+    // توثيقي يعرض الرقمين معاً (التأخر الكامل + مدة الاستئذان إن وُجد) ليحكم القارئ بنفسه،
+    // بدل استبعاد الاستئذانات الجزئية بصمت كما يحدث بشاشة "سجل الغياب والتأخر" التفاعلية.
     const lateRows = attRes.rows
-      .filter((r) => Number(r.lateMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => (Number(r.lateMinutes) + (Number(r.excusedLateMinutes) || 0)) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .map((r) => ({ ...r, rawLateMinutes: Number(r.lateMinutes) + (Number(r.excusedLateMinutes) || 0) }))
       .sort((a, b) => a.date.localeCompare(b.date));
-    const totalMinutes = lateRows.reduce((s, r) => s + Number(r.lateMinutes), 0);
+    const totalMinutes = lateRows.reduce((s, r) => s + r.rawLateMinutes, 0);
+    const totalPermissionMinutes = lateRows.reduce((s, r) => s + (Number(r.latePermissionDurationMin) || 0), 0);
     const distinctCivils = new Set(lateRows.map((r) => r.civil)).size;
     const avg = lateRows.length ? Math.round(totalMinutes / lateRows.length) : 0;
     const header = buildPeriodReportHeader({
@@ -3980,14 +4002,17 @@ document.getElementById('btn-dr-late').addEventListener('click', async () => {
     ]);
     const rows = lateRows.map((r, i) => {
       const d = isoToLocalDate(r.date);
+      const permCell = r.latePermissionDurationMin != null
+        ? `<span class="${r.latePermissionStatus === 'مقبول' ? 'status-ok' : r.latePermissionStatus === 'مرفوض' ? 'status-absent' : 'status-late'}" title="${escapeHtml(r.latePermissionType || '')} — ${escapeHtml(r.latePermissionStatus || '')}">${formatMinutesAsHM(r.latePermissionDurationMin)}</span>`
+        : '—';
       return `<tr>
         <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td>
         <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
-        <td class="pr-late-cell">${formatMinutesAsHM(r.lateMinutes)}</td><td>—</td>
+        <td class="pr-late-cell">${formatMinutesAsHM(r.rawLateMinutes)}</td><td>${permCell}</td>
       </tr>`;
     }).join('') || '<tr><td colspan="8">لا حالات تأخير في هذه الفترة</td></tr>';
-    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>مدة التأخر</th><th>الإشعارات</th></tr></thead>
-      <tbody>${rows}<tr class="pr-total"><td colspan="6">الإجمالي</td><td colspan="2">${formatMinutesAsHM(totalMinutes)}</td></tr></tbody></table>`;
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>مدة التأخر</th><th>الاستئذان</th></tr></thead>
+      <tbody>${rows}<tr class="pr-total"><td colspan="6">الإجمالي</td><td>${formatMinutesAsHM(totalMinutes)}</td><td>${totalPermissionMinutes ? formatMinutesAsHM(totalPermissionMinutes) : '—'}</td></tr></tbody></table>`;
     printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
     drDone_();
   } catch (err) { drFail_(err); }
@@ -4516,6 +4541,17 @@ document.getElementById('btn-save-schedule').addEventListener('click', async () 
   try {
     await callApi('saveSettings', { settings: currentSettings });
     statusEl.textContent = 'تم الحفظ ✔';
+  } catch (err) {
+    statusEl.textContent = 'خطأ: ' + err.message;
+  }
+});
+
+document.getElementById('btn-clear-cache').addEventListener('click', async () => {
+  const statusEl = document.getElementById('clear-cache-status');
+  statusEl.textContent = 'جارٍ التفريغ...';
+  try {
+    await callApi('clearCache', {});
+    statusEl.textContent = 'تم — أعد تحميل الصفحة الآن لترى البيانات المحدَّثة ✔';
   } catch (err) {
     statusEl.textContent = 'خطأ: ' + err.message;
   }

@@ -834,7 +834,7 @@
             </div>
             <div style="max-height:520px; overflow:auto">
               <table id="dep-early-table">
-                <thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th><th>الحالة</th><th></th></tr></thead>
+                <thead><tr><th>التاريخ</th><th>الاسم</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th><th>الاستئذان</th><th>الحالة</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -2383,7 +2383,7 @@ function renderLateTable() {
         <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td>
         <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
         <td class="status-late">${r.lateMinutes}</td>
-        <td>${permissionBadgeHtml_(r.permissionStatus, r.permissionType)}</td>
+        <td>${permissionBadgeHtml_(r.latePermissionStatus, r.latePermissionType)}</td>
         <td>${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-late">مسألة</button></td>
       </tr>`).join('');
@@ -3508,6 +3508,7 @@ function renderDepEarlyTable() {
         <td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
         <td class="status-late">${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td>
         <td class="status-late">${escapeHtml(r.hoursRaw) || '—'}</td>
+        <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
         <td>${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-early">مسألة</button></td>
       </tr>`).join('');

@@ -1665,7 +1665,7 @@ function renderBatchImportTable() {
     let statusHtml = '<span class="muted">بانتظار</span>';
     if (f.error) statusHtml = `<span style="color:var(--bad)">✕ ${escapeHtml(f.error)}</span>`;
     else if (f.status === 'saving') statusHtml = '<span class="msg-loading" style="padding:0">جارٍ الحفظ…</span>';
-    else if (f.status === 'done') statusHtml = `<span style="color:var(--good)">✔ تم — ${f.result.presentCount} حاضر، ${f.result.absentCount} غائب</span>`;
+    else if (f.status === 'done') statusHtml = `<span style="color:var(--good)">✔ تم — ${f.result.presentCount} حاضر، ${f.result.absentCount} غائب</span>${f.result.skippedUnmatchedCount ? `<br><span style="color:var(--warn);font-size:11px">⚠️ ${f.result.skippedUnmatchedCount} صف بلا معلّم مطابق</span>` : ''}`;
     else if (f.status === 'failed') statusHtml = `<span style="color:var(--bad)">✕ فشل: ${escapeHtml(f.failReason || '')}</span>`;
     return `
       <tr data-idx="${i}">
@@ -1791,7 +1791,10 @@ async function processPermissionsFile_(file) {
 
     msgEl.innerHTML = '<div class="msg-loading">جارٍ الاستيراد…</div>';
     const res = await callApi('importPermissions', { rows });
-    msgEl.innerHTML = `<div class="msg ok">تم استيراد ${res.imported} طلباً — صُنِّف تلقائياً ${res.classifiedDays} يوم غياب بعذر مطابق.</div>`;
+    const malformedWarning = res.malformedDateCount
+      ? `<br><span style="color:var(--warn)">⚠️ ${res.malformedDateCount} طلب "مقبول" بتاريخ غير قياسي لم يُصنَّف — تحقّق من صيغة التاريخ بالملف (يجب أن تكون yyyy-MM-dd).</span>`
+      : '';
+    msgEl.innerHTML = `<div class="msg ok">تم استيراد ${res.imported} طلباً — صُنِّف تلقائياً ${res.classifiedDays} يوم غياب بعذر مطابق.${malformedWarning}</div>`;
     document.getElementById('permissions-file-input').value = '';
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
@@ -1817,7 +1820,10 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
       schedLabel: document.getElementById('imp-sched-label').value.trim(),
       rows: parsedRows,
     });
-    document.getElementById('import-msg').innerHTML = `<div class="msg ok">تم الاستيراد: ${res.presentCount} حاضر، ${res.absentCount} غائب.</div>`;
+    const skipWarning = res.skippedUnmatchedCount
+      ? `<br><span style="color:var(--warn)">⚠️ تم تجاهل ${res.skippedUnmatchedCount} صفاً بسجل مدني غير مطابق لأي معلّم بالروستر${res.skippedUnmatchedCivils && res.skippedUnmatchedCivils.length ? ' (مثال: ' + res.skippedUnmatchedCivils.slice(0, 5).map(escapeHtml).join('، ') + ')' : ''} — تحقّق من الروستر أو من الملف.</span>`
+      : '';
+    document.getElementById('import-msg').innerHTML = `<div class="msg ok">تم الاستيراد: ${res.presentCount} حاضر، ${res.absentCount} غائب.${skipWarning}</div>`;
     if (document.getElementById('dash-date').value === date) refreshDashboard();
   } catch (err) {
     document.getElementById('import-msg').innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
@@ -2697,7 +2703,7 @@ function renderSummaryHighlights() {
     .filter((e) => e.absenceDays > 0 || e.lateMinutes > 0 || e.earlyMinutes > 0).slice(0, 3);
   const breakdown = (e) => `غياب ${e.absenceDays}ي · تأخير ${e.lateMinutes}د · مبكر ${e.earlyMinutes}د`;
   const listHtml = (list, emptyMsg) => list.length
-    ? list.map((e, i) => `<div class="il-row"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span style="font-size:11px">${breakdown(e)}</span></div>`).join('')
+    ? list.map((e, i) => `<div class="il-row" data-civil="${escapeHtml(e.civil)}"><span><span class="rank-medal">${rankMedal_(i + 1)}</span>${avatarHtml_(e.name, 18)}${escapeHtml(e.name)}</span><span style="font-size:11px">${breakdown(e)}</span></div>`).join('')
     : `<div class="muted" style="font-size:12px">${emptyMsg}</div>`;
   el.innerHTML = `
     <div class="kpi-card tone-ok" style="text-align:right">
@@ -2785,9 +2791,7 @@ document.querySelector('#summary-table tbody').addEventListener('click', (ev) =>
 document.getElementById('sum-highlights').addEventListener('click', (ev) => {
   const row = ev.target.closest('.il-row');
   if (!row) return;
-  const nameText = row.querySelector('span').textContent;
-  const match = lastSummaryList.find((e) => e.name === nameText);
-  if (match) jumpToEmployeeReport(String(match.civil));
+  jumpToEmployeeReport(row.dataset.civil);
 });
 
 // ---------- فترات جاهزة ----------
@@ -2820,7 +2824,18 @@ document.getElementById('btn-print-summary-official').addEventListener('click', 
   const to = document.getElementById('sum-to').value;
   const rows = lastSummaryList.slice().sort((a, b) => {
     const av = a[sumSortKey], bv = b[sumSortKey];
-    const cmp = sumSortKey === 'name' ? String(av || '').localeCompare(String(bv || ''), 'ar') : (Number(av) || 0) - (Number(bv) || 0);
+    if (sumSortKey === 'name') {
+      const cmp = String(av || '').localeCompare(String(bv || ''), 'ar');
+      return sumSortDir === 'asc' ? cmp : -cmp;
+    }
+    // نفس منطق الجدول المعروض بالضبط: "لا توجد بيانات" تُدفَع لنهاية القائمة دائماً بدل
+    // معاملتها كصفر — وإلا يظهر ترتيب مختلف بين الشاشة والمستند المطبوع لنفس الفترة.
+    const aMissing = av === null || av === undefined;
+    const bMissing = bv === null || bv === undefined;
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    const cmp = Number(av) - Number(bv);
     return sumSortDir === 'asc' ? cmp : -cmp;
   });
   const header = buildPeriodReportHeader({
@@ -4100,22 +4115,25 @@ document.getElementById('btn-dr-late').addEventListener('click', async () => {
   if (!p) return;
   try {
     const cfg = loadConfig();
-    const attRes = await callApi('getAttendanceRange', p);
     // مدة التأخر هنا تُعرَض كاملة كما سُجِّلت فعلياً (لا صافية بعد الاستثناء) — التقرير سجل
     // توثيقي يعرض الرقمين معاً (التأخر الكامل + مدة الاستئذان إن وُجد) ليحكم القارئ بنفسه،
     // بدل استبعاد الاستئذانات الجزئية بصمت كما يحدث بشاشة "سجل الغياب والتأخر" التفاعلية.
+    const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
     const lateRows = attRes.rows
-      .filter((r) => (Number(r.lateMinutes) + (Number(r.excusedLateMinutes) || 0)) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => Number(r.lateMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
       .map((r) => ({ ...r, rawLateMinutes: Number(r.lateMinutes) + (Number(r.excusedLateMinutes) || 0) }))
       .sort((a, b) => a.date.localeCompare(b.date));
     const totalMinutes = lateRows.reduce((s, r) => s + r.rawLateMinutes, 0);
     const totalPermissionMinutes = lateRows.reduce((s, r) => s + (Number(r.latePermissionDurationMin) || 0), 0);
     const distinctCivils = new Set(lateRows.map((r) => r.civil)).size;
     const avg = lateRows.length ? Math.round(totalMinutes / lateRows.length) : 0;
+    // اسم المعلّم يُؤخذ من الروستر الفعلي لا من أول سجل مُصفّى — معلّم بلا أي حالة تأخير
+    // بالفترة (٠ سجلات) كان يظهر اسمه فارغاً بمستند رسمي مطبوع لو اعتمدنا على lateRows[0].
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
     const header = buildPeriodReportHeader({
       schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف التأخر عن الدوام',
       titleLine: 'كشف التأخر عن الدوام',
-      subtitleHtml: `${p.civil ? escapeHtml((lateRows[0] && lateRows[0].name) || '') : 'جميع المعلمين'} — عدد الحالات: ${lateRows.length} — ${dateRangeHtml_(p.from, p.to)}`,
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات: ${lateRows.length} — ${dateRangeHtml_(p.from, p.to)}`,
     });
     const stats = buildStatCardsHtml([
       { value: avg + ' د', label: 'متوسط المرة' },
@@ -4147,16 +4165,17 @@ document.getElementById('btn-dr-absence').addEventListener('click', async () => 
   if (!p) return;
   try {
     const cfg = loadConfig();
-    const absRes = await callApi('getAbsenceRange', p);
+    const [absRes, teachersRes] = await Promise.all([callApi('getAbsenceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
     const rowsData = absRes.rows.filter((r) => !p.civil || String(r.civil) === p.civil).slice().sort((a, b) => a.date.localeCompare(b.date));
     const unclassified = rowsData.filter((r) => !r.classification).length;
     const excused = rowsData.filter((r) => r.classification === 'بعذر').length;
     const unexcused = rowsData.filter((r) => r.classification === 'بدون عذر').length;
     const distinctCivils = new Set(rowsData.map((r) => r.civil)).size;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
     const header = buildPeriodReportHeader({
       schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف الغياب',
       titleLine: 'كشف الغياب',
-      subtitleHtml: `${p.civil ? escapeHtml((rowsData[0] && rowsData[0].name) || '') : 'جميع المعلمين'} — عدد الحالات: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
     });
     const stats = buildStatCardsHtml([
       { value: unclassified, label: 'غير مصنف', tone: unclassified ? 'warn' : '' },
@@ -4194,8 +4213,15 @@ document.getElementById('btn-dr-daily-official').addEventListener('click', async
     if (p.civil) teachers = teachers.filter((t) => String(t.civil) === p.civil);
 
     const bodies = [];
+    const failedDates = []; // فشل يوم واحد لا يجب أن يُهدر كل الأيام التي جُلبت بنجاح قبله
     for (const date of dates) {
-      const dayRes = await callApi('getDay', { date });
+      let dayRes;
+      try {
+        dayRes = await callApi('getDay', { date });
+      } catch (err) {
+        failedDates.push(date);
+        continue;
+      }
       const attendanceByCivil = {}, absenceByCivil = {};
       dayRes.attendance.forEach((r) => (attendanceByCivil[String(r.civil)] = r));
       dayRes.absence.forEach((r) => (absenceByCivil[String(r.civil)] = r));
@@ -4209,10 +4235,16 @@ document.getElementById('btn-dr-daily-official').addEventListener('click', async
       const built = buildMinistryReportHtml({ schoolName: cfg.schoolName, adminName: cfg.adminName, dateISO: date, presentRows, absentRows });
       bodies.push(built.body);
     }
+    if (!bodies.length) { drFail_(new Error('تعذّر جلب أي يوم من أيام هذه الفترة — تحقّق من الاتصال وحاول مجدداً.')); return; }
+    // نُظهر تحذيراً واضحاً بالأيام التي تعذّر جلبها بدل التوقف الكامل — يطبع ما توفّر فعلياً
+    // ويترك للمستخدم إعادة محاولة الأيام الناقصة تحديداً بدل الفترة كاملة من جديد.
+    const failWarning = failedDates.length
+      ? `<div class="pr-page" style="text-align:center; padding-top:80pt"><h2 style="color:var(--bad,#b91c1c)">تعذّر جلب ${failedDates.length} يوماً من هذه الفترة</h2><p>${failedDates.map(escapeHtml).join('، ')}</p><p class="muted">اطبعها لاحقاً بشكل منفصل بعد التأكد من الاتصال.</p></div>`
+      : '';
     // نستخدم مقاس خط واحد موحَّد لكل الأيام مبنياً على إجمالي عدد المعلمين (لا حجم كل يوم
     // على حدة) — يضمن ثبات المظهر بين الصفحات ويصلح خللاً كان يتجاهل حساب المقاس تماماً
     // فيطبع دائماً بأكبر خط افتراضي، مما يدفع الكشوف الكبيرة (٣٠+ معلماً) لصفحة ثانية زائدة.
-    printInPage(MOE_REPORT_STYLE + '\n' + moeSizeVars_(teachers.length), bodies.join(''));
+    printInPage(MOE_REPORT_STYLE + '\n' + moeSizeVars_(teachers.length), failWarning + bodies.join(''));
     drDone_();
   } catch (err) { drFail_(err); }
 });

@@ -1180,6 +1180,7 @@
             <button class="primary rc-btn-wide" id="btn-dr-teachers">تقرير المعلمين</button>
             <button class="ghost" id="btn-dr-late">تقرير التأخر</button>
             <button class="ghost" id="btn-dr-absence">تقرير الغياب</button>
+            <button class="ghost" id="btn-dr-permissions">تقرير الاستئذانات</button>
             <button class="ghost" id="btn-dr-daily-official">الكشف الرسمي اليومي للفترة (يوم في كل صفحة)</button>
           </div>
           <p class="muted" style="font-size:11.5px; margin-top:10px">تُطبَع التقارير مباشرة على مقاس A4 بلا فتح نافذة جديدة.</p>
@@ -4060,19 +4061,27 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
         const dayName = WEEKDAYS_FULL_AR[d.getDay()];
         if (e.__type === 'present') {
           presentDays++;
-          const late = Number(e.lateMinutes) || 0, early = Number(e.earlyMinutes) || 0;
+          // التأخر/الانصراف هنا يُعرَضان كاملَين كما سُجِّلا فعلياً (لا صافيين) بناءً على طلب
+          // صريح — عمود "الاستئذان" المنفصل يوضّح ما استُثني منهما بدل خصمه بصمت من الرقم
+          // الظاهر، فيرى القارئ الرقم الحقيقي وسبب الاستثناء معاً بدل رقم مُخفَّض غامض.
+          const late = (Number(e.lateMinutes) || 0) + (Number(e.excusedLateMinutes) || 0);
+          const early = (Number(e.earlyMinutes) || 0) + (Number(e.excusedEarlyMinutes) || 0);
+          const excLate = Number(e.excusedLateMinutes) || 0;
+          const excEarly = Number(e.excusedEarlyMinutes) || 0;
           if (late > 0) { lateDays++; lateMinutes += late; }
           if (early > 0) earlyMinutes += early;
-          excusedLateMinutes += Number(e.excusedLateMinutes) || 0;
-          excusedEarlyMinutes += Number(e.excusedEarlyMinutes) || 0;
+          excusedLateMinutes += excLate;
+          excusedEarlyMinutes += excEarly;
           if (String(e.noCheckout) === 'true') noCheckout++;
-          const excusedNote = (e.excusedLateMinutes || e.excusedEarlyMinutes) ? ` (استُثني ${(Number(e.excusedLateMinutes) || 0) + (Number(e.excusedEarlyMinutes) || 0)}د باستئذان)` : '';
+          const permCell = excLate > 0 ? excLate : (excEarly > 0 ? excEarly : '—');
+          const noteText = excLate > 0 ? `استئذان تأخر (${excLate}د)` : excEarly > 0 ? `استئذان انصراف (${excEarly}د)` : '—';
           return `<tr>
             <td>${i + 1}</td><td>${escapeHtml(e.date)}</td><td>${escapeHtml(dayName)}</td>
             <td class="${late > 0 ? 'pr-late-cell' : ''}">${escapeHtml(toArabicAmPmTime(e.checkIn)) || '—'}</td>
             <td>${String(e.noCheckout) === 'true' ? '—' : (escapeHtml(toArabicAmPmTime(e.checkOut)) || '—')}</td>
             <td>${late || '—'}</td><td>${early || '—'}</td>
-            <td>${late > 0 ? 'متأخر' : 'حاضر'}</td><td>${excusedNote || '—'}</td>
+            <td>${permCell}</td>
+            <td>${late > 0 ? 'متأخر' : 'حاضر'}</td><td>${noteText}</td>
           </tr>`;
         }
         absenceDays++;
@@ -4080,9 +4089,10 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
         return `<tr>
           <td>${i + 1}</td><td>${escapeHtml(e.date)}</td><td>${escapeHtml(dayName)}</td>
           <td colspan="4" class="pr-absent-cell">غياب</td>
+          <td>—</td>
           <td class="pr-absent-cell">غائب</td><td>${escapeHtml(e.reason || e.note || '') || '—'}</td>
         </tr>`;
-      }).join('') || '<tr><td colspan="9">لا سجلات في هذه الفترة</td></tr>';
+      }).join('') || '<tr><td colspan="10">لا سجلات في هذه الفترة</td></tr>';
 
       const header = buildPeriodReportHeader({
         schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف حضور وانصراف معلم',
@@ -4101,7 +4111,7 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
         statCards.push({ value: excusedLateMinutes + excusedEarlyMinutes, label: 'مستثنى باستئذان معتمد (د)' });
       }
       const stats = buildStatCardsHtml(statCards);
-      const table = `<table class="pr-table"><thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>الحضور</th><th>الانصراف</th><th>التأخر (د)</th><th>مبكر (د)</th><th>الحالة</th><th>السبب/الملاحظة</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const table = `<table class="pr-table"><thead><tr><th>م</th><th>التاريخ</th><th>اليوم</th><th>الحضور</th><th>الانصراف</th><th>التأخر (د)</th><th>مبكر (د)</th><th>الاستئذان (د)</th><th>الحالة</th><th>السبب/الملاحظة</th></tr></thead><tbody>${rows}</tbody></table>`;
       return `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`;
     });
     printInPage(PERIOD_REPORT_STYLE, pages.join(''));
@@ -4194,6 +4204,43 @@ document.getElementById('btn-dr-absence').addEventListener('click', async () => 
     }).join('') || '<tr><td colspan="6">لا يوجد غياب في هذه الفترة</td></tr>';
     const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th></tr></thead>
       <tbody>${rows}<tr class="pr-total"><td colspan="5">إجمالي أيام الغياب</td><td>${rowsData.length}</td></tr></tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- تقرير الاستئذانات (معلّم واحد أو الكل) ----------
+document.getElementById('btn-dr-permissions').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    const [permRes, teachersRes] = await Promise.all([callApi('getPermissionsRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = permRes.rows.filter((r) => !p.civil || String(r.civil) === p.civil).slice().sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+    const accepted = rowsData.filter((r) => r.status === 'مقبول').length;
+    const rejected = rowsData.filter((r) => r.status === 'مرفوض').length;
+    const pending = rowsData.filter((r) => r.status === 'تحت الإجراء').length;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف طلبات الاستئذان',
+      titleLine: 'كشف طلبات الاستئذان',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — إجمالي الطلبات: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي الطلبات' },
+      { value: accepted, label: 'مقبول', tone: 'good' },
+      { value: rejected, label: 'مرفوض', tone: rejected ? 'bad' : '' },
+      { value: pending, label: 'تحت الإجراء', tone: pending ? 'warn' : '' },
+    ]);
+    const rows = rowsData.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.fromDate)}</td><td>${escapeHtml(r.toDate)}</td>
+        <td>${escapeHtml(r.fromTime) || '—'}</td><td>${escapeHtml(r.toTime) || '—'}</td>
+        <td>${escapeHtml(r.type) || '—'}</td>
+        <td class="${permStatusClass_(r.status)}">${escapeHtml(r.status)}</td>
+      </tr>`).join('') || '<tr><td colspan="8">لا توجد طلبات استئذان في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>من تاريخ</th><th>إلى تاريخ</th><th>من وقت</th><th>إلى وقت</th><th>النوع</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table>`;
     printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
     drDone_();
   } catch (err) { drFail_(err); }

@@ -1034,6 +1034,7 @@
                   <th class="sortable" data-key="unclassified">غير مصنف<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="lateMinutes">دقائق التأخير<span class="sort-arrow">▾</span></th>
                   <th class="sortable" data-key="earlyMinutes">دقائق الانصراف المبكر<span class="sort-arrow">▾</span></th>
+                  <th class="sortable" data-key="excusedTotal">مستثنى باستئذان (د)<span class="sort-arrow">▾</span></th>
                   <th class="sortable sort-active" data-key="violations">المخالفات<span class="sort-arrow">▾</span></th>
                   <th>الحالة</th>
                 </tr>
@@ -2595,7 +2596,7 @@ document.getElementById('btn-export-summary-excel').addEventListener('click', ()
   const rows = lastSummaryList.map((e) => ({
     'الرقم': e.num, 'الاسم': e.name, 'حضور': e.presentDays, 'نسبة الحضور': e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '', 'غياب': e.absenceDays,
     'بعذر': e.excused, 'بدون عذر': e.unexcused, 'غير مصنف': e.unclassified,
-    'دقائق التأخير': e.lateMinutes, 'دقائق الانصراف المبكر': e.earlyMinutes,
+    'دقائق التأخير': e.lateMinutes, 'دقائق الانصراف المبكر': e.earlyMinutes, 'مستثنى باستئذان (د)': e.excusedTotal,
     'المخالفات': e.violations,
   }));
   const from = document.getElementById('sum-from').value;
@@ -2630,6 +2631,7 @@ async function refreshSummary() {
       callApi('getAlerts', {}).catch(() => ({ approachingPenalty: [] })),
     ]);
     lastSummaryList = res.list;
+    lastSummaryList.forEach((e) => { e.excusedTotal = (e.excusedLateMinutes || 0) + (e.excusedEarlyMinutes || 0); });
     lastSummaryPrevList = prevRes.list || [];
     summaryActionCivils = new Set((penaltiesRes.list || []).map((e) => String(e.civil)));
     summaryApproachingMap = new Map((alertsRes.approachingPenalty || []).map((e) => [String(e.civil), e.remaining]));
@@ -2642,6 +2644,7 @@ async function refreshSummary() {
       <div class="kpi-card ${t.absenceDays ? 'tone-bad' : ''}"><div class="kpi-label">إجمالي أيام الغياب</div><div class="kpi-value" style="color:${t.absenceDays ? 'var(--bad)' : 'inherit'}">${t.absenceDays}</div></div>
       <div class="kpi-card ${t.lateMinutes ? 'tone-warn' : ''}"><div class="kpi-label">دقائق التأخير</div><div class="kpi-value" style="color:${t.lateMinutes ? 'var(--warn)' : 'inherit'}">${t.lateMinutes}</div></div>
       <div class="kpi-card"><div class="kpi-label">دقائق الانصراف المبكر</div><div class="kpi-value">${t.earlyMinutes}</div></div>
+      ${(t.excusedLateMinutes + t.excusedEarlyMinutes) > 0 ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد (د)</div><div class="kpi-value" style="color:var(--good)">${t.excusedLateMinutes + t.excusedEarlyMinutes}</div></div>` : ''}
     `;
     msgEl.innerHTML = '';
   } catch (err) {
@@ -2725,6 +2728,7 @@ function renderSummaryTable() {
         <td>${e.presentDays}</td><td>${renderRateCell(e.attendanceRate)}${trendHtml}</td><td>${e.absenceDays}</td>
         <td>${e.excused}</td><td>${e.unexcused}</td><td>${e.unclassified}</td>
         <td>${e.lateMinutes}</td><td>${e.earlyMinutes}</td>
+        <td>${e.excusedTotal > 0 ? `<span class="status-ok">${e.excusedTotal}</span>` : '0'}</td>
         <td>${e.violations > 0 ? '<b class="status-late">' + e.violations + '</b>' : '0'}</td>
         <td>${statusHtml}</td>
       </tr>`;
@@ -2798,9 +2802,10 @@ document.getElementById('btn-print-summary-official').addEventListener('click', 
       <td>${i + 1}</td><td>${escapeHtml(e.num)}</td><td class="pr-name">${escapeHtml(e.name)}</td>
       <td>${e.presentDays}</td><td>${e.attendanceRate != null ? Math.round(e.attendanceRate * 100) + '%' : '—'}</td>
       <td>${e.absenceDays}</td><td>${e.lateMinutes}</td><td>${e.earlyMinutes}</td>
+      <td>${(e.excusedLateMinutes || 0) + (e.excusedEarlyMinutes || 0)}</td>
       <td>${e.violations}</td>
     </tr>`).join('');
-  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>نسبة الحضور</th><th>غياب</th><th>دقائق التأخير</th><th>دقائق الانصراف المبكر</th><th>المخالفات</th></tr></thead><tbody>${trs}</tbody></table>`;
+  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الرقم</th><th>الاسم</th><th>حضور</th><th>نسبة الحضور</th><th>غياب</th><th>دقائق التأخير</th><th>دقائق الانصراف المبكر</th><th>مستثنى باستئذان (د)</th><th>المخالفات</th></tr></thead><tbody>${trs}</tbody></table>`;
   printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${table}${buildReportFooterHtml()}</div>`);
 });
 

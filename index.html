@@ -536,6 +536,7 @@
       <button data-tab="analytics"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
       <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب والتأخر</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
       <button data-tab="departure"><span class="icon" data-icon="logOut"></span><span>سجل الانصراف</span></button>
+      <button data-tab="permissions"><span class="icon" data-icon="clock"></span><span>الاستئذانات</span></button>
       <button data-tab="reports"><span class="icon" data-icon="fileText"></span><span>التقارير اليومية</span></button>
       <button data-tab="actions"><span class="icon" data-icon="alertTriangle"></span><span>الاجراءات</span></button>
       <button data-tab="settings"><span class="icon" data-icon="settings"></span><span>الإعدادات</span></button>
@@ -673,6 +674,19 @@
           </div>
           <button class="primary" id="btn-batch-import-all" style="margin-top:14px; width:100%">استيراد كل الملفات</button>
           <div id="batch-import-msg"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin-top:0">استيراد الاستئذانات</h3>
+          <p class="muted">ملف "تقرير الاستئذانات" من برنامج حضوري. الطلبات "مقبول" بلا وقت محدد تُصنَّف كغياب بعذر تلقائياً على اليوم/الأيام المطابقة، والطلبات "مقبول" بوقت محدد تُستثنى تلقائياً من قوائم التأخر والانصراف المبكر إن كانت تغطّي الفجوة بالكامل.</p>
+          <div class="dropzone" id="permissions-dropzone">
+            <div class="icon-circle"><span class="icon" data-icon="upload"></span></div>
+            <div style="font-weight:600">اختر ملف الاستئذانات من الجهاز</div>
+            <div class="muted" style="font-size:11.5px">xlsx · xls</div>
+            <button class="primary" id="btn-pick-permissions-file" style="margin-top:10px">اختيار الملف</button>
+            <input type="file" id="permissions-file-input" accept=".xlsx,.xls" style="display:none">
+          </div>
+          <div id="permissions-import-msg"></div>
         </div>
       </section>
 
@@ -853,6 +867,49 @@
             <p class="muted" id="dep-nc-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
             <div id="dep-nc-msg"></div>
           </div>
+        </div>
+      </section>
+
+      <section id="view-permissions" style="display:none">
+        <div class="card">
+          <div class="row">
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="perm-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="perm-to">
+            </div>
+            <button class="primary" id="btn-refresh-permissions" style="align-self:flex-end">تحديث</button>
+            <button class="ghost" id="btn-print-permissions" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة</button>
+          </div>
+        </div>
+
+        <div class="kpi-row" id="perm-kpis"></div>
+
+        <div class="card">
+          <div class="table-toolbar no-print">
+            <button class="ghost" id="btn-export-permissions-excel">تصدير Excel</button>
+            <button type="button" class="filter-chip active" data-status="">الكل</button>
+            <button type="button" class="filter-chip" data-status="مقبول">مقبول</button>
+            <button type="button" class="filter-chip" data-status="مرفوض">مرفوض</button>
+            <button type="button" class="filter-chip" data-status="تحت الإجراء">تحت الإجراء</button>
+            <div class="toolbar-spacer"></div>
+            <input type="search" id="perm-search" placeholder="ابحث بالاسم…">
+          </div>
+          <div class="table-toolbar no-print" id="perm-type-filters" style="margin-top:8px"></div>
+          <div style="max-height:560px; overflow:auto">
+            <table id="permissions-table">
+              <thead>
+                <tr><th>رقم الطلب</th><th>الاسم</th><th>من تاريخ</th><th>إلى تاريخ</th><th>من وقت</th><th>إلى وقت</th><th>النوع</th><th>الحالة</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="permissions-empty" style="display:none">لا توجد طلبات استئذان في هذه الفترة.</p>
+          <p class="muted" id="permissions-search-empty" style="display:none">لا نتائج مطابقة.</p>
+          <div id="permissions-msg"></div>
         </div>
       </section>
 
@@ -1257,8 +1314,8 @@ function formatDayLabel(iso) {
 }
 
 // ---------- Tabs ----------
-const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'departure', 'reports', 'actions', 'settings'];
-const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب والتأخر', departure: 'سجل الانصراف', reports: 'التقارير اليومية', actions: 'الاجراءات', settings: 'الإعدادات' };
+const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'departure', 'permissions', 'reports', 'actions', 'settings'];
+const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب والتأخر', departure: 'سجل الانصراف', permissions: 'الاستئذانات', reports: 'التقارير اليومية', actions: 'الاجراءات', settings: 'الإعدادات' };
 let currentTab = 'dashboard';
 function showTab(name) {
   currentTab = name;
@@ -1290,6 +1347,17 @@ function showTab(name) {
       });
     } else {
       refreshDayNoticeStatuses().then(() => refreshDeparture());
+    }
+  }
+  if (name === 'permissions') {
+    if (!document.getElementById('perm-from').value) {
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('perm-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('perm-to').value = to;
+        refreshPermissions();
+      });
+    } else {
+      refreshPermissions();
     }
   }
   if (name === 'settings') {
@@ -1632,6 +1700,72 @@ document.getElementById('btn-batch-import-all').addEventListener('click', async 
   btn.disabled = false;
   refreshDashboard();
 });
+
+// ==================== استيراد ملف "تقرير الاستئذانات" ====================
+document.getElementById('btn-pick-permissions-file').addEventListener('click', () => document.getElementById('permissions-file-input').click());
+document.getElementById('permissions-file-input').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if (file) await processPermissionsFile_(file);
+});
+
+async function processPermissionsFile_(file) {
+  const msgEl = document.getElementById('permissions-import-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ قراءة الملف…</div>';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+    let headerRowIdx = -1, headers = [];
+    for (let i = 0; i < Math.min(grid.length, 10); i++) {
+      const row = grid[i].map(String);
+      if (row.some((c) => c.includes('رقم الطلب'))) { headerRowIdx = i; headers = row; break; }
+    }
+    if (headerRowIdx === -1) {
+      msgEl.innerHTML = '<div class="msg err">تعذّر إيجاد عمود "رقم الطلب" — تأكّد من أن هذا ملف الاستئذانات الصحيح.</div>';
+      return;
+    }
+    const col = (label) => findCol(headers, label);
+    const idCol = col('رقم الطلب'), civilCol = col('السجل المدني'), nameCol = col('الموظف');
+    const fromTimeCol = col('من وقت'), toTimeCol = col('إلى وقت');
+    const fromDateCol = col('من تاريخ'), toDateCol = col('إلى تاريخ');
+    const statusCol = col('حالة الطلب'), typeCol = col('نوع الاستئذان');
+    if ([idCol, civilCol, fromDateCol, toDateCol, statusCol, typeCol].includes(-1)) {
+      msgEl.innerHTML = '<div class="msg err">تعذّر إيجاد أحد الأعمدة المطلوبة بالملف (رقم الطلب/السجل المدني/التواريخ/الحالة/النوع).</div>';
+      return;
+    }
+
+    const rows = [];
+    for (let i = headerRowIdx + 1; i < grid.length; i++) {
+      const row = grid[i];
+      const requestId = String(row[idCol] || '').trim();
+      const civil = String(row[civilCol] || '').trim();
+      if (!requestId || !/^\d{5,}$/.test(civil)) continue;
+      rows.push({
+        requestId, civil,
+        name: nameCol >= 0 ? String(row[nameCol] || '') : '',
+        fromTime: normalizeTimeString(row[fromTimeCol]),
+        toTime: normalizeTimeString(row[toTimeCol]),
+        fromDate: String(row[fromDateCol] || '').trim(),
+        toDate: String(row[toDateCol] || '').trim(),
+        status: String(row[statusCol] || '').trim(),
+        type: String(row[typeCol] || '').trim(),
+      });
+    }
+    if (!rows.length) {
+      msgEl.innerHTML = '<div class="msg err">لم يُعثر على أي صف صالح بالملف.</div>';
+      return;
+    }
+
+    msgEl.innerHTML = '<div class="msg-loading">جارٍ الاستيراد…</div>';
+    const res = await callApi('importPermissions', { rows });
+    msgEl.innerHTML = `<div class="msg ok">تم استيراد ${res.imported} طلباً — صُنِّف تلقائياً ${res.classifiedDays} يوم غياب بعذر مطابق.</div>`;
+    document.getElementById('permissions-file-input').value = '';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
 
 document.getElementById('btn-confirm-import').addEventListener('click', async () => {
   const date = document.getElementById('imp-date').value.trim();
@@ -2185,6 +2319,7 @@ document.querySelectorAll('button[data-logtab]').forEach((btn) => {
 
 // ==================== سجل التأخر (داخل نفس تبويب سجل الغياب والتأخر) ====================
 let lastLateRows = [];
+let lastLateExcusedCount = 0;
 let lateSevFilter = '';
 let lateViewMode = 'table';
 
@@ -2203,7 +2338,8 @@ async function refreshLate() {
   msgEl.innerHTML = '<div class="msg-loading">جارٍ تحميل سجل التأخر…</div>';
   try {
     const res = await callApi('getAttendanceRange', { from, to });
-    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0);
+    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0 && !r.excusedLate);
+    lastLateExcusedCount = res.rows.filter((r) => Number(r.lateMinutes) > 0 && r.excusedLate).length;
     document.getElementById('late-empty').style.display = lastLateRows.length ? 'none' : 'block';
     renderLateKpis();
     renderLateTable();
@@ -2226,6 +2362,7 @@ function renderLateKpis() {
     <div class="kpi-card"><div class="kpi-label">إجمالي دقائق التأخر</div><div class="kpi-value">${formatMinutesAsHM(totalMinutes)}</div></div>
     <div class="kpi-card"><div class="kpi-label">تأخر كبير (أكثر من ٣٠د)</div><div class="kpi-value" style="color:${heavy ? 'var(--bad)' : 'inherit'}">${heavy}</div></div>
     <div class="kpi-card"><div class="kpi-label">الأكثر تأخراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' دقيقة' : ''}</div></div>
+    ${lastLateExcusedCount ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد</div><div class="kpi-value" style="color:var(--good)">${lastLateExcusedCount}</div><div class="kpi-sub">لا تظهر بالجدول أدناه</div></div>` : ''}
   `;
 }
 
@@ -3282,6 +3419,7 @@ function parseHoursRawToMinutes_(hoursRaw) {
 }
 
 let lastDepEarlyRows = [];
+let lastDepEarlyExcusedCount = 0;
 let lastDepNcRows = [];
 
 async function refreshDeparture() {
@@ -3297,9 +3435,15 @@ async function refreshDeparture() {
     // بعد ساعات عمل كافية لا يُحسب هنا، بخلاف من عمل ساعتين فقط مثلاً.
     lastDepEarlyRows = res.rows.filter((r) => {
       if (String(r.noCheckout) === 'true') return false;
+      if (r.excusedEarly) return false; // استئذان معتمد يغطي كامل فجوة الانصراف المبكر
       const mins = parseHoursRawToMinutes_(r.hoursRaw);
       return mins != null && mins < 240;
     });
+    lastDepEarlyExcusedCount = res.rows.filter((r) => {
+      if (String(r.noCheckout) === 'true' || !r.excusedEarly) return false;
+      const mins = parseHoursRawToMinutes_(r.hoursRaw);
+      return mins != null && mins < 240;
+    }).length;
     lastDepNcRows = res.rows.filter((r) => String(r.noCheckout) === 'true');
 
     document.getElementById('dep-early-empty').style.display = lastDepEarlyRows.length ? 'none' : 'block';
@@ -3337,6 +3481,7 @@ function renderDepEarlyKpis() {
     <div class="kpi-card"><div class="kpi-label">إجمالي الحالات</div><div class="kpi-value">${total}</div></div>
     <div class="kpi-card"><div class="kpi-label">متوسط ساعات العمل</div><div class="kpi-value">${formatMinutesAsHM(avgMinutes)}</div></div>
     <div class="kpi-card"><div class="kpi-label">الأكثر تكراراً في الفترة</div><div class="kpi-value" style="font-size:15px">${top ? escapeHtml(top[0]) : '—'}</div><div class="kpi-sub">${top ? top[1] + ' مرات' : ''}</div></div>
+    ${lastDepEarlyExcusedCount ? `<div class="kpi-card tone-ok"><div class="kpi-label">مستثنى باستئذان معتمد</div><div class="kpi-value" style="color:var(--good)">${lastDepEarlyExcusedCount}</div><div class="kpi-sub">لا تظهر بالجدول أدناه</div></div>` : ''}
   `;
 }
 
@@ -3560,6 +3705,141 @@ function printNoCheckoutMesaalah_(row) {
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }
+
+// ==================== تبويب "الاستئذانات" ====================
+let lastPermissionsRows = [];
+let permStatusFilter = '';
+let permTypeFilter = '';
+
+// يستخرج تصنيف نوع الاستئذان من الجزء الأول قبل الشرطة (شخصي - طارئ ← شخصي، اجازة- سنوية
+// ← اجازة، رسمية - تدريب ← رسمية) — يُبنى ديناميكياً من البيانات الفعلية بدل قائمة ثابتة،
+// فأي تصنيف جديد يظهر مستقبلاً بالملف يحصل على فلتر خاص به تلقائياً بلا حاجة لتعديل الكود.
+function permTypeCategory_(type) {
+  return String(type || '').split('-')[0].trim() || 'أخرى';
+}
+
+async function refreshPermissions() {
+  const from = document.getElementById('perm-from').value;
+  const to = document.getElementById('perm-to').value;
+  if (!from || !to) return;
+  const msgEl = document.getElementById('permissions-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ التحميل…</div>';
+  try {
+    const res = await callApi('getPermissionsRange', { from, to });
+    lastPermissionsRows = res.rows;
+    document.getElementById('permissions-empty').style.display = lastPermissionsRows.length ? 'none' : 'block';
+    renderPermissionsKpis();
+    renderPermTypeFilters();
+    renderPermissionsTable();
+    msgEl.innerHTML = '';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+document.getElementById('btn-refresh-permissions').addEventListener('click', refreshPermissions);
+
+function renderPermTypeFilters() {
+  const categories = [...new Set(lastPermissionsRows.map((r) => permTypeCategory_(r.type)))].sort((a, b) => a.localeCompare(b, 'ar'));
+  const el = document.getElementById('perm-type-filters');
+  if (permTypeFilter && !categories.includes(permTypeFilter)) permTypeFilter = '';
+  el.innerHTML = `
+    <span class="muted" style="font-size:12px; align-self:center">النوع:</span>
+    <button type="button" class="filter-chip ${!permTypeFilter ? 'active' : ''}" data-type="">الكل</button>
+    ${categories.map((c) => `<button type="button" class="filter-chip ${permTypeFilter === c ? 'active' : ''}" data-type="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
+  `;
+  el.querySelectorAll('.filter-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      el.querySelectorAll('.filter-chip').forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      permTypeFilter = chip.dataset.type;
+      renderPermissionsTable();
+    });
+  });
+}
+
+function renderPermissionsKpis() {
+  const total = lastPermissionsRows.length;
+  const accepted = lastPermissionsRows.filter((r) => r.status === 'مقبول').length;
+  const rejected = lastPermissionsRows.filter((r) => r.status === 'مرفوض').length;
+  const pending = lastPermissionsRows.filter((r) => r.status === 'تحت الإجراء').length;
+  document.getElementById('perm-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي الطلبات</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card tone-ok"><div class="kpi-label">مقبول</div><div class="kpi-value" style="color:var(--good)">${accepted}</div></div>
+    <div class="kpi-card ${rejected ? 'tone-bad' : ''}"><div class="kpi-label">مرفوض</div><div class="kpi-value" style="color:${rejected ? 'var(--bad)' : 'inherit'}">${rejected}</div></div>
+    <div class="kpi-card ${pending ? 'tone-warn' : ''}"><div class="kpi-label">تحت الإجراء</div><div class="kpi-value" style="color:${pending ? 'var(--warn)' : 'inherit'}">${pending}</div></div>
+  `;
+}
+
+function permStatusClass_(status) {
+  if (status === 'مقبول') return 'status-ok';
+  if (status === 'مرفوض') return 'status-absent';
+  return 'status-late';
+}
+
+function renderPermissionsTable() {
+  const q = document.getElementById('perm-search').value.trim().toLowerCase();
+  const rows = lastPermissionsRows.filter((r) => {
+    if (permStatusFilter && r.status !== permStatusFilter) return false;
+    if (permTypeFilter && permTypeCategory_(r.type) !== permTypeFilter) return false;
+    if (q && !String(r.name).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const tbody = document.querySelector('#permissions-table tbody');
+  tbody.innerHTML = rows.map((r) => `
+      <tr>
+        <td><bdi>${escapeHtml(r.requestId)}</bdi></td>
+        <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.fromDate)}</td>
+        <td>${escapeHtml(r.toDate) !== escapeHtml(r.fromDate) ? escapeHtml(r.toDate) : '—'}</td>
+        <td>${escapeHtml(r.fromTime) || '—'}</td>
+        <td>${escapeHtml(r.toTime) || '—'}</td>
+        <td>${escapeHtml(r.type) || '—'}</td>
+        <td class="${permStatusClass_(r.status)}">${escapeHtml(r.status)}</td>
+      </tr>`).join('');
+  document.getElementById('permissions-search-empty').style.display = (lastPermissionsRows.length && !rows.length) ? 'block' : 'none';
+}
+document.getElementById('perm-search').addEventListener('input', renderPermissionsTable);
+document.querySelectorAll('#view-permissions .table-toolbar > .filter-chip[data-status]').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#view-permissions .table-toolbar > .filter-chip[data-status]').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    permStatusFilter = chip.dataset.status;
+    renderPermissionsTable();
+  });
+});
+
+document.getElementById('btn-export-permissions-excel').addEventListener('click', () => {
+  if (!lastPermissionsRows.length) return;
+  const rows = lastPermissionsRows.map((r) => ({
+    'رقم الطلب': r.requestId, 'الاسم': r.name, 'من تاريخ': r.fromDate, 'إلى تاريخ': r.toDate,
+    'من وقت': r.fromTime || '', 'إلى وقت': r.toTime || '', 'النوع': r.type, 'الحالة': r.status,
+  }));
+  const from = document.getElementById('perm-from').value, to = document.getElementById('perm-to').value;
+  exportRowsToExcel(`الاستئذانات_${from}_${to}.xlsx`, 'الاستئذانات', rows);
+});
+
+document.getElementById('btn-print-permissions').addEventListener('click', () => {
+  if (!lastPermissionsRows.length) return;
+  const cfg = loadConfig();
+  const from = document.getElementById('perm-from').value, to = document.getElementById('perm-to').value;
+  const rows = lastPermissionsRows.filter((r) =>
+    (!permStatusFilter || r.status === permStatusFilter) && (!permTypeFilter || permTypeCategory_(r.type) === permTypeFilter)
+  );
+  const header = buildPeriodReportHeader({
+    schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'كشف طلبات الاستئذان',
+    titleLine: 'كشف طلبات الاستئذان',
+    subtitleHtml: `${dateRangeHtml_(from, to)} — إجمالي الطلبات: ${rows.length}`,
+  });
+  const trs = rows.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.fromDate)}</td><td>${escapeHtml(r.toDate) !== escapeHtml(r.fromDate) ? escapeHtml(r.toDate) : '—'}</td>
+      <td>${escapeHtml(r.fromTime) || '—'}</td><td>${escapeHtml(r.toTime) || '—'}</td>
+      <td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.status)}</td>
+    </tr>`).join('');
+  const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>من تاريخ</th><th>إلى تاريخ</th><th>من وقت</th><th>إلى وقت</th><th>النوع</th><th>الحالة</th></tr></thead><tbody>${trs}</tbody></table>`;
+  printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${table}${buildReportFooterHtml()}</div>`);
+});
 
 // ==================== تبويب "التقارير اليومية" ====================
 function drPeriod_() {

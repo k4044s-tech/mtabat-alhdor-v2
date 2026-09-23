@@ -1181,6 +1181,11 @@
             <button class="ghost" id="btn-dr-late">تقرير التأخر</button>
             <button class="ghost" id="btn-dr-absence">تقرير الغياب</button>
             <button class="ghost" id="btn-dr-permissions">تقرير الاستئذانات</button>
+            <button class="ghost" id="btn-dr-absence-mesaalah">تقرير مسألة الغياب</button>
+            <button class="ghost" id="btn-dr-late-mesaalah">تقرير مسألة التأخر</button>
+            <button class="ghost" id="btn-dr-earlyleave-mesaalah">تقرير مسألة الخروج قبل إكمال ٤ ساعات</button>
+            <button class="ghost" id="btn-dr-earlyend-mesaalah">تقرير مسألة الانصراف قبل نهاية الدوام الرسمي</button>
+            <button class="ghost" id="btn-dr-actions-mesaalah">تقرير مسألة الاجراءات (تراكم التأخير)</button>
             <button class="ghost" id="btn-dr-daily-official">الكشف الرسمي اليومي للفترة (يوم في كل صفحة)</button>
           </div>
           <p class="muted" style="font-size:11.5px; margin-top:10px">تُطبَع التقارير مباشرة على مقاس A4 بلا فتح نافذة جديدة.</p>
@@ -3867,7 +3872,7 @@ function printNoCheckoutMesaalah_(row) {
         <div>( &nbsp;&nbsp;) تم الاطلاع على الإفادة واتخاذ الإجراء وفق الأنظمة والتعليمات</div>
         <div>( &nbsp;&nbsp;) أخرى: ....................................................</div>
       </div>
-      <div class="pr-sign-row"><div>اسم المسؤول/ة: ....................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+      <div class="pr-sign-row"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
     </div>`;
   printInPage(PERIOD_REPORT_STYLE, body);
 }
@@ -4246,6 +4251,211 @@ document.getElementById('btn-dr-permissions').addEventListener('click', async ()
   } catch (err) { drFail_(err); }
 });
 
+// ---------- تقرير مسألة الغياب: يعرض فقط أيام الغياب التي أُنجِزت مساءلتها فعلياً
+// (عمود "الحالة" = تم) — يوم لم تُنجَز مساءلته بعد لا يظهر هنا إطلاقاً ----------
+document.getElementById('btn-dr-absence-mesaalah').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    await refreshDayNoticeStatuses(); // نجلب الحالات فوراً بدل الاعتماد على ما سبق تحميله بتبويب آخر
+    const [absRes, teachersRes] = await Promise.all([callApi('getAbsenceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = absRes.rows
+      .filter((r) => !p.civil || String(r.civil) === p.civil)
+      .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('absence', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('absence', r.civil, r.date)].done))
+      .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('absence', r.civil, r.date)] || {}).doneAt }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const excused = rowsData.filter((r) => r.classification === 'بعذر').length;
+    const unexcused = rowsData.filter((r) => r.classification === 'بدون عذر').length;
+    const distinctCivils = new Set(rowsData.map((r) => r.civil)).size;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'تقرير مسألة الغياب',
+      titleLine: 'تقرير مسألة الغياب',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات المُساءَلة: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي المساءلات المنجَزة' },
+      { value: excused, label: 'بعذر', tone: 'good' },
+      { value: unexcused, label: 'بدون عذر', tone: unexcused ? 'bad' : '' },
+      { value: distinctCivils, label: 'عدد المعلمين' },
+    ]);
+    const rows = rowsData.map((r, i) => {
+      const d = isoToLocalDate(r.date);
+      const clsClass = r.classification === 'بعذر' ? 'pr-excused-cell' : r.classification === 'بدون عذر' ? 'pr-absent-cell' : '';
+      return `<tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td>
+        <td class="${clsClass}">${escapeHtml(r.classification) || 'غير مصنف'}</td><td>${escapeHtml(r.reason) || escapeHtml(r.note) || '—'}</td>
+        <td>${r.doneAt ? escapeHtml(formatDateDMY(String(r.doneAt).slice(0, 10))) : '—'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7">لا توجد مساءلات غياب مُنجَزة في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>التصنيف</th><th>السبب/الملاحظة</th><th>تاريخ إنجاز المساءلة</th></tr></thead><tbody>${rows}</tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- تقرير مسألة التأخر: نفس فكرة تقرير مسألة الغياب — فقط حالات التأخر التي
+// أُنجِزت مساءلتها فعلياً (عمود "الحالة" = تم)، وما دون ذلك لا يظهر إطلاقاً ----------
+document.getElementById('btn-dr-late-mesaalah').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    await refreshDayNoticeStatuses();
+    const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = attRes.rows
+      .filter((r) => Number(r.lateMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)].done))
+      .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)] || {}).doneAt }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const totalMinutes = rowsData.reduce((s, r) => s + Number(r.lateMinutes), 0);
+    const distinctCivils = new Set(rowsData.map((r) => r.civil)).size;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'تقرير مسألة التأخر',
+      titleLine: 'تقرير مسألة التأخر',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات المُساءَلة: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي المساءلات المنجَزة' },
+      { value: formatMinutesAsHM(totalMinutes), label: 'إجمالي دقائق التأخر' },
+      { value: distinctCivils, label: 'عدد المعلمين' },
+    ]);
+    const rows = rowsData.map((r, i) => {
+      const d = isoToLocalDate(r.date);
+      return `<tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td>
+        <td class="pr-late-cell">${r.lateMinutes}</td>
+        <td>${r.doneAt ? escapeHtml(formatDateDMY(String(r.doneAt).slice(0, 10))) : '—'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8">لا توجد مساءلات تأخر مُنجَزة في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>بداية الدوام</th><th>وقت الحضور</th><th>دقائق التأخير</th><th>تاريخ إنجاز المساءلة</th></tr></thead><tbody>${rows}</tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- تقرير مسألة الخروج قبل إكمال ٤ ساعات عمل — نفس فكرة تقارير المساءلة الأخرى ----------
+document.getElementById('btn-dr-earlyleave-mesaalah').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    await refreshDayNoticeStatuses();
+    const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = attRes.rows
+      .filter((r) => {
+        if (String(r.noCheckout) === 'true' || (p.civil && String(r.civil) !== p.civil)) return false;
+        const mins = parseHoursRawToMinutes_(r.hoursRaw);
+        return mins != null && mins < 240;
+      })
+      .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('earlyleave', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('earlyleave', r.civil, r.date)].done))
+      .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('earlyleave', r.civil, r.date)] || {}).doneAt }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const distinctCivils = new Set(rowsData.map((r) => r.civil)).size;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'تقرير مسألة الخروج قبل إكمال ٤ ساعات',
+      titleLine: 'تقرير مسألة الخروج قبل إكمال ٤ ساعات عمل',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات المُساءَلة: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي المساءلات المنجَزة' },
+      { value: distinctCivils, label: 'عدد المعلمين' },
+    ]);
+    const rows = rowsData.map((r, i) => {
+      const d = isoToLocalDate(r.date);
+      return `<tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td>
+        <td class="pr-late-cell">${escapeHtml(r.hoursRaw) || '—'}</td>
+        <td>${r.doneAt ? escapeHtml(formatDateDMY(String(r.doneAt).slice(0, 10))) : '—'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8">لا توجد مساءلات مُنجَزة في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>ساعات العمل</th><th>تاريخ إنجاز المساءلة</th></tr></thead><tbody>${rows}</tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- تقرير مسألة الانصراف قبل نهاية الدوام الرسمي — نفس الفكرة، بمعيار مختلف
+// (دقائق الانصراف قبل الموعد الرسمي، لا إجمالي ساعات العمل) ----------
+document.getElementById('btn-dr-earlyend-mesaalah').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    await refreshDayNoticeStatuses();
+    const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = attRes.rows
+      .filter((r) => Number(r.earlyMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)].done))
+      .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] || {}).doneAt }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const totalMinutes = rowsData.reduce((s, r) => s + Number(r.earlyMinutes), 0);
+    const distinctCivils = new Set(rowsData.map((r) => r.civil)).size;
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'تقرير مسألة الانصراف قبل نهاية الدوام الرسمي',
+      titleLine: 'تقرير مسألة الانصراف قبل نهاية الدوام الرسمي',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات المُساءَلة: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي المساءلات المنجَزة' },
+      { value: formatMinutesAsHM(totalMinutes), label: 'إجمالي دقائق الانصراف المبكر' },
+      { value: distinctCivils, label: 'عدد المعلمين' },
+    ]);
+    const rows = rowsData.map((r, i) => {
+      const d = isoToLocalDate(r.date);
+      return `<tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(r.name)}</td><td>${escapeHtml(r.date)}</td><td>${WEEKDAYS_FULL_AR[d.getDay()]}</td>
+        <td>${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</td><td>${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</td>
+        <td class="pr-late-cell">${r.earlyMinutes}</td>
+        <td>${r.doneAt ? escapeHtml(formatDateDMY(String(r.doneAt).slice(0, 10))) : '—'}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8">لا توجد مساءلات مُنجَزة في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>التاريخ</th><th>اليوم</th><th>نهاية الدوام</th><th>وقت الانصراف</th><th>دقائق الانصراف المبكر</th><th>تاريخ إنجاز المساءلة</th></tr></thead><tbody>${rows}</tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
+// ---------- تقرير مسألة الاجراءات (تراكم دقائق التأخير) — نفس فكرة تقارير المساءلة الأخرى،
+// لكن getAnnualPenalties يُرفق actionDone جاهزاً بكل صف فلا حاجة لجلب الحالات بشكل منفصل ----------
+document.getElementById('btn-dr-actions-mesaalah').addEventListener('click', async () => {
+  const p = drGuard_();
+  if (!p) return;
+  try {
+    const cfg = loadConfig();
+    const [penRes, teachersRes] = await Promise.all([callApi('getAnnualPenalties', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
+    const rowsData = penRes.list
+      .filter((e) => !!e.actionDone && (!p.civil || String(e.civil) === p.civil))
+      .sort((a, b) => b.totalLateMinutes - a.totalLateMinutes);
+    const selectedName = p.civil && teachersRes ? (teachersRes.teachers.find((t) => String(t.civil) === p.civil) || {}).name || '' : '';
+    const header = buildPeriodReportHeader({
+      schoolName: cfg.schoolName, adminName: cfg.adminName, subject: 'تقرير مسألة الاجراءات (تراكم دقائق التأخير)',
+      titleLine: 'تقرير مسألة الاجراءات (تراكم دقائق التأخير)',
+      subtitleHtml: `${p.civil ? escapeHtml(selectedName) : 'جميع المعلمين'} — عدد الحالات المُساءَلة: ${rowsData.length} — ${dateRangeHtml_(p.from, p.to)}`,
+    });
+    const stats = buildStatCardsHtml([
+      { value: rowsData.length, label: 'إجمالي الإجراءات المنجَزة' },
+    ]);
+    const rows = rowsData.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td><td class="pr-name">${escapeHtml(e.name)}</td>
+        <td>${e.totalLateMinutes}</td><td>${e.absenceDays}</td>
+        <td>${escapeHtml(e.action)}</td><td>${escapeHtml(e.note) || '—'}</td>
+        <td>${e.deductionDays || '—'}</td>
+        <td>${e.actionDoneAt ? escapeHtml(formatDateDMY(String(e.actionDoneAt).slice(0, 10))) : '—'}</td>
+      </tr>`).join('') || '<tr><td colspan="8">لا توجد إجراءات مُنجَزة في هذه الفترة</td></tr>';
+    const table = `<table class="pr-table"><thead><tr><th>م</th><th>الاسم</th><th>مجموع التأخر (د)</th><th>مجموع الغياب (أيام)</th><th>الإجراء</th><th>ملاحظة</th><th>أيام الحسم</th><th>تاريخ إنجاز الإجراء</th></tr></thead><tbody>${rows}</tbody></table>`;
+    printInPage(PERIOD_REPORT_STYLE, `<div class="pr-page">${header}${stats}${table}${buildReportFooterHtml()}</div>`);
+    drDone_();
+  } catch (err) { drFail_(err); }
+});
+
 // ---------- الكشف الرسمي اليومي للفترة: يوم مستورد واحد في كل صفحة ----------
 document.getElementById('btn-dr-daily-official').addEventListener('click', async () => {
   const p = drGuard_();
@@ -4489,7 +4699,7 @@ function printAbsenceMesaalah_(entry) {
         السلام عليكم ورحمة الله وبركاته وبعـد:<br>
         من خلال متابعة الدوام تبين غيابكم خلال الفترة الموضحة أعلاه، آمل الإفادة عن أسباب ذلك وعليكم تقديم ما يؤيد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
       </p>
-      <div class="pr-sign-row"><div>اسم المدير المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+      <div class="pr-sign-row"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
 
       <div class="pr-section-title">(٢) الإفادة</div>
       <p style="font-size:9.5pt">المكرم/ مدير وفقه الله<br>السلام عليكم ورحمة الله وبركاته وبعد:<br>أفيدكم أن غيابي كان للأسباب التالية:</p>
@@ -4497,19 +4707,19 @@ function printAbsenceMesaalah_(entry) {
       <p style="font-size:9.5pt">وسأقوم بتقديم ما يثبت ذلك خلال أسبوع من تاريخه.</p>
       <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
 
-      <div class="pr-section-title">(٣) المدير المباشر</div>
+      <div class="pr-section-title">(٣) مدير المدرسة</div>
       <div class="pr-checklist">
         <div>( &nbsp;&nbsp;) تحتسب له إجازة مرضية بعد التأكد من نظامية التقرير</div>
         <div>( &nbsp;&nbsp;) يحتسب غيابه من رصيده للإجازات العادية أو الاضطرارية لقبول عذره إذا كان رصيده يسمح وإلا يحسم عليه</div>
         <div>( &nbsp;&nbsp;) يعتمد الحسم لعدم قبول عذره</div>
       </div>
-      <div class="pr-sign-row"><div>اسم المدير المباشر: ................................</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
+      <div class="pr-sign-row"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
 
       <div class="pr-warning-box">
         <b>ملاحظات هامة:</b><br>
-        ١- تستكمل الاستمارة من المدير المباشر وإصدار القرار بموجبه.<br>
+        ١- تستكمل الاستمارة من مدير المدرسة وإصدار القرار بموجبه.<br>
         ٢- إذا سبق عطلة نهاية الأسبوع غياب وألحقها غياب تحتسب غياب الأسبوع كاملة.<br>
-        ٣- يجب أن يوضح المتغيب أسباب غيابه فور تسلمه الاستمارة ويعيدها لمديره المباشر.<br>
+        ٣- يجب أن يوضح المتغيب أسباب غيابه فور تسلمه الاستمارة ويعيدها لمدير المدرسة.<br>
         ٤- يعطى المتغيب مدة أسبوع لتقديم ما يؤيد عذره فإذا انقضت هذه المدة الزمنية تستكمل الاستمارة ويتم الحسم.<br>
         ٥- في حال رفض الموظف توقيع المساءلة يتم تدوين ذلك في الخانة المخصصة لتقرير غياب مع التوقيع من قبل المساعد الإداري ووكيل المدرسة.
       </div>

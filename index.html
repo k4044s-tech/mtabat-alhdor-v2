@@ -2171,7 +2171,7 @@ async function loadDashboardInsights() {
     const rep = res.repeatedAbsence || [];
     cards.push(`
       <div class="insight-card ${rep.length ? 'tone-warn' : 'tone-ok'}">
-        <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر (٣٠ يوماً)</div>
+        <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر بدون عذر (٣٠ يوماً)</div>
         <div class="insight-value">${rep.length}${insightTrendHtml_(prevCounts, 'repeated', rep.length)}</div>
         <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(r.civil)}">${avatarHtml_(r.name, 18)}${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
       </div>`);
@@ -2182,7 +2182,7 @@ async function loadDashboardInsights() {
         <div class="insight-head"><span class="icon" data-icon="clock"></span> اقترب من جزاء جديد</div>
         <div class="insight-value">${ap.length}${insightTrendHtml_(prevCounts, 'approaching', ap.length)}</div>
         <div class="insight-list">${ap.slice(0, 4).map((a) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(a.civil)}">${avatarHtml_(a.name, 18)}${escapeHtml(a.name)}</span><span>باقي ${a.remaining} د</span></div>`).join('') || 'لا يوجد.'}</div>
-        ${ap.length ? '<button type="button" class="insight-cta" data-goto-tab="reports">فتح كشف الجزاءات</button>' : ''}
+        ${ap.length ? '<button type="button" class="insight-cta" data-goto-tab="actions">فتح كشف الجزاءات</button>' : ''}
       </div>`);
 
     const nc = (res.noCheckoutLastImport && res.noCheckoutLastImport.list) || [];

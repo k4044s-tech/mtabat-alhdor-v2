@@ -2171,7 +2171,7 @@ async function loadDashboardInsights() {
     const rep = res.repeatedAbsence || [];
     cards.push(`
       <div class="insight-card ${rep.length ? 'tone-warn' : 'tone-ok'}">
-        <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر بدون عذر (٣٠ يوماً)</div>
+        <div class="insight-head"><span class="icon" data-icon="userX"></span> غياب متكرر بدون عذر</div>
         <div class="insight-value">${rep.length}${insightTrendHtml_(prevCounts, 'repeated', rep.length)}</div>
         <div class="insight-list">${rep.slice(0, 4).map((r) => `<div class="il-row"><span class="il-name-link" data-civil="${escapeHtml(r.civil)}">${avatarHtml_(r.name, 18)}${escapeHtml(r.name)}</span><span>${r.count} أيام</span></div>`).join('') || 'لا يوجد.'}</div>
       </div>`);

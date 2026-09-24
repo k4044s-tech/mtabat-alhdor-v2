@@ -637,11 +637,11 @@
               </div>
               <div>
                 <label>بداية الدوام</label>
-                <input type="text" id="imp-sched-start" style="width:80px" value="6:45">
+                <input type="text" id="imp-sched-start" style="width:80px" value="">
               </div>
               <div>
                 <label>نهاية الدوام</label>
-                <input type="text" id="imp-sched-end" style="width:80px" value="12:30">
+                <input type="text" id="imp-sched-end" style="width:80px" value="">
               </div>
               <div>
                 <label>تسمية الفترة</label>
@@ -1009,6 +1009,38 @@
           <p class="muted">استخدم هذا الزر بعد أي تحديث لملف Code.gs في Apps Script — تحديثات الكود لا تُفرِغ الذاكرة المؤقتة تلقائياً كما تفعل عمليات الاستيراد والتعديل، فقد تستمر البيانات القديمة بالظهور حتى ست ساعات بلا هذه الخطوة.</p>
           <button class="ghost" id="btn-clear-cache">تفريغ الذاكرة المؤقتة</button>
           <span class="muted" id="clear-cache-status"></span>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">إعادة حساب التأخير والانصراف المبكر</h3>
+          <p class="muted">تستخدم عند تصحيح خطأ بجدول الدوام في الإعدادات بأثر رجعي — تعيد حساب دقائق التأخير/الانصراف المبكر لفترة سابقة وفق جدول الدوام الصحيح الحالي، دون لمس بصمات الحضور/الانصراف الفعلية نفسها. <b>تعرض معاينة أولاً</b>، ولا تُعدَّل أي بيانات إلا بعد موافقتك الصريحة على كل صف.</p>
+          <div class="row">
+            <div>
+              <label>من تاريخ</label>
+              <input type="date" id="recalc-from">
+            </div>
+            <div>
+              <label>إلى تاريخ</label>
+              <input type="date" id="recalc-to">
+            </div>
+            <button class="primary" id="btn-recalc-preview" style="align-self:flex-end">معاينة</button>
+          </div>
+          <div id="recalc-msg"></div>
+          <div id="recalc-results" style="display:none; margin-top:12px">
+            <div class="table-toolbar no-print">
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px"><input type="checkbox" id="recalc-select-all" checked> تحديد الكل</label>
+              <div class="toolbar-spacer"></div>
+              <button class="primary" id="btn-recalc-apply">تطبيق التصحيح على المحدَّد</button>
+            </div>
+            <div style="max-height:420px; overflow:auto">
+              <table id="recalc-table">
+                <thead>
+                  <tr><th style="width:26px"></th><th>التاريخ</th><th>الاسم</th><th>نهاية الدوام (قديم ← جديد)</th><th>التأخير (قديم ← جديد)</th><th>الانصراف المبكر (قديم ← جديد)</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1397,6 +1429,9 @@ function showTab(name) {
       refreshPermissions();
     }
   }
+  if (name === 'import') {
+    refreshImportScheduleDefaults_();
+  }
   if (name === 'settings') {
     const cfg = loadConfig();
     document.getElementById('cfg-url').value = cfg.url || '';
@@ -1715,12 +1750,16 @@ document.getElementById('btn-batch-import-all').addEventListener('click', async 
     renderBatchImportTable();
     try {
       const sched = resolveScheduleForDateClient(f.date);
+      // الدفعة تضم غالباً تواريخ من فترات مختلفة (صيفي/شتوي/رمضان) — يجب أن يُحسم جدول كل
+      // ملف من تاريخه هو تحديداً دائماً، لا من حقل واحد مشترك بالنموذج قد يطابق فترة ملف واحد
+      // فقط ويُطبَّق خطأً على بقية الملفات ذات التواريخ المختلفة. هذا بالضبط سبب الخلل الذي
+      // أدّى لتخزين نهاية دوام خاطئة على استيرادات سابقة.
       const res = await callApi('importDay', {
         date: f.date,
         fileName: f.fileName,
-        schedStart: document.getElementById('imp-sched-start').value.trim() || sched.workStart || '',
-        schedEnd: document.getElementById('imp-sched-end').value.trim() || sched.workEnd || '',
-        schedLabel: document.getElementById('imp-sched-label').value.trim() || sched.label || '',
+        schedStart: sched.workStart || document.getElementById('imp-sched-start').value.trim() || '',
+        schedEnd: sched.workEnd || document.getElementById('imp-sched-end').value.trim() || '',
+        schedLabel: sched.label || document.getElementById('imp-sched-label').value.trim() || '',
         rows: f.rows,
       });
       f.status = 'done';
@@ -4838,6 +4877,19 @@ async function loadScheduleSettings() {
   renderWeekendDays();
   renderPeriods();
   renderHolidays();
+  refreshImportScheduleDefaults_();
+}
+
+// يملأ حقلي بداية/نهاية الدوام بنموذج الاستيراد بقيم الفترة الافتراضية الفعلية من
+// الإعدادات — بدل قيمتين ثابتتين كانتا مكتوبتين مباشرة بالـHTML منذ إصدار سابق للتطبيق
+// (قبل ميزة "فترات الدوام" المتعددة)، فتبقيان ظاهرتين بلا تغيير حتى يُكتب تاريخ بالحقل،
+// ولا تعكسان بالضرورة الفترة التي عدّلها المستخدم فعلياً بالإعدادات (كما حدث هنا: "صيفي"
+// نهايته ١٢:٠٥ فعلياً، بينما الحقل الثابت القديم كان يعرض ١٢:٣٠ الأصلية قبل التعديل).
+function refreshImportScheduleDefaults_() {
+  if (document.getElementById('imp-date').value) return; // تاريخ مُدخَل بالفعل — لا نُطاح بحله
+  const sched = resolveScheduleForDateClient(todayISO());
+  document.getElementById('imp-sched-start').value = sched.workStart || '';
+  document.getElementById('imp-sched-end').value = sched.workEnd || '';
 }
 
 function renderWeekendDays() {
@@ -4966,6 +5018,67 @@ document.getElementById('btn-clear-cache').addEventListener('click', async () =>
     statusEl.textContent = 'تم — أعد تحميل الصفحة الآن لترى البيانات المحدَّثة ✔';
   } catch (err) {
     statusEl.textContent = 'خطأ: ' + err.message;
+  }
+});
+
+// ==================== أداة إعادة الحساب ====================
+let lastRecalcChanges = [];
+document.getElementById('btn-recalc-preview').addEventListener('click', async () => {
+  const from = document.getElementById('recalc-from').value;
+  const to = document.getElementById('recalc-to').value;
+  const msgEl = document.getElementById('recalc-msg');
+  if (!from || !to) { msgEl.innerHTML = '<div class="msg err">حدّد الفترة أولاً.</div>'; return; }
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ المسح والمقارنة…</div>';
+  document.getElementById('recalc-results').style.display = 'none';
+  try {
+    const res = await callApi('previewRecalculate', { from, to });
+    lastRecalcChanges = res.changes;
+    if (!lastRecalcChanges.length) {
+      msgEl.innerHTML = `<div class="msg ok">تم مسح ${res.totalScanned} صف حضور — لا فروقات فعلية بين المخزَّن والمحسوب الآن وفق جدول الدوام الحالي.</div>`;
+      return;
+    }
+    msgEl.innerHTML = `<div class="msg ok">تم مسح ${res.totalScanned} صف — وُجد ${lastRecalcChanges.length} صفاً يختلف تأخيره أو انصرافه المبكر الفعلي عمّا هو مخزَّن. راجع القائمة أدناه قبل التطبيق.</div>`;
+    renderRecalcTable_();
+    document.getElementById('recalc-results').style.display = 'block';
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+});
+
+function renderRecalcTable_() {
+  const tbody = document.querySelector('#recalc-table tbody');
+  tbody.innerHTML = lastRecalcChanges.map((c, i) => `
+    <tr data-idx="${i}">
+      <td><input type="checkbox" class="recalc-row-check" checked></td>
+      <td>${escapeHtml(c.date)}</td>
+      <td>${avatarHtml_(c.name, 18)}${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.oldSchedEnd) || '—'} ← <b>${escapeHtml(c.newSchedEnd) || '—'}</b></td>
+      <td>${c.oldLateMinutes} ← <b class="${c.newLateMinutes > c.oldLateMinutes ? 'status-absent' : c.newLateMinutes < c.oldLateMinutes ? 'status-ok' : ''}">${c.newLateMinutes}</b></td>
+      <td>${c.oldEarlyMinutes} ← <b class="${c.newEarlyMinutes > c.oldEarlyMinutes ? 'status-absent' : c.newEarlyMinutes < c.oldEarlyMinutes ? 'status-ok' : ''}">${c.newEarlyMinutes}</b></td>
+    </tr>`).join('');
+}
+
+document.getElementById('recalc-select-all').addEventListener('change', (ev) => {
+  document.querySelectorAll('.recalc-row-check').forEach((c) => { c.checked = ev.target.checked; });
+});
+
+document.getElementById('btn-recalc-apply').addEventListener('click', async () => {
+  const selectedIdxs = [...document.querySelectorAll('#recalc-table tbody tr')]
+    .filter((tr) => tr.querySelector('.recalc-row-check').checked)
+    .map((tr) => Number(tr.dataset.idx));
+  if (!selectedIdxs.length) return;
+  const selected = selectedIdxs.map((i) => lastRecalcChanges[i]);
+  const confirmed = confirm(`سيُعدَّل ${selected.length} صف بيانات حضور فعلية (جدول الدوام ودقائق التأخير/الانصراف المبكر المخزَّنة). لا يمكن التراجع عن هذا تلقائياً بعد التطبيق. متابعة؟`);
+  if (!confirmed) return;
+  const msgEl = document.getElementById('recalc-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ التطبيق…</div>';
+  try {
+    const res = await callApi('applyRecalculate', { changes: selected });
+    msgEl.innerHTML = `<div class="msg ok">تم تصحيح ${res.applied} صفاً بنجاح ✔ — لا تنسَ تفريغ الذاكرة المؤقتة أعلاه لترى الأرقام المحدَّثة بكل الشاشات فوراً.</div>`;
+    document.getElementById('recalc-results').style.display = 'none';
+    lastRecalcChanges = [];
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ أثناء التطبيق: ${escapeHtml(err.message)}</div>`;
   }
 });
 

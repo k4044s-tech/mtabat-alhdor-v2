@@ -455,6 +455,12 @@
 
   /* ---------- شريط بحث/فلاتر فوق الجداول ---------- */
   .table-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .pg-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+  .pg-size { display: flex; align-items: center; gap: 6px; }
+  .pg-size select { padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line); font-family: inherit; font-size: 12.5px; }
+  .pg-nav { display: flex; align-items: center; gap: 8px; }
+  .pg-nav button { padding: 4px 12px; font-size: 12.5px; }
+  .pg-nav button:disabled { opacity: .4; cursor: not-allowed; }
   .table-toolbar input[type=search] { min-width: 180px; flex: 1 1 180px; }
   .filter-chip {
     background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 6px 13px;
@@ -747,6 +753,7 @@
                 <tbody></tbody>
               </table>
             </div>
+            <div id="absence-pagination"></div>
             <p class="muted" id="absence-empty" style="display:none">لا توجد سجلات غياب في هذه الفترة.</p>
             <p class="muted" id="absence-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
             <div id="absence-msg"></div>
@@ -784,6 +791,7 @@
                 <tbody></tbody>
               </table>
             </div>
+            <div id="late-pagination"></div>
             <p class="muted" id="late-empty" style="display:none">لا توجد حالات تأخير في هذه الفترة.</p>
             <p class="muted" id="late-search-empty" style="display:none">لا نتائج مطابقة لبحثك/فلترك.</p>
             <div id="late-msg"></div>
@@ -839,6 +847,7 @@
                 <tbody></tbody>
               </table>
             </div>
+            <div id="dep-early-pagination"></div>
             <p class="muted" id="dep-early-empty" style="display:none">لا توجد حالات انصراف قبل إكمال ٤ ساعات في هذه الفترة.</p>
             <p class="muted" id="dep-early-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
             <div id="dep-early-msg"></div>
@@ -865,6 +874,7 @@
                 <tbody></tbody>
               </table>
             </div>
+            <div id="dep-earlyend-pagination"></div>
             <p class="muted" id="dep-earlyend-empty" style="display:none">لا توجد حالات انصراف قبل نهاية الدوام الرسمي في هذه الفترة.</p>
             <p class="muted" id="dep-earlyend-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
             <div id="dep-earlyend-msg"></div>
@@ -885,6 +895,7 @@
                 <tbody></tbody>
               </table>
             </div>
+            <div id="dep-nc-pagination"></div>
             <p class="muted" id="dep-nc-empty" style="display:none">لا توجد حالات عدم تسجيل انصراف في هذه الفترة.</p>
             <p class="muted" id="dep-nc-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
             <div id="dep-nc-msg"></div>
@@ -930,6 +941,7 @@
               <tbody></tbody>
             </table>
           </div>
+          <div id="permissions-pagination"></div>
           <p class="muted" id="permissions-empty" style="display:none">لا توجد طلبات استئذان في هذه الفترة.</p>
           <p class="muted" id="permissions-search-empty" style="display:none">لا نتائج مطابقة.</p>
           <div id="permissions-msg"></div>
@@ -1255,6 +1267,7 @@
               <tbody></tbody>
             </table>
           </div>
+          <div id="penalties-pagination"></div>
           <p class="muted" id="penalties-empty" style="display:none">لا يوجد من تجاوز ٣٠ دقيقة تأخير تراكمي في هذه الفترة.</p>
           <div id="penalties-msg"></div>
         </div>
@@ -2298,6 +2311,7 @@ function renderAbsenceKpis() {
   `;
 }
 
+let absPageState = makePaginator_();
 function renderAbsenceTable() {
   const q = document.getElementById('abs-search').value.trim().toLowerCase();
   const rows = lastAbsenceRows.filter((r) => {
@@ -2306,8 +2320,9 @@ function renderAbsenceTable() {
     if (q && !String(r.name).toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date)); // الأحدث تاريخاً أولاً
+  const pageRows = sliceForPage_(absPageState, rows);
   const tbody = document.querySelector('#absence-table tbody');
-  tbody.innerHTML = rows.map((r) => {
+  tbody.innerHTML = pageRows.map((r) => {
     const classOptions = CLASSIFICATIONS.map((c) => `<option value="${escapeHtml(c)}" ${c === (r.classification || '') ? 'selected' : ''}>${escapeHtml(c) || '—'}</option>`).join('');
     const reasonList = r.reason && !ABSENCE_REASONS.includes(r.reason) ? [r.reason, ...ABSENCE_REASONS] : ABSENCE_REASONS;
     const reasonOptions = ['', ...reasonList].map((rs) => `<option value="${escapeHtml(rs)}" ${rs === (r.reason || '') ? 'selected' : ''}>${escapeHtml(rs) || '— بدون سبب محدد —'}</option>`).join('');
@@ -2326,9 +2341,11 @@ function renderAbsenceTable() {
         <td><button class="small btn-print-mesaalah-day">مسألة</button></td>
       </tr>`;
   }).join('');
+  document.getElementById('absence-pagination').innerHTML = paginationControlsHtml_(absPageState, rows.length);
   document.getElementById('absence-search-empty').style.display = (lastAbsenceRows.length && !rows.length) ? 'block' : 'none';
-  document.getElementById('abs-select-all').checked = rows.length > 0 && rows.every((r) => absSelectedIds.has(String(r.id)));
+  document.getElementById('abs-select-all').checked = pageRows.length > 0 && pageRows.every((r) => absSelectedIds.has(String(r.id)));
 }
+wirePagination_('absence-pagination', absPageState, renderAbsenceTable);
 
 // ---------- عرض "تجميع حسب المعلّم" ----------
 function renderAbsenceGrouped() {
@@ -2379,12 +2396,13 @@ document.querySelectorAll('button[data-absview]').forEach((btn) => {
   });
 });
 
-document.getElementById('abs-search').addEventListener('input', renderAbsenceTable);
+document.getElementById('abs-search').addEventListener('input', () => { absPageState.page = 1; renderAbsenceTable(); });
 document.querySelectorAll('#log-absence-section .filter-chip').forEach((chip) => {
   chip.addEventListener('click', () => {
     document.querySelectorAll('#log-absence-section .filter-chip').forEach((c) => c.classList.remove('active'));
     chip.classList.add('active');
     absClassFilter = chip.dataset.cls;
+    absPageState.page = 1;
     renderAbsenceTable();
   });
 });
@@ -2451,6 +2469,7 @@ function renderLateKpis() {
   `;
 }
 
+let latePageState = makePaginator_();
 function renderLateTable() {
   const q = document.getElementById('late-search').value.trim().toLowerCase();
   const rows = lastLateRows.filter((r) => {
@@ -2458,8 +2477,9 @@ function renderLateTable() {
     if (q && !String(r.name).toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date));
+  const pageRows = sliceForPage_(latePageState, rows);
   const tbody = document.querySelector('#late-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = pageRows.map((r) => `
       <tr data-id="${escapeHtml(r.id)}">
         <td>${escapeHtml(r.date)}</td>
         <td>${escapeHtml(r.name)}</td>
@@ -2470,8 +2490,10 @@ function renderLateTable() {
         <td>${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-late">مسألة</button></td>
       </tr>`).join('');
+  document.getElementById('late-pagination').innerHTML = paginationControlsHtml_(latePageState, rows.length);
   document.getElementById('late-search-empty').style.display = (lastLateRows.length && !rows.length) ? 'block' : 'none';
 }
+wirePagination_('late-pagination', latePageState, renderLateTable);
 
 // ---------- عرض "تجميع حسب المعلّم" لسجل التأخر ----------
 function renderLateGrouped() {
@@ -2526,12 +2548,13 @@ document.querySelectorAll('button[data-lateview]').forEach((btn) => {
   });
 });
 
-document.getElementById('late-search').addEventListener('input', renderLateTable);
+document.getElementById('late-search').addEventListener('input', () => { latePageState.page = 1; renderLateTable(); });
 document.querySelectorAll('#log-late-section .filter-chip').forEach((chip) => {
   chip.addEventListener('click', () => {
     document.querySelectorAll('#log-late-section .filter-chip').forEach((c) => c.classList.remove('active'));
     chip.classList.add('active');
     lateSevFilter = chip.dataset.sev;
+    latePageState.page = 1;
     renderLateTable();
   });
 });
@@ -3174,6 +3197,60 @@ function formatMinutesAsHM(mins) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return `${h}:${String(m).padStart(2, '0')}`;
 }
+// ==================== تقسيم الصفحات (Pagination) — أداة مشتركة لكل الجداول الطويلة ====================
+// state: {page, pageSize} لكل جدول على حدة. renderFn يُعاد استدعاؤه عند تغيير الصفحة أو الحجم؛
+// يجب أن يعيد renderFn حساب الفلترة/الفرز الكاملين ثم يستخدم sliceForPage_ لاقتطاع الصفحة الحالية.
+function makePaginator_() { return { page: 1, pageSize: 25 }; }
+
+function sliceForPage_(state, rows) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / state.pageSize));
+  if (state.page > totalPages) state.page = totalPages;
+  if (state.page < 1) state.page = 1;
+  const start = (state.page - 1) * state.pageSize;
+  return rows.slice(start, start + state.pageSize);
+}
+
+function paginationControlsHtml_(state, totalRows) {
+  const totalPages = Math.max(1, Math.ceil(totalRows / state.pageSize));
+  const from = totalRows === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
+  const to = Math.min(totalRows, state.page * state.pageSize);
+  return `
+    <div class="pg-controls">
+      <div class="pg-size">
+        <label>عرض</label>
+        <select class="pg-page-size">
+          <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
+          <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
+          <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
+        </select>
+        <span>سجل</span>
+      </div>
+      <div class="pg-info">${from}–${to} من ${totalRows}</div>
+      <div class="pg-nav">
+        <button type="button" class="ghost pg-prev" ${state.page <= 1 ? 'disabled' : ''}>السابق</button>
+        <span>صفحة ${state.page} من ${totalPages}</span>
+        <button type="button" class="ghost pg-next" ${state.page >= totalPages ? 'disabled' : ''}>التالي</button>
+      </div>
+    </div>`;
+}
+
+// يُستدعى مرة واحدة لكل جدول (عادة عند تحميل الصفحة) — يربط أزرار السابق/التالي وحجم الصفحة
+// بحاوية pgContainerId عبر تفويض الأحداث (event delegation)، بما أن محتوى الحاوية يُعاد بناؤه
+// بالكامل كل مرة تُعرض الصفحة، ويستدعي renderFn لإعادة العرض بالصفحة/الحجم الجديدين.
+function wirePagination_(pgContainerId, state, renderFn) {
+  document.getElementById(pgContainerId).addEventListener('click', (ev) => {
+    if (ev.target.classList.contains('pg-prev')) { state.page--; renderFn(); }
+    else if (ev.target.classList.contains('pg-next')) { state.page++; renderFn(); }
+  });
+  document.getElementById(pgContainerId).addEventListener('change', (ev) => {
+    if (ev.target.classList.contains('pg-page-size')) {
+      state.pageSize = Number(ev.target.value);
+      state.page = 1;
+      renderFn();
+    }
+  });
+}
+
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -3604,11 +3681,13 @@ function renderDepEarlyKpis() {
   `;
 }
 
+let depEarlyPageState = makePaginator_();
 function renderDepEarlyTable() {
   const q = document.getElementById('dep-early-search').value.trim().toLowerCase();
   const rows = lastDepEarlyRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const pageRows = sliceForPage_(depEarlyPageState, rows);
   const tbody = document.querySelector('#dep-early-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = pageRows.map((r) => `
       <tr data-id="${escapeHtml(r.id)}">
         <td>${escapeHtml(r.date)}</td>
         <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
@@ -3619,8 +3698,10 @@ function renderDepEarlyTable() {
         <td>${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-early">مسألة</button></td>
       </tr>`).join('');
+  document.getElementById('dep-early-pagination').innerHTML = paginationControlsHtml_(depEarlyPageState, rows.length);
   document.getElementById('dep-early-search-empty').style.display = (lastDepEarlyRows.length && !rows.length) ? 'block' : 'none';
 }
+wirePagination_('dep-early-pagination', depEarlyPageState, renderDepEarlyTable);
 
 function renderDepEarlyGrouped() {
   const listEl = document.getElementById('dep-early-grouped-list');
@@ -3668,7 +3749,7 @@ document.querySelectorAll('button[data-earlyview]').forEach((btn) => {
     document.getElementById('dep-early-grouped-view').style.display = mode === 'grouped' ? 'block' : 'none';
   });
 });
-document.getElementById('dep-early-search').addEventListener('input', renderDepEarlyTable);
+document.getElementById('dep-early-search').addEventListener('input', () => { depEarlyPageState.page = 1; renderDepEarlyTable(); });
 document.getElementById('btn-export-dep-early-excel').addEventListener('click', () => {
   if (!lastDepEarlyRows.length) return;
   const rows = lastDepEarlyRows.map((r) => ({
@@ -3709,11 +3790,13 @@ function renderDepEarlyEndKpis() {
   `;
 }
 
+let depEarlyEndPageState = makePaginator_();
 function renderDepEarlyEndTable() {
   const q = document.getElementById('dep-earlyend-search').value.trim().toLowerCase();
   const rows = lastDepEarlyEndRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const pageRows = sliceForPage_(depEarlyEndPageState, rows);
   const tbody = document.querySelector('#dep-earlyend-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = pageRows.map((r) => `
       <tr data-id="${escapeHtml(r.id)}">
         <td>${escapeHtml(r.date)}</td>
         <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
@@ -3724,9 +3807,11 @@ function renderDepEarlyEndTable() {
         <td>${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-earlyend">مسألة</button></td>
       </tr>`).join('');
+  document.getElementById('dep-earlyend-pagination').innerHTML = paginationControlsHtml_(depEarlyEndPageState, rows.length);
   document.getElementById('dep-earlyend-search-empty').style.display = (lastDepEarlyEndRows.length && !rows.length) ? 'block' : 'none';
 }
-document.getElementById('dep-earlyend-search').addEventListener('input', renderDepEarlyEndTable);
+wirePagination_('dep-earlyend-pagination', depEarlyEndPageState, renderDepEarlyEndTable);
+document.getElementById('dep-earlyend-search').addEventListener('input', () => { depEarlyEndPageState.page = 1; renderDepEarlyEndTable(); });
 document.getElementById('btn-export-dep-earlyend-excel').addEventListener('click', () => {
   if (!lastDepEarlyEndRows.length) return;
   const rows = lastDepEarlyEndRows.map((r) => ({
@@ -3796,11 +3881,13 @@ function renderDepNcKpis() {
   `;
 }
 
+let depNcPageState = makePaginator_();
 function renderDepNcTable() {
   const q = document.getElementById('dep-nc-search').value.trim().toLowerCase();
   const rows = lastDepNcRows.filter((r) => !q || String(r.name).toLowerCase().includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const pageRows = sliceForPage_(depNcPageState, rows);
   const tbody = document.querySelector('#dep-nc-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = pageRows.map((r) => `
       <tr data-id="${escapeHtml(r.id)}">
         <td>${escapeHtml(r.date)}</td>
         <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
@@ -3810,9 +3897,11 @@ function renderDepNcTable() {
         <td>${dayNoticeStatusBtnHtml_('nocheckout', r.civil, r.date)}</td>
         <td><button class="small btn-print-mesaalah-day-nc">مسألة</button></td>
       </tr>`).join('');
+  document.getElementById('dep-nc-pagination').innerHTML = paginationControlsHtml_(depNcPageState, rows.length);
   document.getElementById('dep-nc-search-empty').style.display = (lastDepNcRows.length && !rows.length) ? 'block' : 'none';
 }
-document.getElementById('dep-nc-search').addEventListener('input', renderDepNcTable);
+wirePagination_('dep-nc-pagination', depNcPageState, renderDepNcTable);
+document.getElementById('dep-nc-search').addEventListener('input', () => { depNcPageState.page = 1; renderDepNcTable(); });
 document.getElementById('btn-export-dep-nc-excel').addEventListener('click', () => {
   if (!lastDepNcRows.length) return;
   const rows = lastDepNcRows.map((r) => ({
@@ -3969,6 +4058,7 @@ function renderPermTypeFilters() {
       el.querySelectorAll('.filter-chip').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
       permTypeFilter = chip.dataset.type;
+      permPageState.page = 1;
       renderPermissionsTable();
     });
   });
@@ -3993,6 +4083,7 @@ function permStatusClass_(status) {
   return 'status-late';
 }
 
+let permPageState = makePaginator_();
 function renderPermissionsTable() {
   const q = document.getElementById('perm-search').value.trim().toLowerCase();
   const rows = lastPermissionsRows.filter((r) => {
@@ -4001,8 +4092,9 @@ function renderPermissionsTable() {
     if (q && !String(r.name).toLowerCase().includes(q)) return false;
     return true;
   });
+  const pageRows = sliceForPage_(permPageState, rows);
   const tbody = document.querySelector('#permissions-table tbody');
-  tbody.innerHTML = rows.map((r) => `
+  tbody.innerHTML = pageRows.map((r) => `
       <tr>
         <td><bdi>${escapeHtml(r.requestId)}</bdi></td>
         <td>${avatarHtml_(r.name, 20)}${escapeHtml(r.name)}</td>
@@ -4013,14 +4105,17 @@ function renderPermissionsTable() {
         <td>${escapeHtml(r.type) || '—'}</td>
         <td class="${permStatusClass_(r.status)}">${escapeHtml(r.status)}</td>
       </tr>`).join('');
+  document.getElementById('permissions-pagination').innerHTML = paginationControlsHtml_(permPageState, rows.length);
   document.getElementById('permissions-search-empty').style.display = (lastPermissionsRows.length && !rows.length) ? 'block' : 'none';
 }
-document.getElementById('perm-search').addEventListener('input', renderPermissionsTable);
+wirePagination_('permissions-pagination', permPageState, renderPermissionsTable);
+document.getElementById('perm-search').addEventListener('input', () => { permPageState.page = 1; renderPermissionsTable(); });
 document.querySelectorAll('#view-permissions .table-toolbar > .filter-chip[data-status]').forEach((chip) => {
   chip.addEventListener('click', () => {
     document.querySelectorAll('#view-permissions .table-toolbar > .filter-chip[data-status]').forEach((c) => c.classList.remove('active'));
     chip.classList.add('active');
     permStatusFilter = chip.dataset.status;
+    permPageState.page = 1;
     renderPermissionsTable();
   });
 });
@@ -4606,6 +4701,7 @@ async function refreshPenalties() {
   }
 }
 
+let penaltiesPageState = makePaginator_();
 function renderPenaltiesTable() {
   const done = lastPenaltiesList.filter((e) => e.actionDone).length;
   const pending = lastPenaltiesList.length - done;
@@ -4614,7 +4710,8 @@ function renderPenaltiesTable() {
     <div class="kpi-card"><div class="kpi-label">تم الإجراء</div><div class="kpi-value" style="color:var(--good)">${done}</div></div>
     <div class="kpi-card"><div class="kpi-label">لم يتم الإجراء</div><div class="kpi-value" style="color:${pending ? 'var(--bad)' : 'inherit'}">${pending}</div></div>
   ` : '';
-  document.querySelector('#penalties-table tbody').innerHTML = lastPenaltiesList.map((e) => `
+  const pageRows = sliceForPage_(penaltiesPageState, lastPenaltiesList);
+  document.querySelector('#penalties-table tbody').innerHTML = pageRows.map((e) => `
       <tr data-civil="${escapeHtml(e.civil)}">
         <td>${escapeHtml(e.num)}</td><td>${escapeHtml(e.name)}</td>
         <td class="status-late">${e.totalLateMinutes}</td>
@@ -4624,7 +4721,9 @@ function renderPenaltiesTable() {
         <td><button class="action-status-btn ${e.actionDone ? 'done' : 'pending'} btn-toggle-action-done">${e.actionDone ? 'تم الإجراء ✔' : 'لم يتم الإجراء'}</button></td>
         <td><button class="small btn-print-action" style="background:var(--warn); color:#fff">الإجراء</button></td>
       </tr>`).join('');
+  document.getElementById('penalties-pagination').innerHTML = paginationControlsHtml_(penaltiesPageState, lastPenaltiesList.length);
 }
+wirePagination_('penalties-pagination', penaltiesPageState, renderPenaltiesTable);
 document.getElementById('btn-export-penalties-excel').addEventListener('click', () => {
   if (!lastPenaltiesList.length) return;
   const { from, to } = acPeriod_();

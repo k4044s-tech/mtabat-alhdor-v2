@@ -460,6 +460,25 @@
   .sd-chip.custom small { color:#1d4ed8; font-weight:700; }
   .sd-chip button { border:none; background:none; cursor:pointer; font-size:13px; padding:0 3px; color:var(--muted); }
   .sd-chip button:hover { color:var(--ink); }
+  /* ---- المتابعة الميدانية ---- */
+  .fn-kind { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; white-space:nowrap; }
+  .fn-kind.k-out { background:#f5f3ff; color:#6d28d9; } .fn-kind.k-loc { background:#fff7ed; color:#c2410c; }
+  .fn-det { font-size:12.5px; line-height:1.6; } .fn-det small { color:var(--muted); display:block; }
+  .fn-doc { font-size:11.5px; color:var(--muted); line-height:1.6; }
+  .fn-doc b { color:var(--ink); font-weight:600; }
+  .fn-modal { max-width:520px; text-align:right; }
+  .fn-modal .ud-title { text-align:center; }
+  .fn-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; margin-bottom:14px; }
+  .fn-grid .full { grid-column:1 / -1; }
+  .fn-grid label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .fn-grid input, .fn-grid select, .fn-grid textarea { width:100%; box-sizing:border-box; padding:9px 10px; font-size:13.5px; border:1px solid var(--border); border-radius:9px; font-family:inherit; }
+  .fn-grid textarea { min-height:56px; resize:vertical; }
+  .fn-kinds { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .fn-kinds button { border:1.5px solid var(--border); background:#fff; border-radius:11px; padding:10px; cursor:pointer; font-family:inherit; font-size:12.5px; text-align:right; line-height:1.5; }
+  .fn-kinds button b { display:block; font-size:13.5px; }
+  .fn-kinds button.on { border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); background:#fafafa; }
+  .fn-dur { font-size:12.5px; font-weight:700; color:#6d28d9; margin-top:4px; min-height:18px; }
+  .fn-err { color:var(--bad); font-size:12.5px; min-height:18px; margin:-6px 0 8px; }
   /* ---- نوافذ التأكيد والتنبيه ---- */
   .ui-dlg-backdrop { position:fixed; inset:0; z-index:10000; background:rgba(15,23,42,.45); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:18px; animation:uiFade .15s ease; }
   .ui-dlg { width:100%; max-width:420px; background:#fff; border-radius:18px; box-shadow:0 24px 60px rgba(15,23,42,.25); padding:22px 22px 18px; text-align:center; animation:uiPop .18s cubic-bezier(.2,.9,.3,1.2); direction:rtl; }
@@ -1029,6 +1048,7 @@
       <button data-tab="analytics"><span class="icon" data-icon="trendingUp"></span><span>التحليلات</span></button>
       <button data-tab="absence"><span class="icon" data-icon="listChecks"></span><span>سجل الغياب والتأخر</span><span class="nav-badge" id="badge-absence" style="display:none"></span></button>
       <button data-tab="departure"><span class="icon" data-icon="logOut"></span><span>سجل الانصراف</span></button>
+      <button data-tab="field"><span class="icon" data-icon="mapPin"></span><span>المتابعة الميدانية</span></button>
       <button data-tab="permissions"><span class="icon" data-icon="clock"></span><span>الاستئذانات</span></button>
       <button data-tab="reports"><span class="icon" data-icon="fileText"></span><span>التقارير</span></button>
       <button data-tab="actions"><span class="icon" data-icon="alertTriangle"></span><span>الاجراءات</span></button>
@@ -1358,7 +1378,7 @@
           </button>
           <button type="button" class="dep-tab" data-deptab="earlyend" role="tab">
             <span class="dt-top"><span class="dt-title">قبل نهاية الدوام الرسمي</span><span class="dt-count" id="dt-count-earlyend">—</span></span>
-            <span class="dt-desc" id="dt-desc-earlyend">انصرف قبل موعد نهاية الدوام المحدد.</span>
+            <span class="dt-desc" id="dt-desc-earlyend">انصرف قبل موعد نهاية الدوام المحدد (بعد إكمال ٤ ساعات عمل).</span>
           </button>
           <button type="button" class="dep-tab" data-deptab="nocheckout" role="tab">
             <span class="dt-top"><span class="dt-title">بلا بصمة انصراف</span><span class="dt-count" id="dt-count-nocheckout">—</span></span>
@@ -1443,6 +1463,39 @@
             <p class="muted" id="dep-nc-search-empty" style="display:none">لا نتائج مطابقة لبحثك.</p>
             <div id="dep-nc-msg"></div>
           </div>
+        </div>
+      </section>
+
+      <section id="view-field" style="display:none">
+        <div class="an-head" style="margin-bottom:10px">
+          <div class="dash-title" style="margin:0">المتابعة الميدانية</div>
+          <div class="muted" style="font-size:12.5px">حالات لا تكشفها البصمة ويثبتها المدير أو الوكيل بالمتابعة: الخروج أثناء الدوام بلا بصمة ثم العودة، والحضور أو الانصراف من موقع آخر.</div>
+        </div>
+        <div class="card">
+          <div class="row" style="align-items:flex-end">
+            <div><label for="fn-from">من تاريخ</label><input type="date" id="fn-from"></div>
+            <div><label for="fn-to">إلى تاريخ</label><input type="date" id="fn-to"></div>
+            <button class="ghost" id="btn-fn-refresh">تحديث</button>
+            <div class="toolbar-spacer"></div>
+            <button class="primary" id="btn-fn-add">＋ تسجيل ملاحظة</button>
+          </div>
+        </div>
+        <div class="kpi-row" id="fn-kpis"></div>
+        <div class="card">
+          <div class="table-toolbar no-print">
+            <input type="search" id="fn-search" placeholder="ابحث بالاسم…">
+            <button type="button" class="filter-chip active" data-fn-kind="">الكل</button>
+            <button type="button" class="filter-chip" data-fn-kind="absent_during">عدم تواجد أثناء الدوام</button>
+            <button type="button" class="filter-chip" data-fn-kind="other_location">حضور/انصراف من موقع آخر</button>
+          </div>
+          <div style="overflow:auto">
+            <table id="fn-table">
+              <thead><tr><th>اليوم</th><th>الموظف</th><th>الحالة</th><th>التفاصيل</th><th>التوثيق</th><th>المساءلة</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="fn-empty" style="display:none">لا توجد ملاحظات في هذه الفترة. اضغط «تسجيل ملاحظة» لإضافة أول حالة.</p>
+          <div id="fn-msg"></div>
         </div>
       </section>
 
@@ -1992,6 +2045,24 @@
           <p class="muted" id="penalties-empty" style="display:none">لا يوجد من تجاوز ٣٠ دقيقة تأخير تراكمي في هذه الفترة.</p>
           <div id="penalties-msg"></div>
         </div>
+
+        <div class="card" id="early-deduct-card">
+          <h3 style="margin-top:0">تراكم الخروج بدون إذن (الانصراف المبكر + عدم التواجد أثناء الدوام)</h3>
+          <p class="muted" style="margin-top:0">يُجمع منفصلاً عن التأخير خلال السنة المالية: دقائق الانصراف المبكر من البصمة + دقائق عدم التواجد المسجّلة في «المتابعة الميدانية». يُحسم يوم عن كل ٤٢٠ دقيقة أو مضاعفاتها، والباقي يُرحَّل.</p>
+          <div style="overflow:auto">
+            <table id="early-deduct-table">
+              <thead><tr><th>الرقم</th><th>الاسم</th><th>مجموع الانصراف المبكر</th><th>مرات</th><th>أيام الحسم</th><th>الباقي للحسم التالي</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" id="early-deduct-empty" style="display:none">لا يوجد انصراف مبكر بدون إذن في هذه الفترة.</p>
+        </div>
+
+        <div class="card" id="interruption-card">
+          <h3 style="margin-top:0">محاضر الانقطاع عن العمل</h3>
+          <p class="muted" style="margin-top:0">يُعدّ محضر انقطاع (نموذج ٩) عند بلوغ الغياب بدون عذر ١٥ يوماً متصلة أو ٣٠ يوماً متفرقة خلال السنة المالية — وتُحتسب العطل الواقعة بين أيام الغياب. الغياب غير المصنّف يُحسب هنا حتى يُصنَّف.</p>
+          <div id="interruption-list"></div>
+        </div>
       </section>
 
       <footer class="app-copyright no-print">جميع الحقوق محفوظة © <span id="copyright-year"></span> — خالد ابراهيم سك</footer>
@@ -2157,6 +2228,15 @@ function handleRequest_(payload) {
           break;
         case 'reapplyPermissions':
           out = handleReapplyPermissions_(payload);
+          break;
+        case 'getFieldNotes':
+          out = handleGetFieldNotes_(payload);
+          break;
+        case 'saveFieldNote':
+          out = handleSaveFieldNote_(payload);
+          break;
+        case 'deleteFieldNote':
+          out = handleDeleteFieldNote_(payload);
           break;
         case 'authInfo':
           out = handleAuthInfo_();
@@ -2391,6 +2471,7 @@ var FORCE_TEXT_COLUMNS = {
   requestId: 1, fromDate: 1, toDate: 1, fromTime: 1, toTime: 1, type: 1, status: 1,
   name: 1, civil: 1, startDate: 1, role: 1,
   username: 1, email: 1, salt: 1, hash: 1, resetHash: 1,
+  location: 1, verifiedBy: 1, witness: 1, createdBy: 1, punchKind: 1, kind: 1,
 };
 
 // upsert بمطابقة عمود المعرّف (idColName) — يحدّث الصف الموجود أو يضيف صفاً جديداً
@@ -2714,6 +2795,7 @@ function handleImportPermissions_(payload) {
     var isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
     records.forEach(function (r) {
       if (String(r.status).trim() !== 'مقبول') return;
+      if (isPersonalPermission_(r.type)) return; // الشخصي لا يُعتمد ليوم كامل
       if (String(r.fromTime || '').trim() || String(r.toTime || '').trim()) return; // استئذان جزئي بوقت محدد — ليس غياب يوم كامل
       if (!r.fromDate || !r.toDate) return;
       if (!isoDateRe.test(r.fromDate) || !isoDateRe.test(r.toDate)) { malformedDatePermissions.push(r.requestId); return; }
@@ -2792,12 +2874,19 @@ function hasFingerprint_(r) {
   return !!(String(r.checkIn || '').trim() || String(r.checkOut || '').trim());
 }
 
+// الاستئذان الشخصي (طبي/طارئ) لا يُعتمد ليوم كامل حسب الآليات المنظمة لحضوري (رابعاً/٢) —
+// فلا يُعذر به غياب يوم كامل تلقائياً حتى لو ظهر "مقبول"؛ يبقى للمراجعة اليدوية.
+function isPersonalPermission_(type) {
+  return /^\s*شخص/.test(String(type || ''));
+}
+
 // استئذان "مقبول" بلا وقت محدد (إجازة/مهمة ليوم كامل أو أكثر) يغطي (السجل المدني، التاريخ)
 function acceptedFullDayPermission_(permsByKey, civil, date) {
   var perms = permsByKey[String(civil) + '|' + date] || [];
   for (var i = 0; i < perms.length; i++) {
     var p = perms[i];
-    if (String(p.status).trim() === 'مقبول' && !String(p.fromTime || '').trim() && !String(p.toTime || '').trim()) return p;
+    if (String(p.status).trim() === 'مقبول' && !String(p.fromTime || '').trim() && !String(p.toTime || '').trim()
+        && !isPersonalPermission_(p.type)) return p;
   }
   return null;
 }
@@ -3340,6 +3429,7 @@ function handleListImports_() {
 // ما بين حدّين يبقى على حسم الدرجة الأدنى — فمثلاً ٦٩٠ دقيقة = يوم واحد لا يومان.
 // الدرجة ٨ (repeat) لها نفس حد الدرجة ٧ لكنها للإحالة المتكررة: تُستحق فقط بعد تنفيذ الدرجة ٧
 // واستمرار التأخر بعدها (تراكم دقائق جديدة بعد تاريخ الرفع الأول).
+var EARLY_DEDUCT_ACTION = 'رفع حسم الانصراف المبكر';
 var LATE_ACTION_TIERS = [
   { step: 1, minMinutes: 30, threshold: '٣٠ دقيقة', action: 'تنبيه شفوي',
     actionText: 'نظراً لتأخرك لذا وجب تنبيهك شفوياً', deductionDays: 0 },
@@ -3360,12 +3450,15 @@ var LATE_ACTION_TIERS = [
 ];
 
 // أعلى درجة "بحد الدقائق" بلغها التراكم (الدرجات ١-٧؛ الدرجة ٨ تُحسم بسجل التنفيذ)
-// بداية العام الدراسي (١٦ أغسطس) للتاريخ المعطى — أساس التراكم السنوي لدقائق التأخير
-function schoolYearStart_(iso) {
+// بداية السنة المالية للتاريخ المعطى — أساس تراكم دقائق التأخير والانصراف المبكر وترحيلها
+// حسب "الآليات والإجراءات المنظمة لتطبيق حضوري": من ٣١ ديسمبر إلى ٣٠ ديسمبر من السنة التالية.
+function fiscalYearStart_(iso) {
   var y = Number(iso.slice(0, 4));
-  var start = y + '-08-16';
-  return iso >= start ? start : (y - 1) + '-08-16';
+  var start = y + '-12-31';
+  return iso >= start ? start : (y - 1) + '-12-31';
 }
+// إبقاء الاسم القديم متوافقاً
+function schoolYearStart_(iso) { return fiscalYearStart_(iso); }
 
 function lateActionTier_(cumulativeMinutes) {
   var best = null;
@@ -3375,11 +3468,9 @@ function lateActionTier_(cumulativeMinutes) {
   return best;
 }
 
-// أيام الحسم المعادلة وفق النموذج: حسم الدرجة المبلوغة، ومن ١٦٨٠ فأكثر يوم لكل ٤٢٠ دقيقة
+// أيام الحسم: يوم عن كل ٤٢٠ دقيقة (٧ ساعات) أو مضاعفاتها — وما دون ذلك يُرحَّل ضمن السنة المالية
 function lateDeductionDays_(cumulativeMinutes) {
-  if (cumulativeMinutes >= 1680) return Math.floor(cumulativeMinutes / 420);
-  var tier = lateActionTier_(cumulativeMinutes);
-  return tier ? tier.deductionDays : 0;
+  return Math.floor((Number(cumulativeMinutes) || 0) / 420);
 }
 
 function addDaysISO_(iso, delta) {
@@ -3504,6 +3595,8 @@ function handleGetAlerts_() {
     missingImportDate: missingImportDate,
     unclassifiedAbsences: unclassifiedAbsences,
     repeatedAbsence: repeatedAbsence,
+    interruptionCases: computeInterruptionCases_(today, settings, teacherByCivil),
+    fieldPending: pendingFieldNotes_(today, teacherByCivil),
     approachingPenalty: approachingPenalty,
     noCheckoutLastImport: { date: lastImportDate, list: noCheckoutLast },
   };
@@ -3573,11 +3666,14 @@ function handleGetAnnualPenalties_(payload) {
   daily = annotateWithPermissions_(daily, from, to);
 
   var lateByCivil = {};
+  var earlyByCivil = {}; // الانصراف المبكر بدون إذن — يُجمع ويُحسم منفصلاً عن التأخير
+  var earlyDaysByCivil = {};
   daily.forEach(function (r) {
     var civil = String(r.civil);
     var mins = Number(r.lateMinutes) || 0;
-    if (mins <= 0) return; // lateMinutes صافية بالفعل بعد annotateWithPermissions_
-    lateByCivil[civil] = (lateByCivil[civil] || 0) + mins;
+    if (mins > 0) lateByCivil[civil] = (lateByCivil[civil] || 0) + mins; // صافية بعد الاستئذانات
+    var em = Number(r.earlyMinutes) || 0;
+    if (em > 0) { earlyByCivil[civil] = (earlyByCivil[civil] || 0) + em; earlyDaysByCivil[civil] = (earlyDaysByCivil[civil] || 0) + 1; }
   });
 
   var doneMap = {};
@@ -3620,7 +3716,7 @@ function handleGetAnnualPenalties_(payload) {
     var raisedDays = 0; // أيام رُفعت للحسم فعلاً مع الدرجات المنفّذة
     steps.forEach(function (x) {
       if (!x.done || !x.deductionDays) return;
-      var d = x.doneMinutes != null && x.doneMinutes >= 1680 ? Math.floor(x.doneMinutes / 420) : x.deductionDays;
+      var d = x.doneMinutes != null ? Math.floor(x.doneMinutes / 420) : x.deductionDays;
       if (d > raisedDays) raisedDays = d;
     });
 
@@ -3645,7 +3741,39 @@ function handleGetAnnualPenalties_(payload) {
 
   list.sort(function (a, b) { return b.totalLateMinutes - a.totalLateMinutes; });
 
-  return { ok: true, from: from, to: to, list: list };
+  // الانصراف المبكر بدون إذن: تراكم وحسم منفصلان — يوم عن كل ٤٢٠ دقيقة، والباقي يُرحَّل
+  // عدم التواجد أثناء الدوام (خروج بلا بصمة ثم عودة) من سجل المتابعة الميدانية = خروج بدون إذن،
+  // فيُضاف لنفس وعاء الانصراف المبكر ويُحسم معه كل ٤٢٠ دقيقة
+  var outByCivil = {}, outCountByCivil = {};
+  fieldNotesInRange_(from, to).forEach(function (n) {
+    if (n.kind !== 'absent_during') return;
+    var m = Number(n.minutes) || 0;
+    if (m <= 0) return;
+    var c = String(n.civil);
+    outByCivil[c] = (outByCivil[c] || 0) + m;
+    outCountByCivil[c] = (outCountByCivil[c] || 0) + 1;
+    earlyByCivil[c] = (earlyByCivil[c] || 0) + m;
+  });
+  var tnByCivil = {};
+  teachers.forEach(function (t) { tnByCivil[String(t.civil)] = t; });
+  var earlyList = Object.keys(earlyByCivil).filter(function (c) { return tnByCivil[c]; }).map(function (c) {
+    var t = tnByCivil[c];
+    var total = earlyByCivil[c];
+    var done = doneMap[c + '||' + EARLY_DEDUCT_ACTION];
+    var raised = done && done.minutes != null ? Math.floor(done.minutes / 420) : 0;
+    var ded = Math.floor(total / 420);
+    return {
+      civil: c, num: t.num, name: t.name,
+      totalEarlyMinutes: total, earlyDays: earlyDaysByCivil[c] || 0,
+      outMinutes: outByCivil[c] || 0, outCount: outCountByCivil[c] || 0,
+      fingerprintEarlyMinutes: total - (outByCivil[c] || 0),
+      deductionDays: ded, raisedDays: Math.min(raised, ded), daysToRaise: Math.max(0, ded - raised),
+      toNextDeduction: 420 - (total % 420),
+      raisedAt: done ? done.at : '',
+    };
+  }).sort(function (a, b) { return b.totalEarlyMinutes - a.totalEarlyMinutes; });
+
+  return { ok: true, from: from, to: to, list: list, earlyList: earlyList };
   });
 }
 
@@ -3944,7 +4072,7 @@ function isoToWeekday_(dateISO) {
 // نصوصاً كما يراها التطبيق عادةً، لا كائنات Date.
 function handleExportAll_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var names = [SHEET_TEACHERS, SHEET_ATTENDANCE, SHEET_ABSENCE, SHEET_IMPORTS, SHEET_SETTINGS, SHEET_PERMISSIONS, SHEET_ACTIONS, SHEET_USERS];
+  var names = [SHEET_TEACHERS, SHEET_ATTENDANCE, SHEET_ABSENCE, SHEET_IMPORTS, SHEET_SETTINGS, SHEET_PERMISSIONS, SHEET_ACTIONS, SHEET_USERS, SHEET_FIELD];
   var sheets = {};
   names.forEach(function (name) {
     var sheet = ss.getSheetByName(name);
@@ -4255,6 +4383,150 @@ function handleUpdateUser_(payload) {
   return { ok: true };
 }
 
+// ==================== محضر الانقطاع عن العمل (نموذج ٩) ====================
+// الآليات المنظمة (خامساً/٤): يُعدّ محضر انقطاع إذا بلغ غياب الموظف بدون عذر ١٥ يوماً متصلة أو
+// ٣٠ يوماً متفرقة خلال السنة. ومع ملحوظة مساءلة الغياب: غياب قبل عطلة (نهاية أسبوع/إجازة) وبعدها
+// تُحتسب العطلة ضمن مدة الغياب. غير المصنّف يُعامل كبدون عذر حتى يُصنَّف (مع التنبيه لذلك).
+function absenceStreaks_(dates, settings) {
+  // dates: تواريخ غياب مرتبة؛ تُدمج في فترات إن فصلت بينها أيام عطلة فقط
+  var streaks = [];
+  dates.forEach(function (d) {
+    var last = streaks[streaks.length - 1];
+    if (last) {
+      var gap = [];
+      var x = addDaysISO_(last.to, 1);
+      var bridged = true;
+      while (x < d) {
+        if (!isNonWorkingDay_(x, settings)) { bridged = false; break; }
+        gap.push(x);
+        x = addDaysISO_(x, 1);
+      }
+      if (bridged) { last.to = d; last.days += gap.length + 1; last.bridged += gap.length; return; }
+    }
+    streaks.push({ from: d, to: d, days: 1, bridged: 0 });
+  });
+  return streaks;
+}
+function computeInterruptionCases_(today, settings, teacherByCivil) {
+  var from = fiscalYearStart_(today);
+  var byCivil = {};
+  getRowsForDateRange_(getSheet_(SHEET_ABSENCE), from, today).forEach(function (a) {
+    var c = String(a.civil);
+    if (!teacherByCivil[c]) return;
+    var cls = String(a.classification || '');
+    if (cls === 'بعذر') return;
+    (byCivil[c] || (byCivil[c] = { dates: [], unclassified: 0 })).dates.push(normalizeDate_(a.date));
+    if (!cls) byCivil[c].unclassified++;
+  });
+  var out = [];
+  Object.keys(byCivil).forEach(function (c) {
+    var info = byCivil[c];
+    var dates = info.dates.sort();
+    var streaks = absenceStreaks_(dates, settings);
+    var longest = streaks.reduce(function (b, s) { return s.days > b.days ? s : b; }, { days: 0 });
+    var totalWithBridges = streaks.reduce(function (a, s) { return a + s.days; }, 0);
+    var reached = longest.days >= 15 ? 'consecutive' : totalWithBridges >= 30 ? 'scattered' : '';
+    var near = !reached && (longest.days >= 10 || totalWithBridges >= 20);
+    if (!reached && !near) return;
+    var t = teacherByCivil[c];
+    out.push({
+      civil: c, name: t.name, num: t.num,
+      longestStreak: longest.days, longestFrom: longest.from || '', longestTo: longest.to || '',
+      totalDays: totalWithBridges, absenceDays: dates.length, unclassified: info.unclassified,
+      reached: reached, near: near, dates: dates,
+    });
+  });
+  out.sort(function (a, b) { return (b.reached ? 1 : 0) - (a.reached ? 1 : 0) || b.totalDays - a.totalDays; });
+  return out;
+}
+
+// ==================== سجل المتابعة الميدانية ====================
+// حالات لا تكشفها البصمة ويثبتها المدير/الوكيل بالمتابعة: عدم التواجد أثناء الدوام (خروج دون
+// بصمة ثم عودة) والحضور/الانصراف من موقع آخر. كل ملاحظة موثّقة بمن سجّلها ووقت التسجيل والشاهد.
+var SHEET_FIELD = 'المتابعة الميدانية';
+var SHEET_FIELD_HEADERS = ['id', 'date', 'civil', 'name', 'kind', 'fromTime', 'toTime', 'minutes', 'punchKind', 'location',
+  'verifiedBy', 'witness', 'note', 'createdBy', 'createdAt', 'updatedAt'];
+function fieldSheet_() {
+  var sh = getOrCreateSheet_(SHEET_FIELD, SHEET_FIELD_HEADERS);
+  ensureHeaders_(sh, SHEET_FIELD_HEADERS);
+  return sh;
+}
+function fieldNotesInRange_(from, to) {
+  return getRowsForDateRange_(fieldSheet_(), from, to);
+}
+function handleGetFieldNotes_(payload) {
+  var from = String(payload.from || '0000-01-01'), to = String(payload.to || '9999-12-31');
+  var rows = fieldNotesInRange_(from, to).map(function (r) {
+    r.date = normalizeDate_(r.date);
+    r.minutes = Number(r.minutes) || 0;
+    return r;
+  });
+  rows.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)); });
+  return { ok: true, rows: rows };
+}
+function handleSaveFieldNote_(payload) {
+  var n = payload.note || {};
+  var date = String(n.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'التاريخ غير صحيح.' };
+  var civil = String(n.civil || '').trim();
+  if (!civil) return { ok: false, error: 'اختر الموظف.' };
+  var kind = n.kind === 'other_location' ? 'other_location' : 'absent_during';
+  var minutes = 0;
+  if (kind === 'absent_during') {
+    var a = parseTimeToMinutes_(n.fromTime), b = parseTimeToMinutes_(n.toTime);
+    if (a == null || b == null || b <= a) return { ok: false, error: 'حدّد وقت الخروج ووقت العودة (العودة بعد الخروج).' };
+    minutes = b - a;
+  }
+  var teacher = sheetToObjects_(getSheet_(SHEET_TEACHERS)).filter(function (t) { return String(t.civil) === civil; })[0];
+  var now = new Date().toISOString();
+  var rec = {
+    id: n.id || ('fn_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)),
+    date: date, civil: civil, name: teacher ? teacher.name : String(n.name || ''), kind: kind,
+    fromTime: kind === 'absent_during' ? String(n.fromTime || '') : '',
+    toTime: kind === 'absent_during' ? String(n.toTime || '') : '',
+    minutes: minutes,
+    punchKind: kind === 'other_location' ? (n.punchKind === 'انصراف' ? 'انصراف' : n.punchKind === 'حضور وانصراف' ? 'حضور وانصراف' : 'حضور') : '',
+    location: kind === 'other_location' ? String(n.location || '') : '',
+    verifiedBy: String(n.verifiedBy || ''), witness: String(n.witness || ''), note: String(n.note || ''),
+    createdBy: String(n.createdBy || ''), createdAt: n.createdAt || now, updatedAt: Date.now(),
+  };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    upsertRows_(fieldSheet_(), 'id', [rec]);
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+  return { ok: true, note: rec };
+}
+function handleDeleteFieldNote_(payload) {
+  var id = String(payload.id || '');
+  if (!id) return { ok: false, error: 'معرّف غير صحيح' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    deleteRowsByIds_(fieldSheet_(), [id]);
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+function pendingFieldNotes_(today, teacherByCivil) {
+  var done = {};
+  sheetToObjects_(getOrCreateSheet_(SHEET_ACTIONS, SHEET_ACTIONS_HEADERS)).forEach(function (r) {
+    if (String(r.done) === 'true') done[r.key] = true;
+  });
+  return fieldNotesInRange_(fiscalYearStart_(today), today).filter(function (n) {
+    var d = normalizeDate_(n.date);
+    return teacherByCivil[String(n.civil)] && !done['day::field::' + n.civil + '::' + d + '#' + n.id];
+  }).map(function (n) {
+    return { id: n.id, civil: String(n.civil), name: n.name, date: normalizeDate_(n.date), kind: n.kind, minutes: Number(n.minutes) || 0 };
+  });
+}
+
 </script>
 <script>
 // أيقونات خطية بسيطة (بنمط Lucide) بدل الإيموجي — currentColor يرث لون النص المحيط
@@ -4274,6 +4546,7 @@ const ICONS = {
   checkCircle: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
   userX: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>`,
   clock: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
   logOut: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" ${ICON_STROKE}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
 };
 function mountIcons() {
@@ -4325,7 +4598,7 @@ const OFFLINE_META_STORE = 'meta';
 const OFFLINE_WRITE_ACTIONS = new Set([
   'importDay', 'importPermissions', 'deleteDay', 'saveSettings', 'clearCache',
   'applyRecalculate', 'updateAbsence', 'bulkUpdateAbsence', 'markActionDone',
-  'saveTeachers', 'deleteTeacher', 'reapplyPermissions'
+  'saveTeachers', 'deleteTeacher', 'reapplyPermissions', 'saveFieldNote', 'deleteFieldNote'
 ]);
 let offlineDbPromise = null;
 let offlineSyncRunning = false;
@@ -4852,6 +5125,12 @@ function todayISO() {
 // بداية السنة الدراسية الحالية — القيمة الافتراضية لحقل "من تاريخ" في تبويبي التقارير
 // اليومية والاجراءات؛ الحقل نفسه قابل للتعديل يدوياً في أي وقت.
 // ١٦ أغسطس من العام الدراسي الحالي (يتحدّث تلقائياً كل عام بدل تاريخ ثابت)
+// بداية السنة المالية (٣١ ديسمبر) — أساس تراكم دقائق التأخير والانصراف المبكر وترحيلها
+const FISCAL_YEAR_FROM = (() => {
+  const t = todayISO();
+  const y = Number(t.slice(0, 4));
+  return t >= `${y}-12-31` ? `${y}-12-31` : `${y - 1}-12-31`;
+})();
 const REPORT_DEFAULT_FROM = (() => {
   const t = todayISO();
   const y = Number(t.slice(0, 4));
@@ -4892,8 +5171,8 @@ function formatDayLabel(iso) {
 }
 
 // ---------- Tabs ----------
-const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'departure', 'permissions', 'reports', 'actions', 'settings'];
-const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب والتأخر', departure: 'سجل الانصراف', permissions: 'الاستئذانات', reports: 'التقارير', actions: 'الاجراءات', settings: 'الإعدادات' };
+const TAB_IDS = ['dashboard', 'import', 'summary', 'analytics', 'absence', 'departure', 'field', 'permissions', 'reports', 'actions', 'settings'];
+const TAB_LABELS = { dashboard: 'لوحة اليوم', import: 'الاستيراد', summary: 'الملخص والترتيب', analytics: 'التحليلات', absence: 'سجل الغياب والتأخر', departure: 'سجل الانصراف', field: 'المتابعة الميدانية', permissions: 'الاستئذانات', reports: 'التقارير', actions: 'الاجراءات', settings: 'الإعدادات' };
 let currentTab = 'dashboard';
 function showTab(name) {
   currentTab = name;
@@ -4915,6 +5194,13 @@ function showTab(name) {
     } else {
       refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
     }
+  }
+  if (name === 'field') {
+    if (!document.getElementById('fn-from').value) {
+      document.getElementById('fn-from').value = FISCAL_YEAR_FROM;
+      document.getElementById('fn-to').value = todayISO();
+    }
+    refreshFieldNotes_();
   }
   if (name === 'departure') {
     if (!document.getElementById('dep-from').value) {
@@ -4993,7 +5279,7 @@ function showTab(name) {
     populateAcEmployeeSelect_();
     if (!document.getElementById('ac-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('ac-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('ac-from').value = FISCAL_YEAR_FROM;
         document.getElementById('ac-to').value = to;
         refreshPenalties();
       });
@@ -6497,6 +6783,25 @@ async function loadDashboardInsights() {
       }));
     } else oks.push('لا أحد قريب من إجراء جديد');
 
+    const fp = res.fieldPending || [];
+    if (fp.length) {
+      cards.push(card({
+        key: 'fieldPending', icon: 'mapPin', title: 'ملاحظات ميدانية بلا مساءلة', items: fp,
+        sub: 'عدم تواجد أثناء الدوام أو بصمة من موقع آخر',
+        rowsHtml: fp.slice(0, 5).map((n) => `<div class="fu-row">${nameHtml(n)}<span class="fu-meta">${n.kind === 'absent_during' ? '🚶 ' + n.minutes + ' د' : '📍 موقع آخر'} · ${escapeHtml(formatDateDMY(n.date))}</span></div>`).join('') + more(fp, 5),
+        cta: '<button type="button" data-goto-tab="field">فتح المتابعة الميدانية</button>',
+      }));
+    }
+    const intr = (res.interruptionCases || []).filter((c) => c.reached);
+    if (intr.length) {
+      cards.push(card({
+        key: 'interruption', tone: 'tone-bad', icon: 'userX', title: 'محضر انقطاع مستحق', items: intr,
+        sub: '١٥ يوماً متصلة أو ٣٠ متفرقة بدون عذر خلال السنة',
+        rowsHtml: intr.slice(0, 5).map((c) => `<div class="fu-row">${nameHtml(c)}<span class="fu-meta">${c.reached === 'consecutive' ? `<b>${c.longestStreak}</b> يوماً متصلة` : `<b>${c.totalDays}</b> يوماً متفرقة`}</span></div>`).join('') + more(intr, 5),
+        cta: '<button type="button" data-goto-tab="actions">طباعة المحضر من الإجراءات</button>',
+      }));
+    }
+
     const rep = res.repeatedAbsence || [];
     if (rep.length) {
       cards.push(card({
@@ -6834,6 +7139,7 @@ function renderAbsenceGrouped() {
         <div class="tg-actions">
           ${g.unc ? `<button type="button" class="small btn-grp-classify" data-civil="${escapeHtml(g.civil)}">تصنيف أيامه غير المصنّفة (${g.unc})</button>` : ''}
           ${notExcused ? `<button type="button" class="small btn-grp-mesaalah" data-civil="${escapeHtml(g.civil)}">🖨 مسألة غياب للأيام غير المعذورة (${notExcused})</button>` : ''}
+          ${g.unx ? `<button type="button" class="small btn-grp-form21" data-civil="${escapeHtml(g.civil)}" style="background:var(--bad);color:#fff">قرار حسم غياب (نموذج ٢١) — ${g.unx}</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -6842,6 +7148,12 @@ function renderAbsenceGrouped() {
 document.getElementById('abs-grouped-list').addEventListener('click', (ev) => {
   const cls = ev.target.closest('.btn-grp-classify');
   if (cls) { filterAbsenceByTeacher_(cls.dataset.civil, true); return; }
+  const f21 = ev.target.closest('.btn-grp-form21');
+  if (f21) {
+    const rows = lastAbsenceRows.filter((r) => String(r.civil) === f21.dataset.civil && r.classification === 'بدون عذر');
+    if (rows.length) printForm21_({ civil: rows[0].civil, name: rows[0].name }, rows);
+    return;
+  }
   const mes = ev.target.closest('.btn-grp-mesaalah');
   if (mes) {
     const rows = lastAbsenceRows.filter((r) => String(r.civil) === mes.dataset.civil && r.classification !== 'بعذر');
@@ -6999,7 +7311,7 @@ function renderLateTable() {
         <td class="time-flow"><span>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</span> ← <b>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</b></td>
         <td><span class="sev-pill sev-${sev}" title="${sevLabel[sev]}">${mins} د <i style="width:${Math.max(8, Math.round((mins / maxLate) * 70))}px"></i><small style="font-weight:600;opacity:.8">${sevLabel[sev]}</small></span>${Number(r.excusedLateMinutes) ? `<div style="font-size:10.5px" class="status-ok">+${r.excusedLateMinutes} د مستثنى</div>` : ''}</td>
         <td>${permissionBadgeHtml_(r.latePermissionStatus, r.latePermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-late" title="طباعة مسألة تأخر لهذا اليوم">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-late" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('late-pagination').innerHTML = paginationControlsHtml_(latePageState, rows.length);
@@ -7086,7 +7398,7 @@ document.querySelector('#late-table tbody').addEventListener('click', (ev) => {
     const tr = ev.target.closest('tr');
     const row = lastLateRows.find((r) => String(r.id) === tr.dataset.id);
     if (row) {
-      printLateEshaarSingle_(row);
+      printForm18_(row, 'late');
       callApi('markActionDone', { key: dayNoticeKey_('late', row.civil, row.date), civil: row.civil, done: true })
         .then(() => { dayNoticeStatuses[dayNoticeKey_('late', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderLateTable(); })
         .catch(() => {});
@@ -8314,6 +8626,386 @@ function buildReportFooterHtml() {
 // في نافذة الطباعة، فتظهر صفحة بيضاء. الإطار هنا مستند مستقل تماماً له محتواه دائماً —
 // لا إخفاء ولا استعلام وسائط متعددة يعتمد عليه أصلاً، فلا يوجد ما "يفشل في إعادة رسمه".
 let printCleanupState = null;
+
+
+// ==================== المتابعة الميدانية ====================
+const FN_KINDS = { absent_during: 'عدم تواجد أثناء الدوام', other_location: 'حضور/انصراف من موقع آخر' };
+const FN_VERIFY = ['جولة ميدانية', 'بلاغ من منسوب المدرسة', 'لوحة تحكم حضوري', 'كاميرات المراقبة', 'أخرى'];
+let lastFieldNotes = [];
+let fnKindFilter = '';
+
+function fnTimeToMin_(t) {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+async function refreshFieldNotes_() {
+  const from = document.getElementById('fn-from').value, to = document.getElementById('fn-to').value;
+  const msg = document.getElementById('fn-msg');
+  try {
+    const [res] = await Promise.all([callApi('getFieldNotes', { from, to }), refreshDayNoticeStatuses()]);
+    lastFieldNotes = res.rows || [];
+    msg.innerHTML = '';
+  } catch (e) { msg.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; lastFieldNotes = []; }
+  renderFieldNotes_();
+}
+function fnNoticeKey_(n) { return dayNoticeKey_('field', n.civil, n.date + '#' + n.id); }
+function renderFieldNotes_() {
+  const out = lastFieldNotes.filter((n) => n.kind === 'absent_during');
+  const loc = lastFieldNotes.filter((n) => n.kind === 'other_location');
+  const outMin = out.reduce((a, n) => a + (Number(n.minutes) || 0), 0);
+  const pending = lastFieldNotes.filter((n) => !(dayNoticeStatuses[fnNoticeKey_(n)] || {}).done).length;
+  document.getElementById('fn-kpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">إجمالي الملاحظات</div><div class="kpi-value">${lastFieldNotes.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">عدم تواجد أثناء الدوام</div><div class="kpi-value" style="color:#6d28d9">${out.length}</div><div class="kpi-sub">${outMin ? formatMinutesAsHM(outMin) + ' ساعة — تُضاف لتراكم الخروج بدون إذن' : ''}</div></div>
+    <div class="kpi-card"><div class="kpi-label">حضور/انصراف من موقع آخر</div><div class="kpi-value" style="color:#c2410c">${loc.length}</div></div>
+    <div class="kpi-card ${pending ? 'tone-bad' : ''}"><div class="kpi-label">بانتظار المساءلة</div><div class="kpi-value" style="color:${pending ? 'var(--bad)' : 'var(--good)'}">${pending}</div></div>`;
+  const q = document.getElementById('fn-search').value.trim().toLowerCase();
+  const rows = lastFieldNotes.filter((n) => (!fnKindFilter || n.kind === fnKindFilter) && (!q || String(n.name).toLowerCase().includes(q)));
+  document.getElementById('fn-empty').style.display = rows.length ? 'none' : 'block';
+  document.querySelector('#fn-table tbody').innerHTML = rows.map((n) => {
+    const isOut = n.kind === 'absent_during';
+    const det = isOut
+      ? `<div class="fn-det">خرج <b>${escapeHtml(toArabicAmPmTime(n.fromTime) || n.fromTime)}</b> ← عاد <b>${escapeHtml(toArabicAmPmTime(n.toTime) || n.toTime)}</b><small>المدة ${formatMinutesAsHM(n.minutes)} ساعة (${n.minutes} د)</small></div>`
+      : `<div class="fn-det">${escapeHtml(n.punchKind || 'حضور')} من موقع آخر${n.location ? `<small>${escapeHtml(n.location)}</small>` : ''}</div>`;
+    return `<tr data-id="${escapeHtml(n.id)}">
+      <td>${absDayCell_(n.date, false)}</td>
+      <td><div class="ncell">${avatarHtml_(n.name, 24)}<span>${escapeHtml(n.name)}</span></div></td>
+      <td><span class="fn-kind ${isOut ? 'k-out' : 'k-loc'}">${isOut ? '🚶' : '📍'} ${FN_KINDS[n.kind]}</span></td>
+      <td>${det}${n.note ? `<div class="fn-doc" style="margin-top:3px">📝 ${escapeHtml(n.note)}</div>` : ''}</td>
+      <td class="fn-doc">${n.verifiedBy ? `<b>${escapeHtml(n.verifiedBy)}</b><br>` : ''}${n.witness ? `الشاهد: ${escapeHtml(n.witness)}<br>` : ''}${n.createdBy ? `سجّلها: ${escapeHtml(n.createdBy)}` : ''}</td>
+      <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('field', n.civil, n.date + '#' + n.id)}<button type="button" class="icon-btn btn-fn-print" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
+      <td style="white-space:nowrap"><button type="button" class="small btn-fn-edit">تعديل</button> <button type="button" class="small btn-fn-del" style="background:var(--bad);color:#fff">حذف</button></td>
+    </tr>`;
+  }).join('');
+}
+document.getElementById('btn-fn-refresh').addEventListener('click', refreshFieldNotes_);
+['fn-from', 'fn-to'].forEach((id) => document.getElementById(id).addEventListener('change', refreshFieldNotes_));
+document.getElementById('fn-search').addEventListener('input', renderFieldNotes_);
+document.querySelectorAll('[data-fn-kind]').forEach((b) => b.addEventListener('click', () => {
+  fnKindFilter = b.dataset.fnKind;
+  document.querySelectorAll('[data-fn-kind]').forEach((x) => x.classList.toggle('active', x === b));
+  renderFieldNotes_();
+}));
+
+// نافذة تسجيل/تعديل ملاحظة
+async function openFieldNoteModal_(existing) {
+  const teachers = ((await getTeachersCached()).teachers || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar'));
+  const n = existing || { date: todayISO(), kind: 'absent_during', punchKind: 'حضور', verifiedBy: 'جولة ميدانية' };
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'ui-dlg-backdrop';
+    back.innerHTML = `
+      <div class="ui-dlg fn-modal" role="dialog" aria-modal="true" aria-labelledby="fn-m-title">
+        <div class="ud-icon" aria-hidden="true">📋</div>
+        <h3 class="ud-title" id="fn-m-title">${existing ? 'تعديل ملاحظة ميدانية' : 'تسجيل ملاحظة ميدانية'}</h3>
+        <div class="fn-grid">
+          <div class="full fn-kinds" role="group" aria-label="نوع الملاحظة">
+            <button type="button" data-k="absent_during"><b>🚶 عدم تواجد أثناء الدوام</b>خرج من العمل بلا بصمة ثم عاد</button>
+            <button type="button" data-k="other_location"><b>📍 حضور/انصراف من موقع آخر</b>بصمة من خارج مقر العمل</button>
+          </div>
+          <div class="full"><label for="fm-civil">الموظف</label>
+            <select id="fm-civil"><option value="">— اختر —</option>${teachers.filter((t) => t.active !== false || t.civil === n.civil).map((t) => `<option value="${escapeHtml(t.civil)}" ${String(t.civil) === String(n.civil) ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}</select></div>
+          <div><label for="fm-date">التاريخ</label><input type="date" id="fm-date" value="${escapeHtml(n.date || '')}"></div>
+          <div class="k-out"><label for="fm-from">وقت الخروج</label><input type="time" id="fm-from" value="${escapeHtml(n.fromTime || '')}"></div>
+          <div class="k-out"><label for="fm-to">وقت العودة</label><input type="time" id="fm-to" value="${escapeHtml(n.toTime || '')}"><div class="fn-dur" id="fm-dur"></div></div>
+          <div class="k-loc"><label for="fm-punch">البصمة</label>
+            <select id="fm-punch">${['حضور', 'انصراف', 'حضور وانصراف'].map((x) => `<option ${x === n.punchKind ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+          <div class="k-loc full"><label for="fm-loc">الموقع (إن عُرف)</label><input id="fm-loc" value="${escapeHtml(n.location || '')}" placeholder="مثال: المنزل، مدرسة أخرى…"></div>
+          <div><label for="fm-verify">طريقة التحقق</label>
+            <select id="fm-verify">${FN_VERIFY.map((x) => `<option ${x === n.verifiedBy ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+          <div><label for="fm-witness">الشاهد (اختياري)</label><input id="fm-witness" value="${escapeHtml(n.witness || '')}" placeholder="اسم الوكيل/المساعد"></div>
+          <div class="full"><label for="fm-note">ملاحظة</label><textarea id="fm-note">${escapeHtml(n.note || '')}</textarea></div>
+        </div>
+        <div class="fn-err" id="fm-err"></div>
+        <div class="ud-actions"><button type="button" class="ud-ok">حفظ</button><button type="button" class="ud-cancel">إلغاء</button></div>
+      </div>`;
+    document.body.appendChild(back);
+    const $ = (id) => back.querySelector('#' + id);
+    let kind = n.kind || 'absent_during';
+    const applyKind = () => {
+      back.querySelectorAll('.fn-kinds button').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
+      back.querySelectorAll('.k-out').forEach((e) => { e.style.display = kind === 'absent_during' ? '' : 'none'; });
+      back.querySelectorAll('.k-loc').forEach((e) => { e.style.display = kind === 'other_location' ? '' : 'none'; });
+    };
+    const showDur = () => {
+      const a = fnTimeToMin_($('fm-from').value), b = fnTimeToMin_($('fm-to').value);
+      $('fm-dur').textContent = a != null && b != null ? (b > a ? `المدة: ${formatMinutesAsHM(b - a)} ساعة (${b - a} دقيقة)` : 'وقت العودة يجب أن يكون بعد الخروج') : '';
+    };
+    applyKind(); showDur();
+    back.querySelectorAll('.fn-kinds button').forEach((b) => b.addEventListener('click', () => { kind = b.dataset.k; applyKind(); }));
+    $('fm-from').addEventListener('input', showDur); $('fm-to').addEventListener('input', showDur);
+    const close = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+    const onKey = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); close(null); } };
+    document.addEventListener('keydown', onKey, true);
+    back.querySelector('.ud-cancel').addEventListener('click', () => close(null));
+    back.querySelector('.ud-ok').addEventListener('click', async (ev) => {
+      const note = {
+        id: n.id, createdAt: n.createdAt, createdBy: n.createdBy || (currentUser_ && currentUser_.username) || '',
+        civil: $('fm-civil').value, date: $('fm-date').value, kind,
+        fromTime: $('fm-from').value, toTime: $('fm-to').value,
+        punchKind: $('fm-punch').value, location: $('fm-loc').value.trim(),
+        verifiedBy: $('fm-verify').value, witness: $('fm-witness').value.trim(), note: $('fm-note').value.trim(),
+      };
+      ev.target.disabled = true;
+      try {
+        const r = await callApi('saveFieldNote', { note });
+        close(r.note);
+      } catch (e) { $('fm-err').textContent = e.message; ev.target.disabled = false; }
+    });
+    setTimeout(() => $('fm-civil').focus(), 30);
+  });
+}
+document.getElementById('btn-fn-add').addEventListener('click', async () => {
+  const saved = await openFieldNoteModal_(null);
+  if (saved) refreshFieldNotes_();
+});
+document.querySelector('#fn-table tbody').addEventListener('click', async (ev) => {
+  const tr = ev.target.closest('tr[data-id]');
+  if (!tr) return;
+  const n = lastFieldNotes.find((x) => String(x.id) === tr.dataset.id);
+  if (!n) return;
+  if (ev.target.closest('.btn-toggle-day-notice')) { toggleDayNotice_(ev.target.closest('.btn-toggle-day-notice').dataset.noticeKey, ev.target.closest('.btn-toggle-day-notice')); return; }
+  if (ev.target.closest('.btn-fn-edit')) { if (await openFieldNoteModal_(n)) refreshFieldNotes_(); return; }
+  if (ev.target.closest('.btn-fn-del')) {
+    if (!await uiConfirm(`حذف ملاحظة ${FN_KINDS[n.kind]} لـ ${n.name} بتاريخ ${formatDateDMY(n.date)}؟`)) return;
+    try { await callApi('deleteFieldNote', { id: n.id }); refreshFieldNotes_(); } catch (e) { await uiAlert('تعذّر الحذف: ' + e.message); }
+    return;
+  }
+  if (ev.target.closest('.btn-fn-print')) {
+    await printForm18ForDay_(n.civil, n.name, n.date);
+    const key = fnNoticeKey_(n);
+    callApi('markActionDone', { key, civil: n.civil, done: true })
+      .then(() => { dayNoticeStatuses[key] = { done: true, doneAt: new Date().toISOString() }; renderFieldNotes_(); }).catch(() => {});
+  }
+});
+
+// نموذج ١٨ ليوم كامل: يجمع كل ما حدث للموظف ذلك اليوم (تأخر/انصراف من البصمة + ملاحظات ميدانية)
+// في مساءلة واحدة بدل عدة مساءلات عن اليوم نفسه
+async function printForm18ForDay_(civil, name, date) {
+  const [att, fn] = await Promise.all([
+    callApi('getAttendanceRange', { from: date, to: date }).catch(() => ({ rows: [] })),
+    callApi('getFieldNotes', { from: date, to: date }).catch(() => ({ rows: [] })),
+  ]);
+  const r = (att.rows || []).find((x) => String(x.civil) === String(civil)) || {};
+  const notes = (fn.rows || []).filter((x) => String(x.civil) === String(civil));
+  const out = notes.filter((x) => x.kind === 'absent_during');
+  const loc = notes.find((x) => x.kind === 'other_location');
+  printForm18Ex_({
+    civil, name, date,
+    late: Number(r.lateMinutes) > 0 ? { at: r.checkIn, min: Number(r.lateMinutes) } : null,
+    early: Number(r.earlyMinutes) > 0 ? { at: r.checkOut, min: Number(r.earlyMinutes) } : null,
+    out: out.length ? out.map((x) => ({ from: x.fromTime, to: x.toTime, min: x.minutes })) : null,
+    loc: loc ? { punch: loc.punchKind, place: loc.location } : null,
+  });
+}
+
+// ==================== النماذج الرسمية (الآليات المنظمة لتطبيق حضوري) ====================
+// نموذج ١٨ مساءلة تأخر/انصراف · نموذج ١٩ قرار حسم مجموع ساعات تأخر وخروج مبكر ·
+// نموذج ٢١ قرار حسم غياب · نموذج ٩ محضر انقطاع — تُعبّأ تلقائياً من بيانات التطبيق، والحقول
+// غير المتوفرة (التخصص، المرتبة، رقم الوظيفة) تُترك للتعبئة اليدوية.
+const OFFICIAL_FORM_STYLE = `
+  @page { size: A4 portrait; margin: 10mm 12mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  /* مقياس موحّد: نص ١١نقطة، ترويسة وجداول ١٠، عنوان ١٤ — وزنان فقط: عادي ٥٠٠ وعريض ٧٠٠ */
+  body { color:#000; direction: rtl; margin:0; font-size: 11pt; font-weight: 500; line-height: 1.6; }
+  b, strong { font-weight: 700; }
+  .of-page { min-height: 272mm; display:flex; flex-direction:column; }
+  .of-page + .of-page { page-break-before: always; }
+  .of-body { flex: 1 1 auto; }
+  .of-head { display:grid; grid-template-columns: 1fr auto 1fr; align-items:start; gap: 6pt; font-size: 9.5pt; font-weight: 700; line-height: 1.6; }
+  .of-head .org { text-align: right; }
+  .of-head .logo { text-align:center; } .of-head .logo img { width: 100px; height:auto; }
+  .of-head .meta { text-align:left; } .of-head .meta div { white-space: nowrap; }
+  .of-title { text-align:center; font-size: 14pt; font-weight: 700; margin: 8pt 0 8pt; }
+  .of-title span { font-weight: 700; }
+  .of-box { display:grid; grid-template-columns: 140pt 1fr; border: 1px solid #000; margin-bottom: 5pt; font-size: 10.5pt; }
+  .of-box > div { padding: 4pt 8pt; } .of-box > div:first-child { border-left: 1px solid #000; font-weight:700; background:#f2f2f2; }
+  table.of-t { width:100%; border-collapse: collapse; margin: 5pt 0 7pt; font-size: 10pt; }
+  .of-t th, .of-t td { border: 1px solid #000; padding: 4pt 6pt; text-align:center; font-weight: 500; }
+  .of-t th { background:#e9e9e9; font-weight: 700; }
+  .of-sec { font-weight: 700; text-decoration: underline; margin: 6pt 0 3pt; }
+  .of-p { line-height: 1.8; margin: 2pt 0; }
+  .of-row { display:flex; justify-content: space-between; gap: 10pt; margin: 6pt 0; font-weight: 700; }
+  .of-check { margin: 3pt 0; line-height: 1.7; font-weight: 500; }
+  .bx { display:inline-block; width: 10pt; height: 10pt; border: 1px solid #000; vertical-align: -1.5pt; margin-inline-end: 6pt; text-align:center; line-height: 9pt; font-size: 9pt; font-weight: 700; }
+  .of-dots { border-bottom: 1px dotted #000; min-height: 17pt; margin: 2pt 0; }
+  .of-sep { border-top: 1px dashed #000; margin: 7pt 0; }
+  .of-note { font-size: 9.5pt; margin-top: 6pt; }
+  .of-fill { display:inline-block; min-width: 56pt; border-bottom: 1px dotted #000; text-align:center; font-weight: 700; }
+  .of-foot { display:flex; justify-content:space-between; align-items:flex-end; border-top: 1px solid #000; padding-top: 4pt; margin-top: 8pt; font-size: 9pt; font-weight: 500; }
+`;
+// أرقام موحّدة داخل النماذج الرسمية: كل الأرقام العربية-الهندية (١٤٤٨، ٤٢٠…) تتحول لأرقام
+// عربية (1448، 420) حتى لا يختلط شكلان وحجمان للأرقام في الصفحة نفسها
+function latinDigits_(html) {
+  return String(html).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+}
+function printOfficial_(body) { printInPage(OFFICIAL_FORM_STYLE, latinDigits_(body)); }
+function hijriShort_(iso) {
+  try {
+    const d = iso ? isoToLocalDate(iso) : new Date();
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'numeric', year: 'numeric' }).format(d);
+  } catch (e) { return ''; }
+}
+// تذييل الصفحة: رقم النموذج ورمزه يميناً، ورقم المرفق يساراً
+function ofFooter_(formNo, code, att) {
+  return `<div class="of-foot"><span>${formNo ? `نموذج رقم(${formNo})${code ? ` &nbsp;·&nbsp; رمز النموذج:(${code})` : ''}` : ''}</span><span>${att || ''}</span></div>`;
+}
+function ofHeader_({ formNo, code, title, noUnit }) {
+  const cfg = loadConfig();
+  return `
+    <div class="of-head">
+      <div class="org">المملكة العربية السعودية<br>وزارة التعليم<br>${escapeHtml(cfg.adminName || 'الإدارة العامة للتعليم')}<br>إدارة الموارد البشرية${noUnit ? '' : '<br>وحدة متابعة دوام الموظفين'}</div>
+      <div class="logo"><img src="${MOE_LOGO_DATA_URI}" alt="وزارة التعليم"></div>
+      <div class="meta"><div>الرقم: ..............................</div><div>التاريخ: ${escapeHtml(hijriShort_())}</div><div>المرفقات: ..........................</div></div>
+    </div>
+    <div class="of-title">اسم النموذج: <span>${escapeHtml(title)}</span></div>`;
+}
+function ofIdentity_(emp, extraHead, extraCell) {
+  const cfg = loadConfig();
+  return `
+    <div class="of-box"><div>الإدارة /المكتب/المدرسة</div><div>${escapeHtml(cfg.schoolName || '')}</div></div>
+    <div class="of-box"><div>رقم الهوية الوطنية</div><div><bdi>${escapeHtml(emp.civil || '')}</bdi></div></div>
+    <table class="of-t"><thead><tr><th>الاسم</th><th>التخصص</th><th>المستوى/المرتبة</th><th>رقم الوظيفة</th><th>العمل الحالي</th>${extraHead ? `<th>${extraHead}</th>` : ''}</tr></thead>
+      <tbody><tr><td>${escapeHtml(emp.name || '')}</td><td></td><td></td><td></td><td>${emp.role === 'إداري' ? 'إداري' : 'معلم'}</td>${extraHead ? `<td><b>${extraCell}</b></td>` : ''}</tr></tbody></table>`;
+}
+function ofDayLine_(iso) {
+  const d = isoToLocalDate(iso);
+  return `${WEEKDAYS_FULL_AR[d.getDay()]} الموافق ${escapeHtml(hijriShort_(iso))} (${escapeHtml(formatDateDMY(iso))}م)`;
+}
+function ofSign_(label) {
+  const cfg = loadConfig();
+  return `<div class="of-row"><span>${label}: ${escapeHtml(cfg.principalName || '....................')}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>`;
+}
+const bx_ = (on) => `<span class="bx">${on ? '✓' : ''}</span>`;
+
+// نموذج ١٨ — مساءلة عن تأخر/انصراف (مرفق ٢). kind: late | early (من البصمة)
+function printForm18_(row, kind) {
+  const late = kind === 'late';
+  printForm18Ex_({
+    civil: row.civil, name: row.name, date: row.date,
+    late: late ? { at: row.checkIn, min: row.lateMinutes } : null,
+    early: !late ? { at: row.checkOut, min: row.earlyMinutes } : null,
+  });
+}
+// الصيغة العامة: أي مجموعة من الحالات الأربع في النموذج تُؤشَّر معاً ليوم واحد
+function printForm18Ex_({ civil, name, date, late, early, out, loc }) {
+  const t = (x) => escapeHtml(toArabicAmPmTime(x) || x || '');
+  const outTxt = out && out.length
+    ? out.map((o) => `( <span class="of-fill">${t(o.from)}</span> ) الى الساعة ( <span class="of-fill">${t(o.to)}</span> ) — ${o.min} دقيقة`).join('<br><span style="display:inline-block;width:170pt"></span>')
+    : '( &nbsp;&nbsp; : &nbsp;&nbsp; ) الى الساعة ( &nbsp;&nbsp; : &nbsp;&nbsp; )';
+  const body = `<div class="of-page"><div class="of-body">
+    ${ofHeader_({ formNo: 18, code: 'و.م.ع.ن – 02-02', title: 'مساءلة عن تأخر/ انصراف' })}
+    ${ofIdentity_({ civil, name })}
+    <div class="of-row"><span>المكرم الموظف/ ${escapeHtml(name)}</span><span>وفقه الله</span></div>
+    <p class="of-p">السلام وعليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>انه في يوم ${ofDayLine_(date)} اتضح ما يلي:</p>
+    <div class="of-check">${bx_(!!late)} تأخركم من بداية الدوام وحضوركم الساعة ( <span class="of-fill">${late ? t(late.at) : ''}</span> )${late && late.min ? ` — بتأخير ${late.min} دقيقة` : ''}</div>
+    <div class="of-check">${bx_(!!(out && out.length))} عدم تواجدكم أثناء الدوام من الساعة ${outTxt}</div>
+    <div class="of-check">${bx_(!!early)} انصرافكم مبكراً قبل نهاية الدوام من الساعة ( <span class="of-fill">${early ? t(early.at) : ''}</span> )${early && early.min ? ` — قبل النهاية بـ ${early.min} دقيقة` : ''}</div>
+    <div class="of-check">${bx_(!!loc)} الحضور أو الانصراف من موقع آخر.${loc ? ` (${escapeHtml(loc.punch || '')}${loc.place ? ' — ' + escapeHtml(loc.place) : ''})` : ''}</div>
+    <p class="of-p">عليه نأمل توضيح ذلك مع ارفاق ما يؤيد عذركم. ولكم تحياتي</p>
+    ${ofSign_('مدير')}
+    <div class="of-sep"></div>
+    <div class="of-row"><span>المكرم / مدير المدرسة</span><span>وفقه الله</span></div>
+    <p class="of-p">السلام وعليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>افيدكم أن أسباب ذلك ما يلي:</p>
+    <div class="of-dots"></div><div class="of-dots"></div><div class="of-dots"></div>
+    <div class="of-row"><span>الاسم: ${escapeHtml(name)}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>
+    <div class="of-sep"></div>
+    <div class="of-sec">رأي مدير المدرسة</div>
+    <div class="of-check">${bx_(false)} عذر مقبول.</div>
+    <div class="of-check">${bx_(false)} عذر غير مقبول ويحسم عليه بعد اكتمال المدة المحددة (٧ساعات أو ٤٢٠ دقيقة أو مضاعفاتها)</div>
+    ${ofSign_('مدير')}
+    <div class="of-note">ملاحظة: نرفق بطاقة المساءلة مع أصل قرار الحسم في حالة عدم قبول العذر.</div>
+  </div>
+  ${ofFooter_(18, 'و.م.ع.ن – 02-02', 'مرفق ٢')}
+  </div>`;
+  printOfficial_(body);
+}
+
+// نموذج ١٩ — قرار حسم مجموع ساعات تأخر وخروج مبكر (مرفق ٤). kind: late | early
+function printForm19_(emp, kind) {
+  const late = kind === 'late';
+  const minutes = late ? emp.totalLateMinutes : emp.totalEarlyMinutes;
+  const days = emp.daysToRaise || emp.deductionDays || 0;
+  const hours = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+  const what = late ? 'التأخر' : 'الخروج المبكر (الانصراف قبل نهاية الدوام)';
+  const body = `<div class="of-page"><div class="of-body">
+    ${ofHeader_({ formNo: 19, code: 'و.م.ع.ن – 04-02', title: 'قرار حسم غياب مجموع ساعات تأخر وخروج مبكر', noUnit: true })}
+    ${ofIdentity_(emp, 'عدد أيام الغياب', days)}
+    <table class="of-t"><tbody><tr><th style="width:30%">الأيام الواجب حسمها ليحدد التاريخ</th><td>${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومان' : 'أيام'} — مجموع ${what}: ${minutes} دقيقة (${hours} ساعة)</td></tr></tbody></table>
+    <p class="of-p"><b>إن مدير ${escapeHtml(/^\s*مدرسة/.test(loadConfig().schoolName || '') ? loadConfig().schoolName : 'المدرسة ' + (loadConfig().schoolName || ''))}</b><br>
+    و بناء على صلاحياته ، وبناء على المادة (٢١) من نظام الخدمة المدنية ، وبناء على موافقة معالي الوزير على إعطاء بعض الصلاحيات للمدراء بالقرار رقم ٣٧٦١٧١٦٨ وتاريخ ١٤٣٧/٤/١هـ، ولبلوغ ساعات ${late ? 'التأخر' : 'الخروج المبكر'} بدون عذر من الدوام ( <span class="of-fill">${hours}</span> ) ساعة وحيث إن عذره غير مقبول ، وبمقتضى النظام</p>
+    <p class="of-p" style="text-align:center;font-weight:800">يقرر ما يلي :-</p>
+    <p class="of-p">١. حسم ساعات ${late ? 'التأخر' : 'الانصراف'} بدون عذر الموضحة بعاليه وعددها ( <span class="of-fill">${days}</span> ) يوما من راتبه.<br>
+    ٢. على إدارة الموارد البشرية تنفيذ إجراء الحسم واستبعادها من خدماته وأصل القرار لملفه بالإدارة مع الأساس لملفه.</p>
+    <p class="of-p" style="text-align:center;font-weight:800">والله الموفق،،،</p>
+    <div style="width:45%;margin-inline-start:auto;font-weight:700;line-height:2">الرئيس المباشر<br>الاسم: ${escapeHtml(loadConfig().principalName || '')}<br>التوقيع:<br>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</div>
+    <div style="font-weight:800;margin-top:10pt">الختم</div>
+    <div class="of-note">ملاحظة/ يتم الحسم عند بلوغ الموظف (٤٢٠) دقيقة تأخير يتم رفع أصل القرار لتنفيذ الحسم إلى خدمات الموارد البشرية (الرواتب)</div>
+  </div>
+  ${ofFooter_(19, 'و.م.ع.ن – 04-02', 'مرفق ٤')}
+  </div>`;
+  printOfficial_(body);
+}
+
+// نموذج ٢١ — قرار حسم غياب (مرفق ٣)
+function printForm21_(emp, rows) {
+  const dates = rows.map((r) => r.date).sort();
+  const days = dates.length;
+  const body = `<div class="of-page"><div class="of-body">
+    ${ofHeader_({ formNo: 21, code: 'و.م.ع.ن – 05-02', title: 'قرار حسم غياب', noUnit: true })}
+    ${ofIdentity_(emp, 'عدد أيام الغياب', days)}
+    <table class="of-t"><tbody><tr><th style="width:30%">الأيام الواجب حسمها ليحدد التاريخ</th><td style="text-align:right;line-height:1.7;font-size:${dates.length > 8 ? '9pt' : '10.5pt'}"><div style="columns:${dates.length > 12 ? 3 : dates.length > 4 ? 2 : 1};column-gap:14pt">${dates.map((d) => `<div>${escapeHtml(dates.length > 8 ? WEEKDAYS_FULL_AR[isoToLocalDate(d).getDay()] + ' ' + formatDateDMY(d) : ofDayLine_(d))}</div>`).join('')}</div></td></tr></tbody></table>
+    <p class="of-p"><b>إن مدير ${escapeHtml(/^\s*مدرسة/.test(loadConfig().schoolName || '') ? loadConfig().schoolName : 'المدرسة ' + (loadConfig().schoolName || ''))}</b><br>
+    وبناء على صلاحياته، وبناء على المادة (٢١) من نظام الخدمة المدنية، وبناء على موافقة معالي الوزير على إعطاء بعض الصلاحيات للمدراء بالقرار رقم ١/١١٣٩ وتاريخ ١٤٢١/٣/١٧هـ، ولغياب الموظف الموضح اسمه أعلاه، وحيث إن عذره غير مقبول، وبمقتضى النظام يقرر ما يلي: -</p>
+    <p class="of-p">١. حسم مدة الغياب الموضحة بعاليه وعددها ( <span class="of-fill">${days}</span> ) يوماً من راتبه<br>
+    ٢. على إدارة الموارد البشرية تنفيذ إجراء الحسم واستبعادها من خدماته وأصل القرار لملفه بالإدارة مع الأساس لملفه.</p>
+    <p class="of-p" style="text-align:center;font-weight:800">والله الموفق،،،</p>
+    <div style="width:45%;margin-inline-start:auto;font-weight:700;line-height:2">الرئيس المباشر<br>الاسم: ${escapeHtml(loadConfig().principalName || '')}<br>التوقيع:<br>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</div>
+    <div style="font-weight:800;margin-top:10pt">الختم</div>
+    <div class="of-note">ملاحظة / لن يتم استلام قرار الحسم بدون المساءلة</div>
+  </div>
+  ${ofFooter_(21, 'و.م.ع.ن – 05-02', 'مرفق ٣')}
+  </div>`;
+  printOfficial_(body);
+}
+
+// نموذج ٩ — محضر انقطاع عن العمل (١٥ يوماً متصلة أو ٣٠ متفرقة) + بيان تفصيلي بأيام الغياب
+function printForm9_(c) {
+  const consecutive = c.reached === 'consecutive' || c.longestStreak >= 15;
+  const sections = [
+    'ثانياً: إدارة المراجعة الداخلية: هل عليه/ـا أو لديه/ـا شكوى يتم التحقق منها',
+    'ثالثاً: إدارة الشؤون القانونية: هل عليه/ـا أو لديه/ـا قضية أو يحقق معه/ـا',
+    'رابعاً: رأي مدير إدارة الموارد البشرية',
+    'خامساً: رأي صاحب الصلاحية',
+    'سادساً: شعبة الأجور والرواتب: هل عليه/ـا كف يد',
+    'سابعاً: وحدة متابعة دوام الموظفين: تم استلام أصل المحضر لاستكماله وفق الإجراءات المتبعة نظاماً',
+  ];
+  const detail = c.dates.map((d, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(ofDayLine_(d))}</td></tr>`).join('');
+  const body = `<div class="of-page"><div class="of-body">
+    ${ofHeader_({ title: 'محضر انقطاع عن العمل مدة خمسة عشر يوماً فأكثر أو تغيب ثلاثين يوماً متفرقة' })}
+    <table class="of-t"><thead><tr><th>الاسم رباعياً</th><th>السجل المدني</th><th>الرتبة / المرتبة</th><th>العمل الحالي</th><th>جهة العمل</th></tr></thead>
+      <tbody><tr><td>${escapeHtml(c.name)}</td><td><bdi>${escapeHtml(c.civil)}</bdi></td><td></td><td>معلم</td><td>${escapeHtml(loadConfig().schoolName || '')}</td></tr></tbody></table>
+    <div class="of-sec">أولاً: اتضح بأن الموضح/ـة اسمه/ـا أعلاه قد تغيب عن العمل:</div>
+    <div class="of-check">${bx_(consecutive)} مدة (١٥) يوماً متصلة بدون عذر مشروع اعتباراً من ${consecutive ? escapeHtml(ofDayLine_(c.longestFrom)) : '&nbsp;/&nbsp;/ ١٤هـ'} وحتى ${consecutive ? escapeHtml(ofDayLine_(c.longestTo)) : '&nbsp;/&nbsp;/ ١٤هـ'}${consecutive ? ` (${c.longestStreak} يوماً)` : ''}</div>
+    <div class="of-check">${bx_(!consecutive)} مدة (٣٠) يوماً منفصلة بدون عذر مشروع خلال السنة${!consecutive ? ` (${c.totalDays} يوماً)` : ''}. (ملاحظة: يرفق بيان تفصيلي بأيام الغياب)</div>
+    <p class="of-p">وبناءً على المادة (٢٢٦/ب) من اللائحة التنفيذية للموارد البشرية نرى: &nbsp; ${bx_(false)} طي قيده/ـا &nbsp;&nbsp; ${bx_(false)} التريث بسبب: ..............................</p>
+    <p class="of-p">علماً بأن المذكور/ة: &nbsp; ${bx_(false)} ليس عليه/ـا عهد أو التزامات &nbsp;&nbsp; ${bx_(false)} عليه/ـا عهد والتزامات</p>
+    ${ofSign_('مدير/ة المدرسة')}
+    ${sections.map((t) => `<div class="of-sep" style="margin:6pt 0"></div><div class="of-sec" style="text-decoration:none">${t}</div><div class="of-row" style="font-weight:500"><span>الاسم: ....................</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤٤هـ</span></div>`).join('')}
+  </div>
+  ${ofFooter_(9, '', 'محضر انقطاع')}
+  </div>
+  <div class="of-page"><div class="of-body">
+    ${ofHeader_({ title: 'بيان تفصيلي بأيام الغياب بدون عذر' })}
+    <p class="of-p">الموظف/ـة: <b>${escapeHtml(c.name)}</b> — السجل المدني: <bdi>${escapeHtml(c.civil)}</bdi> — إجمالي أيام الغياب المسجّلة: <b>${c.absenceDays}</b>${c.totalDays !== c.absenceDays ? ` (وبإضافة العطل الواقعة بين أيام الغياب: <b>${c.totalDays}</b> يوماً)` : ''}${c.unclassified ? ` — منها ${c.unclassified} غير مصنّفة بعد` : ''}</p>
+    <table class="of-t"><thead><tr><th style="width:12%">م</th><th>اليوم والتاريخ</th></tr></thead><tbody>${detail}</tbody></table>
+    ${ofSign_('مدير/ة المدرسة')}
+  </div>
+  ${ofFooter_(9, '', 'مرفق المحضر: بيان تفصيلي')}
+  </div>`;
+  printOfficial_(body);
+}
+
 // ==================== التقرير الشهري المصوّر ====================
 // على نسق "الميزانية الشهرية": عنوان كبير، سطرا إرشاد، رسم حلقي بنسب ومفتاح ألوان، رسم أعمدة
 // مزدوجة بمفتاح، ثم جدول ملخص برأس أزرق وعمود مظلّل وصف إجمالي.
@@ -8560,7 +9252,12 @@ function printInPage(styleCss, bodyHtml) {
   let safetyTimer = null;
 
   iframe.onload = () => {
-    setTimeout(() => {
+    const win0 = iframe.contentWindow;
+    // ننتظر تحميل الخط (بحد أقصى ثانية ونصف) حتى لا تُطبع الصفحة بخط بديل
+    const fontsReady = win0.document.fonts && win0.document.fonts.ready
+      ? Promise.race([win0.document.fonts.ready, new Promise((r) => setTimeout(r, 1500))])
+      : Promise.resolve();
+    fontsReady.then(() => setTimeout(() => {
       const win = iframe.contentWindow;
       win.focus();
       win.print();
@@ -8571,12 +9268,17 @@ function printInPage(styleCss, bodyHtml) {
       window.addEventListener('afterprint', cleanup);
       window.addEventListener('focus', onFocus);
       safetyTimer = setTimeout(cleanup, 20000);
-    }, 60);
+    }, 60));
   };
 
   const doc = iframe.contentWindow.document;
   doc.open();
-  doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><style>${styleCss}</style></head><body>${bodyHtml}</body></html>`);
+  // نفس خط التطبيق في كل المطبوعات (موحّد للحروف والأرقام)، مع بدائل مثبتة بالنظام إن تعذّر تحميله
+  doc.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+    <style>${styleCss}
+      body, table, th, td, input, button { font-family: 'IBM Plex Sans Arabic', Tahoma, 'Segoe UI', Arial, sans-serif !important; font-variant-numeric: lining-nums; }
+    </style></head><body>${bodyHtml}</body></html>`);
   doc.close();
 }
 
@@ -8593,6 +9295,13 @@ function parseHoursRawToMinutes_(hoursRaw) {
 }
 
 let lastDepEarlyRows = [];
+// يوم يُصنَّف "خروج قبل إكمال ٤ ساعات عمل" — تُصدر فيه مساءلة الأربع ساعات وحدها، فلا يُكرَّر
+// في "الانصراف قبل نهاية الدوام الرسمي" حتى لا تُوجَّه مساءلتان عن الخروج نفسه
+function isUnder4h_(r) {
+  if (String(r.noCheckout) === 'true') return false;
+  const mins = parseHoursRawToMinutes_(r.hoursRaw);
+  return mins != null && mins < 240;
+}
 let lastDepEarlyExcusedCount = 0;
 let lastDepEarlyEndRows = [];
 let lastDepEarlyEndExcusedMinutes = 0;
@@ -8624,8 +9333,8 @@ async function refreshDeparture() {
     // "قبل نهاية الدوام الرسمي": معيار مختلف تماماً عن الأعلى — دقائق الانصراف قبل الموعد
     // الرسمي مباشرة (earlyMinutes، صافية بالفعل من أي استئذان معتمد يغطيها جزئياً أو كلياً)،
     // بغضّ النظر عن إجمالي ساعات العمل بذلك اليوم.
-    lastDepEarlyEndRows = res.rows.filter((r) => Number(r.earlyMinutes) > 0);
-    lastDepEarlyEndExcusedMinutes = res.rows.reduce((s, r) => s + (Number(r.excusedEarlyMinutes) || 0), 0);
+    lastDepEarlyEndRows = res.rows.filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r));
+    lastDepEarlyEndExcusedMinutes = res.rows.filter((r) => !isUnder4h_(r)).reduce((s, r) => s + (Number(r.excusedEarlyMinutes) || 0), 0);
 
     document.getElementById('dep-early-empty').style.display = lastDepEarlyRows.length ? 'none' : 'block';
     document.getElementById('dep-earlyend-empty').style.display = lastDepEarlyEndRows.length ? 'none' : 'block';
@@ -8675,8 +9384,8 @@ function updateDepTabCounts_() {
   document.getElementById('dt-count-nocheckout').textContent = lastDepNcRows.length;
   const mins = lastDepEarlyEndRows.reduce((s, r) => s + (Number(r.earlyMinutes) || 0), 0);
   document.getElementById('dt-desc-earlyend').textContent = mins
-    ? `انصرف قبل موعد نهاية الدوام — مجموعها ${formatMinutesAsHM(mins)} ساعة.`
-    : 'انصرف قبل موعد نهاية الدوام المحدد.';
+    ? `انصرف قبل موعد نهاية الدوام بعد إكمال ٤ ساعات — مجموعها ${formatMinutesAsHM(mins)} ساعة.`
+    : 'انصرف قبل موعد نهاية الدوام المحدد (بعد إكمال ٤ ساعات عمل).';
 }
 
 document.querySelectorAll('button[data-deptab]').forEach((btn) => {
@@ -8725,7 +9434,7 @@ function renderDepEarlyTable() {
           <div class="hc-bar"><i style="width:${Math.min(100, Math.round((worked / 240) * 100))}%"></i></div>
         </div></td>
         <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-early" title="طباعة إشعار انصراف مبكر">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-early" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('dep-early-pagination').innerHTML = paginationControlsHtml_(depEarlyPageState, rows.length);
@@ -8793,7 +9502,7 @@ document.querySelector('#dep-early-table tbody').addEventListener('click', (ev) 
     const tr = ev.target.closest('tr');
     const row = lastDepEarlyRows.find((r) => String(r.id) === tr.dataset.id);
     if (row) {
-      printEarlyLeaveEshaarSingle_(row);
+      printForm18_(row, 'early');
       callApi('markActionDone', { key: dayNoticeKey_('earlyleave', row.civil, row.date), civil: row.civil, done: true })
         .then(() => { dayNoticeStatuses[dayNoticeKey_('earlyleave', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderDepEarlyTable(); })
         .catch(() => {});
@@ -8837,7 +9546,7 @@ function renderDepEarlyEndTable() {
         <td class="time-flow"><b style="color:#9333ea">${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</b><br><span style="font-size:11px">نهاية الدوام ${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</span></td>
         <td><span class="early-pill">${mins} د <i style="width:${Math.max(8, Math.round((mins / maxEarly) * 70))}px"></i><small style="font-weight:500;color:var(--muted)">${formatMinutesAsHM(mins)}</small></span>${Number(r.excusedEarlyMinutes) ? `<div style="font-size:10.5px" class="status-ok">+${r.excusedEarlyMinutes} د مستثنى</div>` : ''}</td>
         <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-earlyend" title="طباعة إشعار انصراف قبل نهاية الدوام">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-earlyend" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('dep-earlyend-pagination').innerHTML = paginationControlsHtml_(depEarlyEndPageState, rows.length);
@@ -8858,7 +9567,7 @@ document.querySelector('#dep-earlyend-table tbody').addEventListener('click', (e
     const tr = ev.target.closest('tr');
     const row = lastDepEarlyEndRows.find((r) => String(r.id) === tr.dataset.id);
     if (row) {
-      printEarlyEndEshaarSingle_(row);
+      printForm18_(row, 'early');
       callApi('markActionDone', { key: dayNoticeKey_('earlyend', row.civil, row.date), civil: row.civil, done: true })
         .then(() => { dayNoticeStatuses[dayNoticeKey_('earlyend', row.civil, row.date)] = { done: true, doneAt: new Date().toISOString() }; renderDepEarlyEndTable(); })
         .catch(() => {});
@@ -9265,10 +9974,13 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
   if (!p) return;
   try {
     const cfg = loadConfig();
-    const [teachersRes, bundleRes] = await Promise.all([
+    const [teachersRes, bundleRes, fnRes] = await Promise.all([
       getTeachersCached(),
       callApi('getRangeBundle', p),
+      callApi('getFieldNotes', { from: p.from, to: p.to }).catch(() => ({ rows: [] })),
     ]);
+    const fnByKey = {};
+    (fnRes.rows || []).forEach((n) => { const k = n.civil + '|' + n.date; (fnByKey[k] || (fnByKey[k] = [])).push(n.kind === 'absent_during' ? `عدم تواجد ${n.minutes}د` : 'بصمة من موقع آخر'); });
     const attByCivil = {}, absByCivil = {};
     bundleRes.attendance.forEach((r) => { const c = String(r.civil); (attByCivil[c] || (attByCivil[c] = [])).push(r); });
     bundleRes.absence.forEach((r) => { const c = String(r.civil); (absByCivil[c] || (absByCivil[c] = [])).push(r); });
@@ -9310,7 +10022,9 @@ document.getElementById('btn-dr-teachers').addEventListener('click', async () =>
           // الحالة بحسب الصافي: تأخر مغطّى كاملاً باستئذان معتمد ليس "متأخراً"
           const statusText = (Number(e.lateMinutes) || 0) > 0 ? 'متأخر' : (late > 0 ? 'حاضر (مستأذن)' : 'حاضر');
           const permCell = excLate > 0 ? excLate : (excEarly > 0 ? excEarly : '—');
-          const noteText = excLate > 0 ? `استئذان تأخر (${excLate}د)` : excEarly > 0 ? `استئذان انصراف (${excEarly}د)` : '—';
+          const fnNotes = (fnByKey[civil + '|' + e.date] || []).join('، ');
+          const baseNote = excLate > 0 ? `استئذان تأخر (${excLate}د)` : excEarly > 0 ? `استئذان انصراف (${excEarly}د)` : '';
+          const noteText = [baseNote, fnNotes ? '📋 ' + fnNotes : ''].filter(Boolean).join(' · ') || '—';
           return `<tr>
             <td>${i + 1}</td><td>${escapeHtml(e.date)}</td><td>${escapeHtml(dayName)}</td>
             <td class="${late > 0 ? 'pr-late-cell' : ''}">${escapeHtml(toArabicAmPmTime(e.checkIn)) || '—'}</td>
@@ -9631,7 +10345,7 @@ document.getElementById('btn-dr-earlyend-mesaalah').addEventListener('click', as
     await refreshDayNoticeStatuses();
     const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
     const rowsData = attRes.rows
-      .filter((r) => Number(r.earlyMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r) && (!p.civil || String(r.civil) === p.civil))
       .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)].done))
       .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] || {}).doneAt }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -9810,6 +10524,9 @@ async function refreshPenalties() {
     absRes.rows.forEach((r) => { const c = String(r.civil); absCountByCivil[c] = (absCountByCivil[c] || 0) + 1; });
     const list = civil ? penRes.list.filter((e) => String(e.civil) === civil) : penRes.list;
     lastPenaltiesList = list.map((e) => ({ ...e, absenceDays: absCountByCivil[String(e.civil)] || 0 }));
+    lastEarlyDeductList = (penRes.earlyList || []).filter((e) => !civil || String(e.civil) === civil);
+    renderEarlyDeduct_();
+    renderInterruptions_();
     document.getElementById('penalties-empty').style.display = lastPenaltiesList.length ? 'none' : 'block';
     renderPenaltiesTable();
     msgEl.innerHTML = '';
@@ -9817,6 +10534,64 @@ async function refreshPenalties() {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
+
+// ---- تراكم الانصراف المبكر (منفصل عن التأخير) ----
+let lastEarlyDeductList = [];
+const EARLY_DEDUCT_ACTION = 'رفع حسم الانصراف المبكر';
+function renderEarlyDeduct_() {
+  const tbody = document.querySelector('#early-deduct-table tbody');
+  document.getElementById('early-deduct-empty').style.display = lastEarlyDeductList.length ? 'none' : 'block';
+  tbody.innerHTML = lastEarlyDeductList.map((e) => `
+    <tr data-civil="${escapeHtml(e.civil)}">
+      <td>${escapeHtml(e.num)}</td><td><div class="ncell">${avatarHtml_(e.name, 22)}<span>${escapeHtml(e.name)}</span></div></td>
+      <td><b style="color:#9333ea">${e.totalEarlyMinutes}</b> د <small class="muted">(${formatMinutesAsHM(e.totalEarlyMinutes)})</small>${e.outMinutes ? `<div class="muted" style="font-size:11px">منها ${e.outMinutes} د عدم تواجد (${e.outCount} ${e.outCount === 1 ? 'مرة' : 'مرات'})</div>` : ''}</td>
+      <td>${e.earlyDays}</td>
+      <td class="ded-cell">${e.deductionDays ? daysWord_(e.deductionDays) : '—'}${e.deductionDays ? (e.daysToRaise ? `<small class="bad">للرفع: ${e.daysToRaise}</small>` : '<small class="ok">رُفعت ✔</small>') : ''}</td>
+      <td>${e.toNextDeduction} د</td>
+      <td style="white-space:nowrap">
+        ${e.deductionDays ? `<button type="button" class="small btn-early-form19" style="background:#9333ea;color:#fff">قرار الحسم (نموذج ١٩)</button>` : ''}
+        ${e.daysToRaise ? `<button type="button" class="small btn-early-raised">تم الرفع</button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+document.querySelector('#early-deduct-table tbody').addEventListener('click', async (ev) => {
+  const tr = ev.target.closest('tr[data-civil]');
+  if (!tr) return;
+  const e = lastEarlyDeductList.find((x) => String(x.civil) === tr.dataset.civil);
+  if (!e) return;
+  if (ev.target.closest('.btn-early-form19')) { printForm19_(e, 'early'); return; }
+  if (ev.target.closest('.btn-early-raised')) {
+    if (!await uiConfirm(`تسجيل رفع حسم ${daysWord_(e.daysToRaise)} لـ ${e.name} (مجموع ${e.totalEarlyMinutes} دقيقة)؟`, { title: 'تأكيد رفع الحسم', tone: 'info' })) return;
+    try {
+      await callApi('markActionDone', { civil: e.civil, tierAction: EARLY_DEDUCT_ACTION, done: true, minutes: e.totalEarlyMinutes });
+      refreshPenalties();
+    } catch (err) { await uiAlert('تعذّر الحفظ: ' + err.message); }
+  }
+});
+
+// ---- محاضر الانقطاع ----
+let lastInterruptions_ = [];
+async function renderInterruptions_() {
+  const el = document.getElementById('interruption-list');
+  try {
+    lastInterruptions_ = (await callApi('getAlerts', {})).interruptionCases || [];
+  } catch (e) { el.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; return; }
+  if (!lastInterruptions_.length) { el.innerHTML = '<p class="muted" style="margin:0">✓ لا توجد حالات بلغت أو اقتربت من حد محضر الانقطاع.</p>'; return; }
+  el.innerHTML = `<div style="overflow:auto"><table id="interruption-table"><thead><tr><th>الاسم</th><th>أطول غياب متصل</th><th>مجموع الغياب (مع العطل البينية)</th><th>الحالة</th><th></th></tr></thead><tbody>
+    ${lastInterruptions_.map((c, i) => `<tr data-i="${i}">
+      <td><div class="ncell">${avatarHtml_(c.name, 22)}<span>${escapeHtml(c.name)}</span></div>${c.unclassified ? `<span class="pending-tag">${c.unclassified} غير مصنّف</span>` : ''}</td>
+      <td><b${c.longestStreak >= 15 ? ' style="color:var(--bad)"' : ''}>${c.longestStreak}</b> / ١٥ يوماً<br><small class="muted">${escapeHtml(formatDateDMY(c.longestFrom))} ← ${escapeHtml(formatDateDMY(c.longestTo))}</small></td>
+      <td><b${c.totalDays >= 30 ? ' style="color:var(--bad)"' : ''}>${c.totalDays}</b> / ٣٠ يوماً</td>
+      <td>${c.reached ? '<span class="st-pill st-bad">بلغ حد المحضر</span>' : '<span class="st-pill st-wait">يقترب</span>'}</td>
+      <td>${c.reached ? '<button type="button" class="small btn-form9" style="background:var(--bad);color:#fff">محضر الانقطاع (نموذج ٩)</button>' : ''}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+document.getElementById('interruption-list').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.btn-form9');
+  if (!b) return;
+  const c = lastInterruptions_[Number(b.closest('tr').dataset.i)];
+  if (c) printForm9_(c);
+});
 
 let penaltiesPageState = makePaginator_();
 function daysWord_(n) {
@@ -9856,7 +10631,7 @@ function renderPenaltiesTable() {
         <td>${e.nextStep
           ? `<button class="action-status-btn pending btn-do-next" title="تسجيل الدرجة ${e.nextStep} منفّذة">تنفيذ (${e.nextStep}) ${escapeHtml(e.nextAction)}</button>${e.pendingCount > 1 ? `<small class="muted" style="display:block;font-size:11px;margin-top:3px">ثم ${e.pendingCount - 1} إجراء آخر مستحق</small>` : ''}`
           : '<span class="action-status-btn done">مكتمل ✔</span>'}</td>
-        <td><button class="small btn-print-action" style="background:var(--warn); color:#fff" title="يطبع بيان دقائق التأخير في الصفحة الأولى ومساءلة التأخر في الصفحة الثانية">النموذج والمساءلة</button></td>
+        <td style="white-space:nowrap"><button class="small btn-print-action" style="background:var(--warn); color:#fff" title="يطبع بيان دقائق التأخير في الصفحة الأولى ومساءلة التأخر في الصفحة الثانية">النموذج والمساءلة</button>${e.deductionDays ? ' <button class="small btn-late-form19" title="قرار حسم مجموع ساعات التأخر (نموذج ١٩)">قرار الحسم</button>' : ''}</td>
       </tr>`).join('');
   document.getElementById('penalties-pagination').innerHTML = paginationControlsHtml_(penaltiesPageState, lastPenaltiesList.length);
 }
@@ -9988,6 +10763,7 @@ document.querySelector('#penalties-table tbody').addEventListener('click', async
     document.getElementById('penalties-msg').innerHTML = `<div class="msg err">تعذّر تحديث الحالة: ${escapeHtml(err.message)}</div>`;
   };
 
+  if (ev.target.closest('.btn-late-form19')) { printForm19_(entry, 'late'); return; }
   if (ev.target.closest('.btn-print-action')) {
     const pb = ev.target.closest('.btn-print-action');
     pb.disabled = true;

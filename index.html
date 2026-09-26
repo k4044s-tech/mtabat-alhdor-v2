@@ -546,6 +546,9 @@
   .dep-tab .dt-desc { font-size:11.5px; color:var(--muted); line-height:1.6; }
   .dep-tab.active { border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); }
   .dep-tab[data-deptab="early"] .dt-count { color:var(--bad); }
+  .dep-tab[data-logtab="absence"] .dt-count { color:var(--bad); }
+  .dep-tab[data-logtab="late"] .dt-count { color:var(--warn); }
+  .dt-desc b { color:var(--bad); }
   .dep-tab[data-deptab="earlyend"] .dt-count { color:#9333ea; }
   .dep-tab[data-deptab="nocheckout"] .dt-count { color:#ca8a04; }
   .repeat-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 12px; font-size:12px; }
@@ -1263,11 +1266,18 @@
               <input type="date" id="abs-to">
             </div>
             <button class="primary" id="btn-refresh-absence" style="align-self:flex-end">تحديث</button>
-            <div class="view-toggle" style="align-self:flex-end">
-              <button type="button" class="active" data-logtab="absence">الغياب</button>
-              <button type="button" data-logtab="late">التأخر</button>
-            </div>
           </div>
+        </div>
+
+        <div class="dep-tabs log-tabs" role="tablist" aria-label="الغياب والتأخر">
+          <button type="button" class="dep-tab active" data-logtab="absence" role="tab">
+            <span class="dt-top"><span class="dt-title">الغياب</span><span class="dt-count" id="lt-count-absence">—</span></span>
+            <span class="dt-desc" id="lt-desc-absence">أيام الغياب في الفترة وتصنيفها بعذر أو بدون عذر.</span>
+          </button>
+          <button type="button" class="dep-tab" data-logtab="late" role="tab">
+            <span class="dt-top"><span class="dt-title">التأخر</span><span class="dt-count" id="lt-count-late">—</span></span>
+            <span class="dt-desc" id="lt-desc-late">حالات التأخر عن بداية الدوام وشدتها.</span>
+          </button>
         </div>
 
         <div id="log-absence-section">
@@ -1707,6 +1717,19 @@
           <div id="sy-terms" style="margin-top:12px"></div>
           <button type="button" class="ghost" id="btn-sy-add-term" style="margin-top:8px">＋ إضافة فصل</button>
           <p class="muted" style="font-size:12px;margin:8px 0 0">تُحفظ مع زر «حفظ إعدادات الدوام والعطل» أدناه.</p>
+        </div>
+
+        <div class="card" id="tolerance-card">
+          <h3 style="margin-top:0">هامش التسامح بعد الاستئذان</h3>
+          <p class="muted">إذا غطّى استئذان معتمد التأخر أو الانصراف المبكر وبقيت منه دقائق قليلة لا تتجاوز هذا الهامش، لا تظهر الحالة في قوائم المساءلة. تبقى الدقائق محسوبة في تراكم الحسم كما هي.</p>
+          <div class="row" style="align-items:flex-end">
+            <div>
+              <label for="tol-min">الهامش (دقيقة)</label>
+              <input type="number" id="tol-min" min="0" max="60" step="1" style="width:110px">
+            </div>
+            <span class="muted" style="font-size:12px">٠ = بلا هامش</span>
+          </div>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">يُحفظ مع زر «حفظ إعدادات الدوام والعطل» أدناه.</p>
         </div>
 
         <div class="card">
@@ -7024,6 +7047,13 @@ function renderAbsenceInbox_() {
 
 function renderAbsenceKpis() {
   const total = lastAbsenceRows.length;
+  {
+    const pend = lastAbsenceRows.filter((r) => !r.classification).length;
+    document.getElementById('lt-count-absence').textContent = total;
+    document.getElementById('lt-desc-absence').innerHTML = total
+      ? `${pend ? `<b>${pend} لم يُدخل عذر</b> · ` : ''}${lastAbsenceRows.filter((r) => r.classification === 'بعذر').length} بعذر · ${lastAbsenceRows.filter((r) => r.classification === 'بدون عذر').length} بدون عذر`
+      : 'لا غياب في هذه الفترة.';
+  }
   const unclassified = lastAbsenceRows.filter((r) => !r.classification).length;
   const excused = lastAbsenceRows.filter((r) => r.classification === 'بعذر').length;
   const unexcused = lastAbsenceRows.filter((r) => r.classification === 'بدون عذر').length;
@@ -7272,7 +7302,7 @@ async function refreshLate() {
     const res = await callApi('getAttendanceRange', { from, to });
     // lateMinutes هنا صافية بالفعل من الخادم (بعد طرح ما يغطّيه استئذان معتمد نسبياً) —
     // صف بقي فيه تأخير حقيقي (ولو جزئياً بعد الاستثناء) يبقى ظاهراً برقمه المخفَّض.
-    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0);
+    lastLateRows = res.rows.filter((r) => Number(r.lateMinutes) > 0 && !lateCovered_(r));
     lastLateExcusedMinutes = res.rows.reduce((s, r) => s + (Number(r.excusedLateMinutes) || 0), 0);
     document.getElementById('late-empty').style.display = lastLateRows.length ? 'none' : 'block';
     renderLateKpis();
@@ -7287,6 +7317,14 @@ async function refreshLate() {
 
 function renderLateKpis() {
   const total = lastLateRows.length;
+  {
+    const mins = lastLateRows.reduce((a, r) => a + (Number(r.lateMinutes) || 0), 0);
+    const heavy = lastLateRows.filter((r) => lateSeverity_(r.lateMinutes) === 'heavy').length;
+    document.getElementById('lt-count-late').textContent = total;
+    document.getElementById('lt-desc-late').innerHTML = total
+      ? `مجموعها ${formatMinutesAsHM(mins)} ساعة${heavy ? ` · <b>${heavy} تأخر كبير</b>` : ''}`
+      : 'لا تأخر في هذه الفترة.';
+  }
   const sevCounts = { '': total, light: 0, medium: 0, heavy: 0 };
   lastLateRows.forEach((r) => { sevCounts[lateSeverity_(r.lateMinutes)]++; });
   document.querySelectorAll('#log-late-section .filter-chip[data-sev]').forEach((c) => {
@@ -8746,32 +8784,17 @@ document.querySelector('#fn-table tbody').addEventListener('click', async (ev) =
     return;
   }
   if (ev.target.closest('.btn-fn-print')) {
-    await printForm18ForDay_(n.civil, n.name, n.date);
+    printForm18Ex_({
+      civil: n.civil, name: n.name, date: n.date,
+      out: n.kind === 'absent_during' ? [{ from: n.fromTime, to: n.toTime, min: n.minutes }] : null,
+      loc: n.kind === 'other_location' ? { punch: n.punchKind, place: n.location } : null,
+    });
     const key = fnNoticeKey_(n);
     callApi('markActionDone', { key, civil: n.civil, done: true })
       .then(() => { dayNoticeStatuses[key] = { done: true, doneAt: new Date().toISOString() }; renderFieldNotes_(); }).catch(() => {});
   }
 });
 
-// نموذج ١٨ ليوم كامل: يجمع كل ما حدث للموظف ذلك اليوم (تأخر/انصراف من البصمة + ملاحظات ميدانية)
-// في مساءلة واحدة بدل عدة مساءلات عن اليوم نفسه
-async function printForm18ForDay_(civil, name, date) {
-  const [att, fn] = await Promise.all([
-    callApi('getAttendanceRange', { from: date, to: date }).catch(() => ({ rows: [] })),
-    callApi('getFieldNotes', { from: date, to: date }).catch(() => ({ rows: [] })),
-  ]);
-  const r = (att.rows || []).find((x) => String(x.civil) === String(civil)) || {};
-  const notes = (fn.rows || []).filter((x) => String(x.civil) === String(civil));
-  const out = notes.filter((x) => x.kind === 'absent_during');
-  const loc = notes.find((x) => x.kind === 'other_location');
-  printForm18Ex_({
-    civil, name, date,
-    late: Number(r.lateMinutes) > 0 ? { at: r.checkIn, min: Number(r.lateMinutes) } : null,
-    early: Number(r.earlyMinutes) > 0 ? { at: r.checkOut, min: Number(r.earlyMinutes) } : null,
-    out: out.length ? out.map((x) => ({ from: x.fromTime, to: x.toTime, min: x.minutes })) : null,
-    loc: loc ? { punch: loc.punchKind, place: loc.location } : null,
-  });
-}
 
 // ==================== النماذج الرسمية (الآليات المنظمة لتطبيق حضوري) ====================
 // نموذج ١٨ مساءلة تأخر/انصراف · نموذج ١٩ قرار حسم مجموع ساعات تأخر وخروج مبكر ·
@@ -8809,6 +8832,14 @@ const OFFICIAL_FORM_STYLE = `
   .of-sep { border-top: 1px dashed #000; margin: 7pt 0; }
   .of-note { font-size: 9.5pt; margin-top: 6pt; }
   .of-fill { display:inline-block; min-width: 56pt; border-bottom: 1px dotted #000; text-align:center; font-weight: 700; }
+  /* نماذج طويلة المحتوى (مساءلة الغياب): مسافات أضيق لتبقى في صفحة واحدة */
+  .of-page.compact .of-p { line-height:1.6; margin:1pt 0; }
+  .of-page.compact .of-row { margin:4pt 0; }
+  .of-page.compact .of-sep { margin:5pt 0; }
+  .of-page.compact .of-check { line-height:1.55; margin:2pt 0; }
+  .of-page.compact .of-sec { margin:4pt 0 2pt; }
+  .of-page.compact .of-dots { min-height:15pt; }
+  .of-page.compact .of-title { margin:4pt 0 6pt; }
   .of-foot { display:flex; justify-content:space-between; align-items:flex-end; border-top: 1px solid #000; padding-top: 4pt; margin-top: 8pt; font-size: 9pt; font-weight: 500; }
 `;
 // أرقام موحّدة داخل النماذج الرسمية: كل الأرقام العربية-الهندية (١٤٤٨، ٤٢٠…) تتحول لأرقام
@@ -8854,15 +8885,28 @@ function ofSign_(label) {
   return `<div class="of-row"><span>${label}: ${escapeHtml(cfg.principalName || '....................')}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>`;
 }
 const bx_ = (on) => `<span class="bx">${on ? '✓' : ''}</span>`;
+// "مدير مدرسة ..." باسم المدرسة من الإعدادات (دون تكرار كلمة مدرسة)
+function principalOf_() {
+  const sc = String(loadConfig().schoolName || '').trim();
+  return sc ? (/^مدرسة/.test(sc) ? 'مدير ' + sc : 'مدير مدرسة ' + sc) : 'مدير المدرسة';
+}
 
 // نموذج ١٨ — مساءلة عن تأخر/انصراف (مرفق ٢). kind: late | early (من البصمة)
 function printForm18_(row, kind) {
   const late = kind === 'late';
   printForm18Ex_({
     civil: row.civil, name: row.name, date: row.date,
-    late: late ? { at: row.checkIn, min: row.lateMinutes } : null,
-    early: !late ? { at: row.checkOut, min: row.earlyMinutes } : null,
+    late: late ? { at: row.checkIn, min: row.lateMinutes, exc: Number(row.excusedLateMinutes) || 0 } : null,
+    early: !late ? { at: row.checkOut, min: row.earlyMinutes, exc: Number(row.excusedEarlyMinutes) || 0 } : null,
   });
+}
+// "— بتأخير 77 دقيقة، منها 76 باستئذان معتمد (المحتسب 1 دقيقة)": الوقت المطبوع هو وقت البصمة
+// الفعلي، فلو ذُكرت الدقائق الصافية وحدها لبدت متناقضة معه
+function minsPhrase_(lead, x) {
+  // الدقائق الفعلية كما تُظهرها البصمة (مطابقة للوقت المطبوع)؛ إن كان لدى المعلّم استئذان
+  // فهو يوضّحه في إفادته — المساءلة لا تفترضه
+  const gross = (Number(x.min) || 0) + (Number(x.exc) || 0);
+  return ` — ${lead} ${gross} دقيقة`;
 }
 // الصيغة العامة: أي مجموعة من الحالات الأربع في النموذج تُؤشَّر معاً ليوم واحد
 function printForm18Ex_({ civil, name, date, late, early, out, loc }) {
@@ -8875,19 +8919,19 @@ function printForm18Ex_({ civil, name, date, late, early, out, loc }) {
     ${ofIdentity_({ civil, name })}
     <div class="of-row"><span>المكرم الموظف/ ${escapeHtml(name)}</span><span>وفقه الله</span></div>
     <p class="of-p">السلام وعليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>انه في يوم ${ofDayLine_(date)} اتضح ما يلي:</p>
-    <div class="of-check">${bx_(!!late)} تأخركم من بداية الدوام وحضوركم الساعة ( <span class="of-fill">${late ? t(late.at) : ''}</span> )${late && late.min ? ` — بتأخير ${late.min} دقيقة` : ''}</div>
+    <div class="of-check">${bx_(!!late)} تأخركم من بداية الدوام وحضوركم الساعة ( <span class="of-fill">${late ? t(late.at) : ''}</span> )${late && late.min ? minsPhrase_('بتأخير', late) : ''}</div>
     <div class="of-check">${bx_(!!(out && out.length))} عدم تواجدكم أثناء الدوام من الساعة ${outTxt}</div>
-    <div class="of-check">${bx_(!!early)} انصرافكم مبكراً قبل نهاية الدوام من الساعة ( <span class="of-fill">${early ? t(early.at) : ''}</span> )${early && early.min ? ` — قبل النهاية بـ ${early.min} دقيقة` : ''}</div>
+    <div class="of-check">${bx_(!!early)} انصرافكم مبكراً قبل نهاية الدوام من الساعة ( <span class="of-fill">${early ? t(early.at) : ''}</span> )${early && early.min ? minsPhrase_('قبل النهاية بـ', early) : ''}</div>
     <div class="of-check">${bx_(!!loc)} الحضور أو الانصراف من موقع آخر.${loc ? ` (${escapeHtml(loc.punch || '')}${loc.place ? ' — ' + escapeHtml(loc.place) : ''})` : ''}</div>
     <p class="of-p">عليه نأمل توضيح ذلك مع ارفاق ما يؤيد عذركم. ولكم تحياتي</p>
     ${ofSign_('مدير')}
     <div class="of-sep"></div>
-    <div class="of-row"><span>المكرم / مدير المدرسة</span><span>وفقه الله</span></div>
+    <div class="of-row"><span>المكرم / ${escapeHtml(principalOf_())}</span><span>وفقه الله</span></div>
     <p class="of-p">السلام وعليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>افيدكم أن أسباب ذلك ما يلي:</p>
     <div class="of-dots"></div><div class="of-dots"></div><div class="of-dots"></div>
     <div class="of-row"><span>الاسم: ${escapeHtml(name)}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>
     <div class="of-sep"></div>
-    <div class="of-sec">رأي مدير المدرسة</div>
+    <div class="of-sec">رأي ${escapeHtml(principalOf_())}</div>
     <div class="of-check">${bx_(false)} عذر مقبول.</div>
     <div class="of-check">${bx_(false)} عذر غير مقبول ويحسم عليه بعد اكتمال المدة المحددة (٧ساعات أو ٤٢٠ دقيقة أو مضاعفاتها)</div>
     ${ofSign_('مدير')}
@@ -9075,6 +9119,11 @@ function renderSchoolYearSettings_() {
       <button type="button" class="small sy-del" style="background:var(--bad);color:#fff">حذف</button>
     </div>`).join('') || '<p class="muted" style="margin:0;font-size:12.5px">لا توجد فصول بعد — أضف الفصل الأول والثاني بتواريخهما.</p>';
 }
+document.getElementById('tol-min').addEventListener('change', (ev) => {
+  const v = Math.max(0, Math.min(60, Math.round(Number(ev.target.value) || 0)));
+  ev.target.value = v;
+  currentSettings.permissionTolerance = v;
+});
 document.getElementById('sy-start').addEventListener('change', (ev) => { currentSettings.schoolYearStart = ev.target.value || ''; refreshPeriodChips_(); });
 document.getElementById('sy-terms').addEventListener('input', (ev) => {
   const row = ev.target.closest('.sy-term');
@@ -9370,6 +9419,15 @@ function parseHoursRawToMinutes_(hoursRaw) {
 }
 
 let lastDepEarlyRows = [];
+// هامش التسامح بعد الاستئذان: إن غطّى استئذان معتمد معظم التأخر/الانصراف وبقي منه دقائق قليلة
+// (≤ الهامش) لا تظهر الحالة في قوائم المساءلة — تبقى دقائقها محسوبة في التراكم كما هي
+function permTolerance_() {
+  const v = Number(currentSettings && currentSettings.permissionTolerance);
+  return Number.isFinite(v) && v >= 0 ? v : 5;
+}
+function coveredByPermission_(net, exc) { return exc > 0 && net > 0 && net <= permTolerance_(); }
+function lateCovered_(r) { return coveredByPermission_(Number(r.lateMinutes) || 0, Number(r.excusedLateMinutes) || 0); }
+function earlyCovered_(r) { return coveredByPermission_(Number(r.earlyMinutes) || 0, Number(r.excusedEarlyMinutes) || 0); }
 // يوم يُصنَّف "خروج قبل إكمال ٤ ساعات عمل" — تُصدر فيه مساءلة الأربع ساعات وحدها، فلا يُكرَّر
 // في "الانصراف قبل نهاية الدوام الرسمي" حتى لا تُوجَّه مساءلتان عن الخروج نفسه
 function isUnder4h_(r) {
@@ -9396,6 +9454,7 @@ async function refreshDeparture() {
     lastDepEarlyRows = res.rows.filter((r) => {
       if (String(r.noCheckout) === 'true') return false;
       if (r.excusedEarly) return false; // استئذان معتمد يغطي كامل فجوة الانصراف المبكر
+      if (earlyCovered_(r)) return false; // غطّاه الاستئذان إلا دقائق ضمن هامش التسامح
       const mins = parseHoursRawToMinutes_(r.hoursRaw);
       return mins != null && mins < 240;
     });
@@ -9408,7 +9467,7 @@ async function refreshDeparture() {
     // "قبل نهاية الدوام الرسمي": معيار مختلف تماماً عن الأعلى — دقائق الانصراف قبل الموعد
     // الرسمي مباشرة (earlyMinutes، صافية بالفعل من أي استئذان معتمد يغطيها جزئياً أو كلياً)،
     // بغضّ النظر عن إجمالي ساعات العمل بذلك اليوم.
-    lastDepEarlyEndRows = res.rows.filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r));
+    lastDepEarlyEndRows = res.rows.filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r) && !earlyCovered_(r));
     lastDepEarlyEndExcusedMinutes = res.rows.filter((r) => !isUnder4h_(r)).reduce((s, r) => s + (Number(r.excusedEarlyMinutes) || 0), 0);
 
     document.getElementById('dep-early-empty').style.display = lastDepEarlyRows.length ? 'none' : 'block';
@@ -10335,7 +10394,7 @@ document.getElementById('btn-dr-late-mesaalah').addEventListener('click', async 
     await refreshDayNoticeStatuses();
     const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
     const rowsData = attRes.rows
-      .filter((r) => Number(r.lateMinutes) > 0 && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => Number(r.lateMinutes) > 0 && !lateCovered_(r) && (!p.civil || String(r.civil) === p.civil))
       .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)].done))
       .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('late', r.civil, r.date)] || {}).doneAt }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -10378,6 +10437,7 @@ document.getElementById('btn-dr-earlyleave-mesaalah').addEventListener('click', 
     const rowsData = attRes.rows
       .filter((r) => {
         if (String(r.noCheckout) === 'true' || (p.civil && String(r.civil) !== p.civil)) return false;
+        if (r.excusedEarly || earlyCovered_(r)) return false;
         const mins = parseHoursRawToMinutes_(r.hoursRaw);
         return mins != null && mins < 240;
       })
@@ -10420,7 +10480,7 @@ document.getElementById('btn-dr-earlyend-mesaalah').addEventListener('click', as
     await refreshDayNoticeStatuses();
     const [attRes, teachersRes] = await Promise.all([callApi('getAttendanceRange', p), p.civil ? getTeachersCached() : Promise.resolve(null)]);
     const rowsData = attRes.rows
-      .filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r) && (!p.civil || String(r.civil) === p.civil))
+      .filter((r) => Number(r.earlyMinutes) > 0 && !isUnder4h_(r) && !earlyCovered_(r) && (!p.civil || String(r.civil) === p.civil))
       .filter((r) => !!(dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] && dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)].done))
       .map((r) => ({ ...r, doneAt: (dayNoticeStatuses[dayNoticeKey_('earlyend', r.civil, r.date)] || {}).doneAt }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -10873,64 +10933,49 @@ document.querySelector('#penalties-table tbody').addEventListener('click', async
 
 // نموذج ٢٠ — مساءلة غياب لمعلّم عن يوم واحد أو أكثر (تُستدعى من سجل الغياب لكل صف على حدة)
 // معاد صياغته حرفياً وفق النموذج الرسمي "مرفق رقم (2)" الصادر عن الإدارة العامة للتعليم
+// نموذج ٢٠ — مساءلة غياب (مرفق ١) بنفس تنسيق النماذج الرسمية، معبّأ باسم المعلّم وأيام غيابه
 function printAbsenceMesaalah_(entry) {
   const cfg = loadConfig();
   const dates = entry.dates.slice().sort((a, b) => a.date.localeCompare(b.date));
-  const lastDate = dates[dates.length - 1];
-  const d = isoToLocalDate(lastDate.date);
-  const periodPhrase = dates.length > 1
-    ? `من ${formatDateDMY(dates[0].date)} إلى ${formatDateDMY(lastDate.date)} (${dates.length} أيام)`
-    : `يوم ${formatDateDMY(lastDate.date)} (${WEEKDAYS_FULL_AR[d.getDay()]})`;
-  const header = buildPeriodReportHeader({
-    schoolName: cfg.schoolName, adminName: cfg.adminName, titleLine: 'مساءلة غياب',
-    dateBoxHtml: `<div>الرقم: ....................</div><div>التاريخ: ${reportTodayStr_()}</div><div>المشفوعات: ....................</div>`,
-  });
-  const body = `
-    <div class="pr-page">
-      ${header}
-      <table class="pr-table pr-info-table" style="margin-bottom:10pt">
-        <tbody>
-          <tr><td style="width:22%">اسم المدرسة</td><td>${escapeHtml(cfg.schoolName || '')}</td><td style="width:18%">السجل المدني</td><td><bdi>${escapeHtml(entry.civil)}</bdi></td></tr>
-          <tr><td>الاسم رباعي</td><td>${escapeHtml(entry.name)}</td><td>الوظيفة</td><td>معلّم/ـة</td></tr>
-          <tr><td>المستوى / المرتبة</td><td>—</td><td>عدد أيام الغياب</td><td>${dates.length}</td></tr>
-          <tr><td>أيام الغياب</td><td colspan="3">${periodPhrase}</td></tr>
-        </tbody>
-      </table>
-
-      <div class="pr-section-title">(١) طلب الإفادة</div>
-      <p style="font-size:9.5pt; line-height:1.8">
-        المكرم/ وفقه الله<br>
-        السلام عليكم ورحمة الله وبركاته وبعـد:<br>
-        من خلال متابعة الدوام تبين غيابكم خلال الفترة الموضحة أعلاه، آمل الإفادة عن أسباب ذلك وعليكم تقديم ما يؤيد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.
-      </p>
-      <div class="pr-sign-row"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
-
-      <div class="pr-section-title">(٢) الإفادة</div>
-      <p style="font-size:9.5pt">المكرم/ مدير وفقه الله<br>السلام عليكم ورحمة الله وبركاته وبعد:<br>أفيدكم أن غيابي كان للأسباب التالية:</p>
-      <div class="pr-note-box"></div>
-      <p style="font-size:9.5pt">وسأقوم بتقديم ما يثبت ذلك خلال أسبوع من تاريخه.</p>
-      <div class="pr-sign-row"><div>اسم المتعهد: .................................... &nbsp;&nbsp;&nbsp; التوقيع: ..............</div></div>
-
-      <div class="pr-section-title">(٣) مدير المدرسة</div>
-      <div class="pr-checklist">
-        <div>( &nbsp;&nbsp;) تحتسب له إجازة مرضية بعد التأكد من نظامية التقرير</div>
-        <div>( &nbsp;&nbsp;) يحتسب غيابه من رصيده للإجازات العادية أو الاضطرارية لقبول عذره إذا كان رصيده يسمح وإلا يحسم عليه</div>
-        <div>( &nbsp;&nbsp;) يعتمد الحسم لعدم قبول عذره</div>
-      </div>
-      <div class="pr-sign-row"><div>مدير المدرسة: ${escapeHtml(cfg.principalName || '....................')}</div><div>التوقيع: ..............</div><div>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/١٤هـ</div></div>
-
-      <div class="pr-warning-box">
-        <b>ملاحظات هامة:</b><br>
-        ١- تستكمل الاستمارة من مدير المدرسة وإصدار القرار بموجبه.<br>
-        ٢- إذا سبق عطلة نهاية الأسبوع غياب وألحقها غياب تحتسب غياب الأسبوع كاملة.<br>
-        ٣- يجب أن يوضح المتغيب أسباب غيابه فور تسلمه الاستمارة ويعيدها لمدير المدرسة.<br>
-        ٤- يعطى المتغيب مدة أسبوع لتقديم ما يؤيد عذره فإذا انقضت هذه المدة الزمنية تستكمل الاستمارة ويتم الحسم.<br>
-        ٥- في حال رفض الموظف توقيع المساءلة يتم تدوين ذلك في الخانة المخصصة لتقرير غياب مع التوقيع من قبل المساعد الإداري ووكيل المدرسة.
-      </div>
-      ${buildReportFooterHtml()}
-      <div style="text-align:left; font-size:9pt; margin-top:6pt">مرفق رقم (2)</div>
-    </div>`;
-  printInPage(PERIOD_REPORT_STYLE, body);
+  const first = dates[0].date, last = dates[dates.length - 1].date;
+  const n = dates.length;
+  // أيام الغياب سطراً واحداً مختصراً (تفيد حين تكون متفرقة) بدل جدول يأخذ مساحة الصفحة
+  const daysList = n > 1
+    ? `<p class="of-p" style="font-size:${n > 10 ? '9pt' : '10pt'}"><b>أيام الغياب:</b> ${dates.map((x) => escapeHtml(WEEKDAYS_FULL_AR[isoToLocalDate(x.date).getDay()] + ' ' + formatDateDMY(x.date))).join('، ')}</p>`
+    : '';
+  const body = `<div class="of-page compact"><div class="of-body">
+    ${ofHeader_({ formNo: 20, code: 'و.م.ع.ن – 04-02', title: 'مساءلة غياب' })}
+    ${ofIdentity_({ civil: entry.civil, name: entry.name, role: entry.role }, 'عدد أيام الغياب', n)}
+    <p class="of-p">إنه في يوم ${ofDayLine_(first)} تغيبت عن العمل${n > 1 ? ` الى يوم ${ofDayLine_(last)}` : ''}.</p>
+    ${daysList}
+    <div class="of-sec">(١) طلب الإفادة:</div>
+    <div class="of-row"><span>المكرم/ ${escapeHtml(entry.name)}</span><span>وفقه الله</span></div>
+    <p class="of-p">السلام عليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>من خلال متابعة سجل الدوام تبين غيابكم خلال الفترة الموضحة بعاليه، آمل الإفادة عن أسباب ذلك وعليكم تقديم ما يؤيد عذركم خلال أسبوع من تاريخه، علماً بأنه في حالة عدم الالتزام سيتم اتخاذ اللازم حسب التعليمات.</p>
+    <div class="of-row"><span>اسم الرئيس المباشر: ${escapeHtml(cfg.principalName || '....................')}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>
+    <div class="of-sep"></div>
+    <div class="of-sec">(٢) الإفادة:</div>
+    <div class="of-row"><span>المكرم/ ${escapeHtml(principalOf_())}</span><span>وفقه الله</span></div>
+    <p class="of-p">السلام عليكم ورحمة الله وبركاته &nbsp;&nbsp; وبعد:<br>أفيدكم أن غيابي كان للأسباب التالية:</p>
+    <div class="of-dots"></div><div class="of-dots"></div>
+    <p class="of-p">وسأقوم بتقديم ما يثبت ذلك خلال أسبوع من تاريخه.</p>
+    <div class="of-row"><span>الاسم: ${escapeHtml(entry.name)}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>
+    <div class="of-sep"></div>
+    <div class="of-sec">(٣) ${escapeHtml(principalOf_())}:</div>
+    <div class="of-check">${bx_(false)} تحتسب له إجازة مرضية بعد التأكد من نظامية التقرير</div>
+    <div class="of-check">${bx_(false)} يحتسب غيابه من رصيده للإجازات الاضطرارية لقبول عذره إذا كان رصيده يسمح وإلا يحسم عليه</div>
+    <div class="of-check">${bx_(false)} يعتمد الحسم لعدم قبول عذره</div>
+    <div class="of-row"><span>اسم الرئيس المباشر: ${escapeHtml(cfg.principalName || '....................')}</span><span>التوقيع: ..............</span><span>التاريخ: &nbsp;&nbsp;/&nbsp;&nbsp;/ ١٤هـ</span></div>
+    <div class="of-sec">ملحوظات هامة:</div>
+    <div class="of-note" style="margin-top:0;line-height:1.55;display:grid;grid-template-columns:1fr 1fr;gap:1pt 14pt">
+      <div>١. تستكمل الاستمارة من المدير المباشر وإصدار القرار بموجبه.</div>
+      <div>٢. إذا سبق عطلة نهاية الأسبوع غياب وألحقها غياب تحتسب مدة الغياب كاملة.</div>
+      <div>٣. يجب أن يوضح المتغيب أسباب غيابه فور تسلمه الاستمارة ويعيدها لمديره المباشر.</div>
+      <div>٤. يعطى المتغيب مدة أسبوع لتقديم ما يؤيد عذره فإذا انقضت المدة الزمنية تستكمل الاستمارة ويتم الحسم.</div>
+    </div>
+  </div>
+  ${ofFooter_(20, 'و.م.ع.ن – 04-02', 'مرفق ١')}
+  </div>`;
+  printOfficial_(body);
 }
 
 // نموذج إشعار تأخر عن الدوام ليوم واحد فقط (يُستدعى من سجل التأخر لكل صف على حدة)
@@ -11026,6 +11071,7 @@ async function loadScheduleSettings() {
     if (!currentSettings.roleStartDates) currentSettings.roleStartDates = { 'معلم': '', 'إداري': '' };
     if (typeof renderRoleStartDates_ === 'function') renderRoleStartDates_();
     if (!Array.isArray(currentSettings.schoolTerms)) currentSettings.schoolTerms = [];
+    document.getElementById('tol-min').value = permTolerance_();
     if (typeof renderSchoolYearSettings_ === 'function') { renderSchoolYearSettings_(); refreshPeriodChips_(); }
     if (!currentSettings.schedulePeriods || !currentSettings.schedulePeriods.length) {
       currentSettings.schedulePeriods = [

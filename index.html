@@ -433,8 +433,12 @@
   #absence-table .f-reason { max-width:170px; font-size:12px; }
   #absence-table .f-note { min-width:110px; font-size:12px; }
   .notice-cell { display:flex; align-items:center; gap:6px; }
-  .icon-btn { border:1px solid var(--border); background:#fff; border-radius:8px; width:30px; height:28px; cursor:pointer; font-size:13px; display:inline-grid; place-items:center; }
-  .icon-btn:hover { background:#f4f4f5; }
+  /* زر الطباعة: أيقونة طابعة واضحة + كلمة "طباعة" */
+  .icon-btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #1e3a8a; background:#eff6ff; color:#1e3a8a; border-radius:8px; height:30px; padding:0 10px; cursor:pointer; font-size:12px; font-weight:700; font-family:inherit; white-space:nowrap; }
+  .icon-btn svg { flex:0 0 auto; }
+  .icon-btn > * { pointer-events:none; } /* النقر على الأيقونة/النص يُحتسب على الزر نفسه */
+  .icon-btn:hover { background:#1e3a8a; color:#fff; }
+  .icon-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .sev-pill { display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:12.5px; }
   .sev-pill i { display:block; height:6px; border-radius:999px; }
   .sev-light { color:#ca8a04; } .sev-light i { background:#facc15; }
@@ -460,6 +464,12 @@
   .sd-chip.custom small { color:#1d4ed8; font-weight:700; }
   .sd-chip button { border:none; background:none; cursor:pointer; font-size:13px; padding:0 3px; color:var(--muted); }
   .sd-chip button:hover { color:var(--ink); }
+  /* ---- الفترات الجاهزة ---- */
+  .period-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px; }
+  .period-chips .pc-label { font-size:12px; color:var(--muted); margin-inline-end:2px; }
+  .period-chips .filter-chip.is-current { border-color:#93c5fd; }
+  .period-chips .filter-chip small { font-size:10.5px; opacity:.75; }
+  .an-toolbar .period-chips, .rp-filters .period-chips { margin-top:0; }
   /* ---- المتابعة الميدانية ---- */
   .fn-kind { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; white-space:nowrap; }
   .fn-kind.k-out { background:#f5f3ff; color:#6d28d9; } .fn-kind.k-loc { background:#fff7ed; color:#c2410c; }
@@ -1685,6 +1695,20 @@
           <p class="muted" style="font-size:12px;margin:8px 0 0">تُحفظ مع زر «حفظ إعدادات الدوام والعطل» أدناه، ويُحذف تلقائياً أي غياب مسجّل قبل تاريخ المباشرة.</p>
         </div>
 
+        <div class="card" id="school-year-card">
+          <h3 style="margin-top:0">العام الدراسي والفصول</h3>
+          <p class="muted">كل حقول «من تاريخ» في التطبيق تبدأ من بداية العام الدراسي، و«إلى تاريخ» من آخر يوم مستورد. والفصول تظهر كفترات جاهزة في كل الصفحات.</p>
+          <div class="row" style="align-items:flex-end">
+            <div>
+              <label for="sy-start">بداية العام الدراسي</label>
+              <input type="date" id="sy-start">
+            </div>
+          </div>
+          <div id="sy-terms" style="margin-top:12px"></div>
+          <button type="button" class="ghost" id="btn-sy-add-term" style="margin-top:8px">＋ إضافة فصل</button>
+          <p class="muted" style="font-size:12px;margin:8px 0 0">تُحفظ مع زر «حفظ إعدادات الدوام والعطل» أدناه.</p>
+        </div>
+
         <div class="card">
           <h3 style="margin-top:0">أيام نهاية الأسبوع</h3>
           <p class="muted">لا يُسجَّل غياب في هذه الأيام عند عدم ظهور المعلم بملف الاستيراد.</p>
@@ -1769,12 +1793,7 @@
             <button class="ghost" id="btn-export-summary-excel" style="align-self:flex-end">تصدير Excel</button>
             <button class="ghost" id="btn-print-summary-official" style="align-self:flex-end"><span class="icon" data-icon="printer"></span> طباعة رسمية</button>
           </div>
-          <div class="row" style="margin-top:10px">
-            <span class="muted" style="font-size:12px; align-self:center">فترات جاهزة:</span>
-            <button type="button" class="filter-chip" id="btn-sum-preset-month">هذا الشهر</button>
-            <button type="button" class="filter-chip" id="btn-sum-preset-lastmonth">الشهر الماضي</button>
-            <button type="button" class="filter-chip" id="btn-sum-preset-year">منذ بداية العام الدراسي</button>
-          </div>
+          <div class="period-chips" data-period="sum"></div>
         </div>
 
         <div class="section-header"><span class="sh-title">نظرة عامة على الفترة</span></div>
@@ -1837,12 +1856,7 @@
         <!-- ٢) تحليل الفترة -->
         <div class="section-header"><span class="sh-title">تحليل الفترة</span></div>
         <div class="card an-toolbar">
-          <div class="an-range-chips" role="group" aria-label="فترات جاهزة">
-            <button type="button" class="filter-chip" data-range="week">هذا الأسبوع</button>
-            <button type="button" class="filter-chip" data-range="month">هذا الشهر</button>
-            <button type="button" class="filter-chip" data-range="30">آخر ٣٠ يوماً</button>
-            <button type="button" class="filter-chip" data-range="year">منذ بداية العام</button>
-          </div>
+          <div class="period-chips an-range-chips" data-period="an"></div>
           <div class="an-range-inputs">
             <div>
               <label for="an-from">من تاريخ</label>
@@ -1977,11 +1991,7 @@
                 <option value="">جميع المعلمين</option>
               </select>
             </div>
-            <div class="rp-quick" role="group" aria-label="فترات جاهزة">
-              <button type="button" class="filter-chip" data-rp-range="month">هذا الشهر</button>
-              <button type="button" class="filter-chip" data-rp-range="last">الشهر الماضي</button>
-              <button type="button" class="filter-chip" data-rp-range="year">منذ بداية العام</button>
-            </div>
+            <div class="period-chips rp-quick" data-period="dr"></div>
           </div>
           <div id="dr-msg"></div>
         </div>
@@ -5131,12 +5141,18 @@ const FISCAL_YEAR_FROM = (() => {
   const y = Number(t.slice(0, 4));
   return t >= `${y}-12-31` ? `${y}-12-31` : `${y - 1}-12-31`;
 })();
-const REPORT_DEFAULT_FROM = (() => {
+// بداية العام الدراسي من الإعدادات (وإلا ١٦ أغسطس من العام الحالي كقيمة احتياطية)
+function schoolYearFrom_() {
+  const v = currentSettings && currentSettings.schoolYearStart;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : LEGACY_YEAR_FROM;
+}
+const LEGACY_YEAR_FROM = (() => {
   const t = todayISO();
   const y = Number(t.slice(0, 4));
   return t >= `${y}-08-16` ? `${y}-08-16` : `${y - 1}-08-16`;
 })();
 async function getDefaultReportToDate_() {
+  try { await ensureSettingsLoaded_(); } catch (e) { /* تجاهل */ }
   try {
     const res = await callApi('listImports', {});
     if (res.list && res.list.length) {
@@ -5187,7 +5203,7 @@ function showTab(name) {
   if (name === 'absence') {
     if (!document.getElementById('abs-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('abs-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('abs-from').value = schoolYearFrom_();
         document.getElementById('abs-to').value = to;
         refreshDayNoticeStatuses().then(() => { refreshAbsence(); refreshLate(); });
       });
@@ -5197,15 +5213,17 @@ function showTab(name) {
   }
   if (name === 'field') {
     if (!document.getElementById('fn-from').value) {
-      document.getElementById('fn-from').value = FISCAL_YEAR_FROM;
-      document.getElementById('fn-to').value = todayISO();
-    }
-    refreshFieldNotes_();
+      getDefaultReportToDate_().then((to) => {
+        document.getElementById('fn-from').value = schoolYearFrom_();
+        document.getElementById('fn-to').value = to > todayISO() ? to : todayISO();
+        refreshFieldNotes_();
+      });
+    } else refreshFieldNotes_();
   }
   if (name === 'departure') {
     if (!document.getElementById('dep-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('dep-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('dep-from').value = schoolYearFrom_();
         document.getElementById('dep-to').value = to;
         refreshDayNoticeStatuses().then(() => refreshDeparture());
       });
@@ -5216,7 +5234,7 @@ function showTab(name) {
   if (name === 'permissions') {
     if (!document.getElementById('perm-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('perm-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('perm-from').value = schoolYearFrom_();
         document.getElementById('perm-to').value = to;
         refreshPermissions();
       });
@@ -5246,7 +5264,7 @@ function showTab(name) {
   if (name === 'summary') {
     if (!document.getElementById('sum-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('sum-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('sum-from').value = schoolYearFrom_();
         document.getElementById('sum-to').value = to;
         refreshSummary();
       });
@@ -5258,7 +5276,7 @@ function showTab(name) {
     loadDashboardInsights();
     if (!document.getElementById('an-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('an-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('an-from').value = schoolYearFrom_();
         document.getElementById('an-to').value = to;
         refreshAnalytics();
       });
@@ -5270,7 +5288,7 @@ function showTab(name) {
     populateDrEmployeeSelect_();
     if (!document.getElementById('dr-from').value) {
       getDefaultReportToDate_().then((to) => {
-        document.getElementById('dr-from').value = REPORT_DEFAULT_FROM;
+        document.getElementById('dr-from').value = schoolYearFrom_();
         document.getElementById('dr-to').value = to;
       });
     }
@@ -5658,7 +5676,7 @@ document.querySelectorAll('#role-start-card input[data-role]').forEach((inp) => 
 // بعد أي تغيير في تواريخ المباشرة أو الفئات: حذف الغياب المسجّل قبل تاريخ المباشرة
 async function reconcileStartDates_() {
   try {
-    const res = await callApi('reapplyPermissions', { from: REPORT_DEFAULT_FROM, to: todayISO() });
+    const res = await callApi('reapplyPermissions', { from: schoolYearFrom_(), to: todayISO() });
     return res.removedBeforeStart || 0;
   } catch (e) { return 0; }
 }
@@ -7070,7 +7088,7 @@ function renderAbsenceTable() {
         <td><select class="f-reason" aria-label="السبب">${reasonOptions}</select></td>
         <td><input class="f-note" type="text" value="${escapeHtml(r.note || '')}" placeholder="ملاحظة…" aria-label="ملاحظة"></td>
         <td>${permissionBadgeHtml_(r.permissionStatus, r.permissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('absence', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day" title="طباعة مسألة غياب لهذا اليوم">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('absence', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day" title="طباعة مسألة غياب لهذا اليوم"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('absence-pagination').innerHTML = paginationControlsHtml_(absPageState, rows.length);
@@ -7311,7 +7329,7 @@ function renderLateTable() {
         <td class="time-flow"><span>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'}</span> ← <b>${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</b></td>
         <td><span class="sev-pill sev-${sev}" title="${sevLabel[sev]}">${mins} د <i style="width:${Math.max(8, Math.round((mins / maxLate) * 70))}px"></i><small style="font-weight:600;opacity:.8">${sevLabel[sev]}</small></span>${Number(r.excusedLateMinutes) ? `<div style="font-size:10.5px" class="status-ok">+${r.excusedLateMinutes} د مستثنى</div>` : ''}</td>
         <td>${permissionBadgeHtml_(r.latePermissionStatus, r.latePermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-late" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('late', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-late" title="مساءلة عن تأخر/انصراف — نموذج ١٨"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('late-pagination').innerHTML = paginationControlsHtml_(latePageState, rows.length);
@@ -7807,28 +7825,6 @@ document.getElementById('sum-highlights').addEventListener('click', (ev) => {
   jumpToEmployeeReport(row.dataset.civil);
 });
 
-// ---------- فترات جاهزة ----------
-function applySummaryPeriod_(from, to) {
-  document.getElementById('sum-from').value = from;
-  document.getElementById('sum-to').value = to;
-  refreshSummary();
-}
-document.getElementById('btn-sum-preset-month').addEventListener('click', () => {
-  const d = new Date();
-  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-  applySummaryPeriod_(from, todayISO());
-});
-document.getElementById('btn-sum-preset-lastmonth').addEventListener('click', () => {
-  const d = new Date();
-  const lastMonthEnd = new Date(d.getFullYear(), d.getMonth(), 0);
-  const lastMonthStart = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-  const fmt = (dd) => `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`;
-  applySummaryPeriod_(fmt(lastMonthStart), fmt(lastMonthEnd));
-});
-document.getElementById('btn-sum-preset-year').addEventListener('click', () => {
-  applySummaryPeriod_(REPORT_DEFAULT_FROM, todayISO());
-});
-
 // ---------- طباعة رسمية لكشف الملخص والترتيب ----------
 document.getElementById('btn-print-summary-official').addEventListener('click', () => {
   if (!lastSummaryList.length) return;
@@ -7870,31 +7866,9 @@ document.getElementById('btn-print-summary-official').addEventListener('click', 
 
 // ---------- التحليلات ----------
 document.getElementById('btn-refresh-analytics').addEventListener('click', refreshAnalytics);
-document.getElementById('an-from').addEventListener('change', () => { markAnRangeChip_(''); refreshAnalytics(); });
-// فترات جاهزة: هذا الأسبوع (من أول يوم عمل فيه)، هذا الشهر، آخر ٣٠ يوماً، منذ بداية العام الدراسي
-function markAnRangeChip_(key) {
-  document.querySelectorAll('.an-range-chips .filter-chip').forEach((c) => c.classList.toggle('active', c.dataset.range === key));
-}
-document.querySelector('.an-range-chips').addEventListener('click', (ev) => {
-  const chip = ev.target.closest('[data-range]');
-  if (!chip) return;
-  const to = todayISO();
-  let from = to;
-  if (chip.dataset.range === 'week') {
-    for (let i = 1; i <= 6; i++) { if (isNonWorkingDayClient_(addDaysISO(to, -i))) break; from = addDaysISO(to, -i); }
-  } else if (chip.dataset.range === 'month') {
-    from = to.slice(0, 8) + '01';
-  } else if (chip.dataset.range === '30') {
-    from = addDaysISO(to, -29);
-  } else if (chip.dataset.range === 'year') {
-    from = REPORT_DEFAULT_FROM;
-  }
-  document.getElementById('an-from').value = from;
-  document.getElementById('an-to').value = to;
-  markAnRangeChip_(chip.dataset.range);
-  refreshAnalytics();
-});
-document.getElementById('an-to').addEventListener('change', () => { markAnRangeChip_(''); refreshAnalytics(); });
+document.getElementById('an-from').addEventListener('change', () => { refreshAnalytics(); });
+
+document.getElementById('an-to').addEventListener('change', () => { refreshAnalytics(); });
 
 function barRow(label, value, max) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -8673,7 +8647,7 @@ function renderFieldNotes_() {
       <td><span class="fn-kind ${isOut ? 'k-out' : 'k-loc'}">${isOut ? '🚶' : '📍'} ${FN_KINDS[n.kind]}</span></td>
       <td>${det}${n.note ? `<div class="fn-doc" style="margin-top:3px">📝 ${escapeHtml(n.note)}</div>` : ''}</td>
       <td class="fn-doc">${n.verifiedBy ? `<b>${escapeHtml(n.verifiedBy)}</b><br>` : ''}${n.witness ? `الشاهد: ${escapeHtml(n.witness)}<br>` : ''}${n.createdBy ? `سجّلها: ${escapeHtml(n.createdBy)}` : ''}</td>
-      <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('field', n.civil, n.date + '#' + n.id)}<button type="button" class="icon-btn btn-fn-print" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
+      <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('field', n.civil, n.date + '#' + n.id)}<button type="button" class="icon-btn btn-fn-print" title="مساءلة عن تأخر/انصراف — نموذج ١٨"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       <td style="white-space:nowrap"><button type="button" class="small btn-fn-edit">تعديل</button> <button type="button" class="small btn-fn-del" style="background:var(--bad);color:#fff">حذف</button></td>
     </tr>`;
   }).join('');
@@ -9009,6 +8983,121 @@ function printForm9_(c) {
   printOfficial_(body);
 }
 
+
+// ==================== الفترات الجاهزة (موحّدة لكل الصفحات) ====================
+// هذا الأسبوع · هذا الشهر · الشهر الماضي · فصول العام من الإعدادات · العام الدراسي
+// (وفي الإجراءات أيضاً: السنة المالية). "إلى" = آخر يوم مستورد ضمن الفترة.
+const PERIOD_TARGETS = {
+  sum: () => refreshSummary(),
+  an: () => refreshAnalytics(),
+  abs: () => { refreshAbsence(); refreshLate(); },
+  dep: () => refreshDeparture(),
+  perm: () => refreshPermissions(),
+  dr: null,
+  ac: () => refreshPenalties(),
+  fn: () => refreshFieldNotes_(),
+};
+function isoOf_(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function schoolTerms_() {
+  return ((currentSettings && currentSettings.schoolTerms) || []).filter((t) => t && t.from && t.to);
+}
+function periodPresets_(prefix) {
+  const t = todayISO(), d = isoToLocalDate(t);
+  // الأسبوع: من أول يوم عمل بعد آخر عطلة نهاية أسبوع
+  let wk = t;
+  for (let i = 1; i <= 6; i++) { const x = addDaysISO(t, -i); if (isNonWorkingDayClient_(x)) break; wk = x; }
+  const m0 = isoOf_(new Date(d.getFullYear(), d.getMonth(), 1));
+  const lm0 = isoOf_(new Date(d.getFullYear(), d.getMonth() - 1, 1)), lm1 = isoOf_(new Date(d.getFullYear(), d.getMonth(), 0));
+  const list = [
+    { key: 'week', label: 'هذا الأسبوع', from: wk, to: t },
+    { key: 'month', label: 'هذا الشهر', from: m0, to: t },
+    { key: 'lastmonth', label: 'الشهر الماضي', from: lm0, to: lm1 },
+  ];
+  schoolTerms_().forEach((term, i) => list.push({ key: 'term' + i, label: term.label || `الفصل ${i + 1}`, from: term.from, to: term.to, term: true, current: t >= term.from && t <= term.to }));
+  list.push({ key: 'year', label: 'العام الدراسي', from: schoolYearFrom_(), to: t });
+  if (prefix === 'ac') list.push({ key: 'fiscal', label: 'السنة المالية', from: FISCAL_YEAR_FROM, to: t });
+  return list;
+}
+function renderPeriodChips_(el) {
+  const prefix = el.dataset.period;
+  el.innerHTML = `<span class="pc-label">فترات جاهزة:</span>` + periodPresets_(prefix).map((p) =>
+    `<button type="button" class="filter-chip${p.current ? ' is-current' : ''}" data-pkey="${p.key}" title="${escapeHtml(formatDateDMY(p.from) + ' ← ' + formatDateDMY(p.to))}">${escapeHtml(p.label)}${p.current ? ' <small>(الحالي)</small>' : ''}</button>`).join('');
+}
+async function applyPeriodPreset_(prefix, key, chip) {
+  const p = periodPresets_(prefix).find((x) => x.key === key);
+  if (!p) return;
+  const lastImp = await getDefaultReportToDate_();
+  // "إلى" = آخر يوم مستورد إن وقع داخل الفترة، وإلا نهاية الفترة (أو اليوم)
+  const to = lastImp >= p.from && lastImp <= p.to ? lastImp : (p.to < lastImp ? p.to : p.to > todayISO() ? todayISO() : p.to);
+  document.getElementById(prefix + '-from').value = p.from;
+  document.getElementById(prefix + '-to').value = to;
+  document.querySelectorAll(`.period-chips[data-period="${prefix}"] .filter-chip`).forEach((c) => c.classList.toggle('active', c === chip));
+  if (PERIOD_TARGETS[prefix]) PERIOD_TARGETS[prefix]();
+}
+function mountPeriodChips_() {
+  Object.keys(PERIOD_TARGETS).forEach((prefix) => {
+    let el = document.querySelector(`.period-chips[data-period="${prefix}"]`);
+    if (!el) {
+      const toInput = document.getElementById(prefix + '-to');
+      if (!toInput) return;
+      const card = toInput.closest('.card');
+      el = document.createElement('div');
+      el.className = 'period-chips';
+      el.dataset.period = prefix;
+      const row = toInput.closest('.row') || toInput.parentElement.parentElement;
+      row.insertAdjacentElement('afterend', el);
+      if (!card) return;
+    }
+    renderPeriodChips_(el);
+    el.addEventListener('click', (ev) => {
+      const chip = ev.target.closest('[data-pkey]');
+      if (chip) applyPeriodPreset_(prefix, chip.dataset.pkey, chip);
+    });
+    ['-from', '-to'].forEach((sfx) => {
+      const inp = document.getElementById(prefix + sfx);
+      if (inp) inp.addEventListener('change', () => el.querySelectorAll('.filter-chip').forEach((c) => c.classList.remove('active')));
+    });
+  });
+}
+function refreshPeriodChips_() {
+  document.querySelectorAll('.period-chips[data-period]').forEach(renderPeriodChips_);
+}
+
+// ---- إعدادات العام الدراسي والفصول ----
+function renderSchoolYearSettings_() {
+  document.getElementById('sy-start').value = (currentSettings && currentSettings.schoolYearStart) || '';
+  const terms = (currentSettings && currentSettings.schoolTerms) || [];
+  document.getElementById('sy-terms').innerHTML = terms.map((t, i) => `
+    <div class="row sy-term" data-i="${i}" style="align-items:flex-end;margin-bottom:8px">
+      <div><label>اسم الفصل</label><input type="text" class="sy-label" value="${escapeHtml(t.label || '')}" style="width:150px"></div>
+      <div><label>من</label><input type="date" class="sy-from" value="${escapeHtml(t.from || '')}"></div>
+      <div><label>إلى</label><input type="date" class="sy-to" value="${escapeHtml(t.to || '')}"></div>
+      <button type="button" class="small sy-del" style="background:var(--bad);color:#fff">حذف</button>
+    </div>`).join('') || '<p class="muted" style="margin:0;font-size:12.5px">لا توجد فصول بعد — أضف الفصل الأول والثاني بتواريخهما.</p>';
+}
+document.getElementById('sy-start').addEventListener('change', (ev) => { currentSettings.schoolYearStart = ev.target.value || ''; refreshPeriodChips_(); });
+document.getElementById('sy-terms').addEventListener('input', (ev) => {
+  const row = ev.target.closest('.sy-term');
+  if (!row) return;
+  const t = currentSettings.schoolTerms[Number(row.dataset.i)];
+  t.label = row.querySelector('.sy-label').value.trim();
+  t.from = row.querySelector('.sy-from').value;
+  t.to = row.querySelector('.sy-to').value;
+  refreshPeriodChips_();
+});
+document.getElementById('sy-terms').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.sy-del');
+  if (!b) return;
+  currentSettings.schoolTerms.splice(Number(b.closest('.sy-term').dataset.i), 1);
+  renderSchoolYearSettings_(); refreshPeriodChips_();
+});
+document.getElementById('btn-sy-add-term').addEventListener('click', () => {
+  currentSettings.schoolTerms = currentSettings.schoolTerms || [];
+  const n = currentSettings.schoolTerms.length;
+  currentSettings.schoolTerms.push({ label: ['الفصل الدراسي الأول', 'الفصل الدراسي الثاني', 'الفصل الدراسي الثالث'][n] || `الفصل ${n + 1}`, from: '', to: '' });
+  renderSchoolYearSettings_();
+});
+
 // ==================== التقرير الشهري المصوّر ====================
 // على نسق "الميزانية الشهرية": عنوان كبير، سطرا إرشاد، رسم حلقي بنسب ومفتاح ألوان، رسم أعمدة
 // مزدوجة بمفتاح، ثم جدول ملخص برأس أزرق وعمود مظلّل وصف إجمالي.
@@ -9213,24 +9302,7 @@ async function printMonthlyReport_() {
   }
 }
 document.getElementById('btn-monthly-report').addEventListener('click', printMonthlyReport_);
-document.querySelector('.rp-quick').addEventListener('click', (ev) => {
-  const chip = ev.target.closest('[data-rp-range]');
-  if (!chip) return;
-  const t = todayISO();
-  let from = t, to = t;
-  if (chip.dataset.rpRange === 'month') from = t.slice(0, 8) + '01';
-  else if (chip.dataset.rpRange === 'last') {
-    const d = isoToLocalDate(t.slice(0, 8) + '01'); d.setDate(0);
-    to = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    from = to.slice(0, 8) + '01';
-  } else if (chip.dataset.rpRange === 'year') from = REPORT_DEFAULT_FROM;
-  document.getElementById('dr-from').value = from;
-  document.getElementById('dr-to').value = to;
-  document.querySelectorAll('.rp-quick .filter-chip').forEach((c) => c.classList.toggle('active', c === chip));
-});
-['dr-from', 'dr-to'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
-  document.querySelectorAll('.rp-quick .filter-chip').forEach((c) => c.classList.remove('active'));
-}));
+
 if (!document.getElementById('mr-month').value) document.getElementById('mr-month').value = todayISO().slice(0, 7);
 
 function printInPage(styleCss, bodyHtml) {
@@ -9437,7 +9509,7 @@ function renderDepEarlyTable() {
           <div class="hc-bar"><i style="width:${Math.min(100, Math.round((worked / 240) * 100))}%"></i></div>
         </div></td>
         <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-early" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyleave', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-early" title="مساءلة عن تأخر/انصراف — نموذج ١٨"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('dep-early-pagination').innerHTML = paginationControlsHtml_(depEarlyPageState, rows.length);
@@ -9549,7 +9621,7 @@ function renderDepEarlyEndTable() {
         <td class="time-flow"><b style="color:#9333ea">${escapeHtml(toArabicAmPmTime(r.checkOut)) || '—'}</b><br><span style="font-size:11px">نهاية الدوام ${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</span></td>
         <td><span class="early-pill">${mins} د <i style="width:${Math.max(8, Math.round((mins / maxEarly) * 70))}px"></i><small style="font-weight:500;color:var(--muted)">${formatMinutesAsHM(mins)}</small></span>${Number(r.excusedEarlyMinutes) ? `<div style="font-size:10.5px" class="status-ok">+${r.excusedEarlyMinutes} د مستثنى</div>` : ''}</td>
         <td>${permissionBadgeHtml_(r.earlyPermissionStatus, r.earlyPermissionType)}</td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-earlyend" title="مساءلة عن تأخر/انصراف — نموذج ١٨">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('earlyend', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-earlyend" title="مساءلة عن تأخر/انصراف — نموذج ١٨"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('dep-earlyend-pagination').innerHTML = paginationControlsHtml_(depEarlyEndPageState, rows.length);
@@ -9643,7 +9715,7 @@ function renderDepNcTable() {
         <td><div class="ncell">${avatarHtml_(r.name, 24)}<div><div>${escapeHtml(r.name)}</div>${n > 1 ? `<span class="nc-count">تكرّر ${timesWord_(n)} بالفترة</span>` : ''}</div></div></td>
         <td class="time-flow"><b style="color:var(--ink)">${escapeHtml(toArabicAmPmTime(r.checkIn)) || '—'}</b> ← <span style="color:#ca8a04">لا انصراف</span></td>
         <td class="time-flow"><span>${escapeHtml(toArabicAmPmTime(r.schedStart)) || '—'} – ${escapeHtml(toArabicAmPmTime(r.schedEnd)) || '—'}</span></td>
-        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('nocheckout', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-nc" title="طباعة مسألة عدم تسجيل انصراف">🖨</button></div></td>
+        <td><div class="notice-cell">${dayNoticeStatusBtnHtml_('nocheckout', r.civil, r.date)}<button type="button" class="icon-btn btn-print-mesaalah-day-nc" title="طباعة مسألة عدم تسجيل انصراف"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>طباعة</span></button></div></td>
       </tr>`;
   }).join('');
   document.getElementById('dep-nc-pagination').innerHTML = paginationControlsHtml_(depNcPageState, rows.length);
@@ -10953,6 +11025,8 @@ async function loadScheduleSettings() {
     Object.defineProperty(currentSettings, '__loaded', { value: true, enumerable: false });
     if (!currentSettings.roleStartDates) currentSettings.roleStartDates = { 'معلم': '', 'إداري': '' };
     if (typeof renderRoleStartDates_ === 'function') renderRoleStartDates_();
+    if (!Array.isArray(currentSettings.schoolTerms)) currentSettings.schoolTerms = [];
+    if (typeof renderSchoolYearSettings_ === 'function') { renderSchoolYearSettings_(); refreshPeriodChips_(); }
     if (!currentSettings.schedulePeriods || !currentSettings.schedulePeriods.length) {
       currentSettings.schedulePeriods = [
         { id: 'summer', label: 'صيفي', workStart: '6:45', workEnd: '12:30', dateFrom: '', dateTo: '' },
@@ -11105,7 +11179,7 @@ document.getElementById('btn-save-schedule').addEventListener('click', async () 
     if (removedBefore) statusEl.textContent = `تم الحفظ ✔ — وحُذف ${removedBefore} يوم غياب كان مسجّلاً قبل تاريخ المباشرة.`;
     // هل تغيّر حساب أيام مستوردة سابقاً بسبب هذا التعديل؟
     try {
-      const pv = await callApi('previewRecalculate', { from: REPORT_DEFAULT_FROM, to: todayISO() });
+      const pv = await callApi('previewRecalculate', { from: schoolYearFrom_(), to: todayISO() });
       const ch = pv.changes || [];
       if (ch.length) {
         const days = new Set(ch.map((c) => c.date)).size;
@@ -11547,6 +11621,7 @@ if (!isSyncEnabled_()) {
   if (ind) ind.textContent = 'وضع محلي (بدون مزامنة)';
 }
 mountIcons();
+mountPeriodChips_();
 authGate_();
 setImportStep(1);
 document.getElementById('dash-date').value = todayISO();

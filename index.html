@@ -421,6 +421,7 @@
   @keyframes rowSaved { 0% { background:#dcfce7; } 100% { background:transparent; } }
   .dcell b { display:block; font-size:12.5px; }
   .dcell span { font-size:11.5px; color:var(--muted); white-space:nowrap; }
+  .dcell .dcell-h { display:block; font-size:10.5px; color:#a1a1aa; line-height:1.3; }
   .dcell .age { display:inline-block; margin-top:2px; font-size:10.5px; color:var(--bad); font-weight:700; }
   .ncell { display:flex; align-items:center; gap:8px; white-space:nowrap; }
   .pending-tag { display:inline-block; font-size:10.5px; font-weight:700; color:var(--bad); background:var(--bad-soft); border:1px dashed #fca5a5; border-radius:999px; padding:0 7px; margin-top:2px; }
@@ -7010,7 +7011,7 @@ const absDaysSince_ = (iso) => Math.max(0, Math.round((isoToLocalDate(todayISO()
 function absDayCell_(iso, pending) {
   const d = isoToLocalDate(iso);
   const age = pending ? absDaysSince_(iso) : 0;
-  return `<div class="dcell"><b>${WEEKDAYS_FULL_AR[d.getDay()]}</b><span>${formatDateDMY(iso)}</span>${pending ? `<br><span class="age">${age === 0 ? 'اليوم' : age === 1 ? 'منذ يوم' : age === 2 ? 'منذ يومين' : 'منذ ' + age + (age <= 10 ? ' أيام' : ' يوماً')}</span>` : ''}</div>`;
+  return `<div class="dcell"><b>${WEEKDAYS_FULL_AR[d.getDay()]}</b><span>${formatDateDMY(iso)}</span><small class="dcell-h">${escapeHtml(hijriShort_(iso))}</small>${pending ? `<br><span class="age">${age === 0 ? 'اليوم' : age === 1 ? 'منذ يوم' : age === 2 ? 'منذ يومين' : 'منذ ' + age + (age <= 10 ? ' أيام' : ' يوماً')}</span>` : ''}</div>`;
 }
 
 // صندوق "لم يُدخل عذر": تقدّم التصنيف + المعلمون الذين عليهم أيام غير مصنّفة (انقر للتصفية)

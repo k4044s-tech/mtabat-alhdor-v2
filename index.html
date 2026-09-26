@@ -8815,7 +8815,10 @@ const OFFICIAL_FORM_STYLE = `
   .of-head { display:grid; grid-template-columns: 1fr auto 1fr; align-items:start; gap: 6pt; font-size: 9.5pt; font-weight: 700; line-height: 1.6; }
   .of-head .org { text-align: right; }
   .of-head .logo { text-align:center; } .of-head .logo img { width: 100px; height:auto; }
-  .of-head .meta { text-align:left; } .of-head .meta div { white-space: nowrap; }
+  /* الرقم/التاريخ/المرفقات: عمود للتسميات وعمود للقيم بنفس العرض والمحاذاة */
+  .of-head .meta { justify-self:end; display:grid; grid-template-columns:auto 110pt; column-gap:6pt; row-gap:3pt; align-items:end; }
+  .of-head .meta span { text-align:right; white-space:nowrap; }
+  .of-head .meta i { font-style:normal; border-bottom:1px dotted #000; min-height:14pt; text-align:center; white-space:nowrap; }
   .of-title { text-align:center; font-size: 14pt; font-weight: 700; margin: 8pt 0 8pt; }
   .of-title span { font-weight: 700; }
   .of-box { display:grid; grid-template-columns: 140pt 1fr; border: 1px solid #000; margin-bottom: 5pt; font-size: 10.5pt; }
@@ -8856,9 +8859,9 @@ function ofHeader_({ formNo, code, title, noUnit }) {
     <div class="of-head">
       <div class="org">المملكة العربية السعودية<br>وزارة التعليم<br>${escapeHtml(cfg.adminName || 'الإدارة العامة للتعليم')}<br>إدارة الموارد البشرية${noUnit ? '' : '<br>وحدة متابعة دوام الموظفين'}</div>
       <div class="logo"><img src="${MOE_LOGO_DATA_URI}" alt="وزارة التعليم"></div>
-      <div class="meta"><div>الرقم: ..............................</div><div>التاريخ: ${escapeHtml(hijriShort_())}</div><div>المرفقات: ..........................</div></div>
+      <div class="meta"><span>الرقم:</span><i></i><span>التاريخ:</span><i>${escapeHtml(hijriShort_())}</i><span>المرفقات:</span><i></i></div>
     </div>
-    <div class="of-title">اسم النموذج: <span>${escapeHtml(title)}</span></div>`;
+    <div class="of-title">${escapeHtml(title)}</div>`;
 }
 function ofIdentity_(emp, extraHead, extraCell) {
   const cfg = loadConfig();

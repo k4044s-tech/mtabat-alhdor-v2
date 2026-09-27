@@ -488,6 +488,8 @@
   .fn-kinds button { border:1.5px solid var(--border); background:#fff; border-radius:11px; padding:10px; cursor:pointer; font-family:inherit; font-size:12.5px; text-align:right; line-height:1.5; }
   .fn-kinds button b { display:block; font-size:13.5px; }
   .fn-kinds button.on { border-color:var(--ink); box-shadow:0 0 0 1.5px var(--ink); background:#fafafa; }
+  .fn-att { font-size:12.5px; margin-top:6px; min-height:18px; color:var(--muted); }
+  .fn-att b { color:var(--ink); }
   .fn-dur { font-size:12.5px; font-weight:700; color:#6d28d9; margin-top:4px; min-height:18px; }
   .fn-err { color:var(--bad); font-size:12.5px; min-height:18px; margin:-6px 0 8px; }
   /* ---- نوافذ التأكيد والتنبيه ---- */
@@ -8718,7 +8720,10 @@ async function openFieldNoteModal_(existing) {
           </div>
           <div class="full"><label for="fm-civil">الموظف</label>
             <select id="fm-civil"><option value="">— اختر —</option>${teachers.filter((t) => t.active !== false || t.civil === n.civil).map((t) => `<option value="${escapeHtml(t.civil)}" ${String(t.civil) === String(n.civil) ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}</select></div>
-          <div><label for="fm-date">التاريخ</label><input type="date" id="fm-date" value="${escapeHtml(n.date || '')}"></div>
+          <div class="full"><label for="fm-day">يوم الحضور</label>
+            <select id="fm-day"><option value="">— اختر الموظف أولاً —</option></select>
+            <input type="hidden" id="fm-date" value="${escapeHtml(n.date || '')}">
+            <div class="fn-att" id="fm-att"></div></div>
           <div class="k-out"><label for="fm-from">وقت الخروج</label><input type="time" id="fm-from" value="${escapeHtml(n.fromTime || '')}"></div>
           <div class="k-out"><label for="fm-to">وقت العودة</label><input type="time" id="fm-to" value="${escapeHtml(n.toTime || '')}"><div class="fn-dur" id="fm-dur"></div></div>
           <div class="k-loc"><label for="fm-punch">البصمة</label>
@@ -8745,6 +8750,47 @@ async function openFieldNoteModal_(existing) {
       $('fm-dur').textContent = a != null && b != null ? (b > a ? `المدة: ${formatMinutesAsHM(b - a)} ساعة (${b - a} دقيقة)` : 'وقت العودة يجب أن يكون بعد الخروج') : '';
     };
     applyKind(); showDur();
+    // أيام حضور الموظف فقط (أيام الغياب لا تظهر) مع وقتَي الحضور والانصراف من البصمة
+    let attRows = null;
+    const fmtT = (x) => escapeHtml(toArabicAmPmTime(x) || x || '—');
+    const renderDays = async () => {
+      const civil = $('fm-civil').value;
+      const sel = $('fm-day');
+      if (!civil) { sel.innerHTML = '<option value="">— اختر الموظف أولاً —</option>'; $('fm-att').innerHTML = ''; return; }
+      if (!attRows) {
+        sel.innerHTML = '<option value="">جارٍ تحميل أيام الحضور…</option>';
+        try { attRows = (await callApi('getAttendanceRange', { from: schoolYearFrom_(), to: todayISO() })).rows || []; } catch (e) { attRows = []; }
+      }
+      const days = attRows.filter((r) => String(r.civil) === civil && (String(r.checkIn || '').trim() || String(r.checkOut || '').trim()))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      const today = todayISO();
+      const opts = [];
+      if (!days.some((r) => r.date === today)) opts.push(`<option value="${today}" data-in="" data-out="">اليوم ${escapeHtml(formatDateDMY(today))} — لم يُستورد بعد</option>`);
+      days.forEach((r) => {
+        const d = isoToLocalDate(r.date);
+        opts.push(`<option value="${escapeHtml(r.date)}" data-in="${escapeHtml(r.checkIn || '')}" data-out="${escapeHtml(r.checkOut || '')}">${WEEKDAYS_FULL_AR[d.getDay()]} ${escapeHtml(formatDateDMY(r.date))} — حضور ${fmtT(r.checkIn)} · انصراف ${String(r.noCheckout) === 'true' || !r.checkOut ? 'بلا بصمة' : fmtT(r.checkOut)}</option>`);
+      });
+      // عند التعديل: يبقى تاريخ الملاحظة متاحاً حتى لو لم يعد ضمن القائمة
+      const cur = $('fm-date').value;
+      if (cur && !days.some((r) => r.date === cur) && cur !== today) opts.push(`<option value="${escapeHtml(cur)}" data-in="" data-out="">${escapeHtml(formatDateDMY(cur))} — (تاريخ الملاحظة)</option>`);
+      sel.innerHTML = opts.join('') || '<option value="">لا توجد أيام حضور لهذا الموظف</option>';
+      if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
+      onDay();
+    };
+    const onDay = () => {
+      const o = $('fm-day').selectedOptions[0];
+      $('fm-date').value = o ? o.value : '';
+      const ci = o && o.dataset.in, co = o && o.dataset.out;
+      $('fm-att').innerHTML = o && o.value
+        ? (ci || co ? `البصمة في هذا اليوم: حضور <b>${fmtT(ci)}</b> · انصراف <b>${co ? fmtT(co) : 'بلا بصمة'}</b>` : 'لا توجد بصمة مستوردة لهذا اليوم بعد.')
+        : '';
+      // وقت الخروج/العودة يقع بين الحضور والانصراف
+      const hm = (x) => { const m = String(x || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM|ص|م)?/i); if (!m) return ''; let h = +m[1]; const ap = (m[3] || '').toLowerCase(); if ((ap === 'pm' || ap === 'م') && h < 12) h += 12; if ((ap === 'am' || ap === 'ص') && h === 12) h = 0; return String(h).padStart(2, '0') + ':' + m[2]; };
+      ['fm-from', 'fm-to'].forEach((id) => { $(id).min = hm(ci) || ''; $(id).max = hm(co) || ''; });
+    };
+    $('fm-civil').addEventListener('change', renderDays);
+    $('fm-day').addEventListener('change', onDay);
+    renderDays();
     back.querySelectorAll('.fn-kinds button').forEach((b) => b.addEventListener('click', () => { kind = b.dataset.k; applyKind(); }));
     $('fm-from').addEventListener('input', showDur); $('fm-to').addEventListener('input', showDur);
     const close = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
@@ -8754,11 +8800,17 @@ async function openFieldNoteModal_(existing) {
     back.querySelector('.ud-ok').addEventListener('click', async (ev) => {
       const note = {
         id: n.id, createdAt: n.createdAt, createdBy: n.createdBy || (currentUser_ && currentUser_.username) || '',
-        civil: $('fm-civil').value, date: $('fm-date').value, kind,
+        civil: $('fm-civil').value, date: $('fm-date').value || $('fm-day').value, kind,
         fromTime: $('fm-from').value, toTime: $('fm-to').value,
         punchKind: $('fm-punch').value, location: $('fm-loc').value.trim(),
         verifiedBy: $('fm-verify').value, witness: $('fm-witness').value.trim(), note: $('fm-note').value.trim(),
       };
+      if (!note.date) { $('fm-err').textContent = 'اختر يوم الحضور.'; return; }
+      if (kind === 'absent_during') {
+        const mn = $('fm-from').min, mx = $('fm-to').max;
+        if (mn && note.fromTime && note.fromTime < mn) { $('fm-err').textContent = `وقت الخروج قبل وقت حضوره (${mn}).`; return; }
+        if (mx && note.toTime && note.toTime > mx) { $('fm-err').textContent = `وقت العودة بعد وقت انصرافه (${mx}).`; return; }
+      }
       ev.target.disabled = true;
       try {
         const r = await callApi('saveFieldNote', { note });

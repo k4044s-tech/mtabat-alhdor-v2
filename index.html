@@ -2617,10 +2617,32 @@ function batchUpsertRows_(sheet, idColName, records) {
   // عمود كامل بنداء واحد بدل خلية بخلية، فهي أيضاً أسرع بكثير على هذا الحجم من البيانات.
   var textColIndexes = [];
   headers.forEach(function (h, idx) { if (FORCE_TEXT_COLUMNS[h]) textColIndexes.push(idx + 1); });
+  // صفوف قديمة حوّلتها Sheets سابقاً إلى خلايا Date تُقرأ هنا كائنات Date — نعيدها نصاً
+  // بصيغتها الصحيحة قبل كتابتها في عمود "نص"، وإلا قد تُخزَّن كنص طويل مثل
+  // "Sun Aug 16 2026 00:00:00 GMT+0300" فلا تطابق صيغة yyyy-MM-dd عند الفلترة لاحقاً.
+  for (var r = 1; r < data.length; r++) {
+    textColIndexes.forEach(function (c) {
+      var v = data[r][c - 1];
+      if (isDateValue_(v)) data[r][c - 1] = formatCellForOutput_(headers[c - 1], v);
+    });
+  }
   textColIndexes.forEach(function (colIdx) {
     sheet.getRange(1, colIdx, data.length, 1).setNumberFormat('@');
   });
   sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+}
+
+// حذف دفعي لصفوف بمعرّفاتها (idSet: كائن id -> true) — قراءة واحدة، تصفية، ثم كتابة واحدة،
+// بدل deleteRow() لكل صف (deleteRowsByIds_) التي تبطؤ جداً مع مئات الصفوف في الاستيراد الشامل.
+function batchDeleteIds_(sheet, idSet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return;
+  var idCol = data[0].indexOf('id');
+  if (idCol === -1) return;
+  var kept = data.filter(function (row, i) { return i === 0 || !idSet[normalizeDate_(row[idCol])]; });
+  if (kept.length === data.length) return;
+  sheet.getRange(1, 1, data.length, data[0].length).clearContent();
+  sheet.getRange(1, 1, kept.length, data[0].length).setValues(kept);
 }
 
 function deleteRowsByIds_(sheet, ids) {
@@ -2934,6 +2956,15 @@ function handleImportComprehensiveReport_(payload) {
       }
     });
 
+    // من صار حاضراً بالملف يُحذف سجل غيابه القديم لنفس اليوم، ومن صار غائباً يُحذف حضوره —
+    // نفس ما يفعله importDay، وإلا بقي الشخص حاضراً وغائباً معاً فتتضخم أرقامه بالتقارير.
+    // يقتصر على (التاريخ + السجل المدني) الواردين بالملف فقط؛ لا يمسّ أي سجل آخر.
+    var presentIds = {}, absentIds = {};
+    attendanceRecords.forEach(function (r) { presentIds[r.id] = true; });
+    absenceRecords.forEach(function (r) { absentIds[r.id] = true; });
+    batchDeleteIds_(getSheet_(SHEET_ABSENCE), presentIds);
+    batchDeleteIds_(getSheet_(SHEET_ATTENDANCE), absentIds);
+
     batchUpsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
     batchUpsertRows_(getSheet_(SHEET_ABSENCE), 'id', absenceRecords);
 
@@ -2960,7 +2991,9 @@ function handleImportComprehensiveReport_(payload) {
       absenceWritten: absenceRecords.length,
       skippedUnmatchedCount: skippedUnmatched.length,
       skippedUnmatchedDistinctCount: uniqueValues_(skippedUnmatched).length,
-      skippedUnmatchedCivils: uniqueValues_(skippedUnmatched).slice(0, 8),
+      // القائمة كاملة بلا اقتصاص — الواجهة تعرض عيّنة منها فقط، لكنها تحتاج الكاملة لبناء
+      // سجلات معلمين جدد منها عند الطلب (زر "إضافة الموظفين غير المطابقين").
+      skippedUnmatchedCivils: uniqueValues_(skippedUnmatched),
       // عيّنة من السجلات المدنية الفعلية بالروستر — تُعرض بالواجهة بجانب الأرقام غير المطابقة
       // حتى يقارن المستخدم الشكل (عدد الخانات، وجود أصفار بادئة...) بنفسه دون تخمين من هنا.
       rosterSampleCivils: teachers.slice(0, 5).map(function (t) { return String(t.civil); }),
@@ -3138,6 +3171,8 @@ function handleReapplyPermissions_(payload) {
     var converted = convertEmptyAttendanceToAbsence_(from, to);
     // (ب) حذف غياب مسجّل قبل تاريخ مباشرة الموظف (يحدث عند تحديد/تعديل تاريخ المباشرة لاحقاً)
     var removedBeforeStart = removeAbsencesBeforeStart_(from, to);
+    // (ج) حذف غياب مسجّل في يوم صار عطلة (إجازة أُضيفت للتقويم بعد استيراد ذلك اليوم)
+    var removedNonWorking = removeAbsencesOnNonWorkingDays_(from, to);
     var permsByKey = buildPermissionsByCivilDate_(from, to);
     var absSheet = getSheet_(SHEET_ABSENCE);
     var data = absSheet.getDataRange().getValues();
@@ -3157,7 +3192,7 @@ function handleReapplyPermissions_(payload) {
       if (updatedAtCol >= 0) absSheet.getRange(i + 1, updatedAtCol + 1).setValue(now);
       fixed++;
     }
-    return { ok: true, classifiedDays: fixed, convertedToAbsence: converted, removedBeforeStart: removedBeforeStart };
+    return { ok: true, classifiedDays: fixed, convertedToAbsence: converted, removedBeforeStart: removedBeforeStart, removedNonWorking: removedNonWorking };
   } finally {
     bumpCacheGen_();
     lock.releaseLock();
@@ -3197,6 +3232,41 @@ function convertEmptyAttendanceToAbsence_(from, to) {
   empty.forEach(function (r) { days[normalizeDate_(r.date)] = true; });
   Object.keys(days).forEach(function (d) { refreshImportCounts_(d); });
   return newAbs.length;
+}
+
+// الاستيراد اليومي والشامل لا يسجّلان غياباً في يوم عطلة أصلاً، لكن إجازة تُضاف للتقويم بعد
+// استيراد أيامها (مثل اليوم الوطني) تترك غياب كل الموظفين فيها قائماً. هنا نحذفه بأثر رجعي.
+// سجلات الحضور الفعلي (من بصم فعلاً يوم العطلة) لا تُمسّ. إن لم يبقَ لليوم أي حضور يُحذف سجل
+// استيراده أيضاً فيظهر بالتقويم "عطلة" لا "مستورد"، وإلا تُحدَّث أعداده فقط.
+function removeAbsencesOnNonWorkingDays_(from, to) {
+  var settings = getSettingsObj_();
+  var absSheet = getSheet_(SHEET_ABSENCE);
+  var idSet = {}, days = {}, count = 0;
+  getRowsForDateRange_(absSheet, from, to).forEach(function (a) {
+    var d = normalizeDate_(a.date);
+    if (!isNonWorkingDay_(d, settings)) return;
+    idSet[d + '__' + String(a.civil)] = true; days[d] = true; count++;
+  });
+  if (!count) return 0;
+  batchDeleteIds_(absSheet, idSet);
+
+  var attSheet = getSheet_(SHEET_ATTENDANCE);
+  var emptyDays = {};
+  Object.keys(days).forEach(function (d) {
+    if (getRowsForDate_(attSheet, d).length) refreshImportCounts_(d);
+    else emptyDays[d] = true;
+  });
+  if (Object.keys(emptyDays).length) {
+    var impSheet = getSheet_(SHEET_IMPORTS);
+    var data = impSheet.getDataRange().getValues();
+    var dCol = data[0].indexOf('date');
+    var kept = data.filter(function (row, i) { return i === 0 || !emptyDays[normalizeDate_(row[dCol])]; });
+    if (kept.length !== data.length) {
+      impSheet.getRange(1, 1, data.length, data[0].length).clearContent();
+      impSheet.getRange(1, 1, kept.length, data[0].length).setValues(kept);
+    }
+  }
+  return count;
 }
 
 function removeAbsencesBeforeStart_(from, to) {
@@ -4314,9 +4384,11 @@ function handleExportAll_() {
     if (!sheet) return;
     var values = sheet.getDataRange().getValues();
     var headers = values[0] || [];
+    // أعمدة كلمات المرور/الاستعادة لا تُنسخ إلى المتصفح إطلاقاً
+    var secretCols = name === SHEET_USERS ? { salt: 1, hash: 1, resetHash: 1, resetExpires: 1, resetTries: 1 } : {};
     sheets[name] = values.map(function (row, i) {
       if (i === 0) return row;
-      return row.map(function (v, j) { return formatCellForOutput_(headers[j], v); });
+      return row.map(function (v, j) { return secretCols[headers[j]] ? '' : formatCellForOutput_(headers[j], v); });
     });
   });
   return { ok: true, sheets: sheets, exportedAt: Date.now() };
@@ -4818,7 +4890,13 @@ async function callApiOnce_(cfg, body) {
   } catch (e) {
     throw new Error('استجابة غير متوقعة من الخادم (قد تكون هفوة مؤقتة من Google)');
   }
-  if (!json.ok) throw new Error(json.error || 'فشل الطلب');
+  if (!json.ok) {
+    // رفض منطقي من الخادم (تحقق/صلاحية/إجراء غير معروف) — يختلف عن انقطاع الشبكة: لا يُعاد
+    // ولا يُحفظ بطابور المزامنة، وإلا ظهر للمستخدم "تم الحفظ" وعَلِق بالطابور للأبد.
+    const e = new Error(json.error || 'فشل الطلب');
+    e.serverRejected = true;
+    throw e;
+  }
   return json;
 }
 
@@ -5313,6 +5391,7 @@ async function callApi(action, payload) {
     syncOfflineQueue_().catch(() => {});
     return result;
   } catch (err) {
+    if (err.serverRejected) { setConnectivityBadge_('online'); throw err; }
     // محاولة ثانية كما كان السلوك السابق.
     try {
       await new Promise((r) => setTimeout(r, 1200));
@@ -5322,6 +5401,7 @@ async function callApi(action, payload) {
       syncOfflineQueue_().catch(() => {});
       return result;
     } catch (err2) {
+      if (err2.serverRejected) { setConnectivityBadge_('online'); throw err2; }
       // إذا كانت كتابة فشلت بسبب انقطاع الاتصال فعليًا، نحفظها في الطابور.
       if (OFFLINE_WRITE_ACTIONS.has(action)) return await queueOfflineWrite_(body);
       const cached = await getCachedApiResponse_(action, payload);
@@ -5902,8 +5982,8 @@ document.querySelectorAll('#role-start-card input[data-role]').forEach((inp) => 
 async function reconcileStartDates_() {
   try {
     const res = await callApi('reapplyPermissions', { from: schoolYearFrom_(), to: todayISO() });
-    return res.removedBeforeStart || 0;
-  } catch (e) { return 0; }
+    return { beforeStart: res.removedBeforeStart || 0, nonWorking: res.removedNonWorking || 0 };
+  } catch (e) { return { beforeStart: 0, nonWorking: 0 }; }
 }
 
 // ---------- إدارة المعلمين ----------
@@ -6000,7 +6080,7 @@ document.getElementById('btn-ta-save').addEventListener('click', async () => {
       role: document.getElementById('ta-role').value,
       startDate: (() => { const v = document.getElementById('ta-start').value || ''; return v === roleStartFor_(document.getElementById('ta-role').value) ? '' : v; })() }],
       taEditingCivil_ ? 'تم حفظ التعديل.' : 'تمت إضافة ' + name + '.');
-    const removed = await reconcileStartDates_();
+    const removed = (await reconcileStartDates_()).beforeStart;
     if (removed) taMsg_(`تم الحفظ — وحُذف ${removed} يوم غياب كان مسجّلاً قبل تاريخ المباشرة.`);
     taResetForm_();
     document.getElementById('ta-civil').focus();
@@ -6086,7 +6166,7 @@ document.querySelector('#ta-table tbody').addEventListener('change', async (ev) 
       const merged = { civil: t.civil, name: t.name, num: t.num, active: t.active, role: t.role, startDate: t.startDate, ...patch };
       const newEff = merged.startDate || roleStartFor_(merged.role);
       await taSave_([merged], 'تم حفظ ' + (t.name || t.civil) + (newEff ? ' — يباشر من ' + formatDateDMY(newEff) : '') + '.');
-      const removed = await reconcileStartDates_();
+      const removed = (await reconcileStartDates_()).beforeStart;
       if (removed) taMsg_(`تم الحفظ — وحُذف ${removed} يوم غياب كان مسجّلاً قبل تاريخ المباشرة.`);
       // صار يباشر أبكر: الأيام المستوردة سابقاً بين التاريخين لم يُسجَّل فيها غيابه — تحتاج إعادة استيراد
       if (newEff && oldEff && newEff < oldEff) {
@@ -6530,17 +6610,22 @@ function mapComprehensiveStatus_(raw) {
 }
 
 // "الثلاثاء 11-08-26" أو "11-08-26" أو "2026-08-11" ← "yyyy-MM-dd". صيغة الملف يوم-شهر-سنة
-// (مطابقة ليوميات التقويم الهجري/الميلادي المختصر المعتاد في تصدير حضوري)؛ سنة من رقمين
-// تُفترض ٢٠xx.
+// (مطابقة ليوميات التقويم الهجري/الميلادي المختصر المعتاد في تصدير حضوري، وتم التحقق من
+// الاتجاه فعلياً على ملف حقيقي: "الأحد 16-08-26" = الأحد ١٦ أغسطس ٢٠٢٦، فـ 16=اليوم،
+// 08=الشهر، 26=السنة)؛ سنة من رقمين تُفترض ٢٠xx.
 function parseComprehensiveDate_(v) {
   const s = normalizeArabicKey_(v).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
   let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
   m = s.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})/);
   if (m) {
+    // m[1]=اليوم، m[2]=الشهر، m[3]=السنة — كانا مقلوبين هنا سابقاً (day وmonth)، فكانت كل
+    // الأيام تُكتب بتاريخ خاطئ (مثلاً يوم ١٦ من الشهر ٨ يصير شهر ١١ يوم ٨؛ وأي يوم أكبر من
+    // ١٢ ينتج شهراً غير صالح فيتدحرج على تاريخ عشوائي تماماً خارج الفترة المعروضة)، وهو
+    // بالضبط سبب اختفاء كل الأيام المستوردة من تقويم الاستيراد.
     let y = m[3];
     if (y.length === 2) y = '20' + y;
-    return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   }
   return '';
 }
@@ -6579,11 +6664,20 @@ async function processComprehensiveReportFile_(file) {
     const rows = [];
     const unknownStatuses = new Set();
     const seenCivils = new Set();
+    // اسم كل سجل مدني كما ورد بالملف — يُستخدم لاحقاً لتعبئة جدول المعلمين تلقائياً عند
+    // الطلب (زر "إضافة الموظفين غير المطابقين")، لا لأي غرض آخر بالاستيراد نفسه. يُلتقط من
+    // أي صف صالح السجل المدني فيه، حتى لو استُبعد ذلك الصف لاحقاً (عطلة/حالة غير معروفة)،
+    // لضمان أكبر تغطية ممكنة للأسماء.
+    const civilNameMap = {};
     let weekendSkipped = 0;
     for (let i = headerRowIdx + 1; i < grid.length; i++) {
       const row = grid[i];
       const civil = String(row[civilCol] || '').trim();
       if (!/^\d{5,}$/.test(civil)) continue;
+      if (nameCol >= 0 && !civilNameMap[civil]) {
+        const nm = String(row[nameCol] || '').trim();
+        if (nm) civilNameMap[civil] = nm;
+      }
       const date = parseComprehensiveDate_(row[dateCol]);
       if (!date) continue;
       const statusRaw = String(row[statusCol] || '').trim();
@@ -6613,27 +6707,67 @@ async function processComprehensiveReportFile_(file) {
 
     const dates = [...new Set(rows.map((r) => r.date))].sort();
     const warnHtml = unknownStatuses.size
-      ? `<div class="msg warn">⚠️ حالات غير معروفة لم تُستورد (${[...unknownStatuses].length}): ${[...unknownStatuses].slice(0, 8).map(escapeHtml).join('، ')}</div>`
+      ? `<div class="msg warn">⚠️ حالات غير معروفة لم تُستورد (${unknownStatuses.size}): ${[...unknownStatuses].slice(0, 8).map(escapeHtml).join('، ')}</div>`
       : '';
-    msgEl.innerHTML = `<div class="msg-loading">جارٍ استيراد ${rows.length} صفاً عبر ${dates.length} يوماً (${seenCivils.size} موظفاً)…</div>` + warnHtml;
 
-    const res = await callApi('importComprehensiveReport', { rows, fileName: file.name });
-    // تشخيص واضح عند عدم تطابق السجل المدني: نعرض عدد الموظفين المتأثرين الفعلي (لا عدد
-    // الصفوف، الذي يتكرر لنفس الموظف عبر كل يوم بالملف فيبدو مضخَّماً ومربكاً)، مع عيّنة من
-    // السجلات المدنية الموجودة فعلاً بالروستر — فيقارن المستخدم الشكل بنفسه (عدد الخانات،
-    // صفر بادئ...) فوراً بلا حاجة لتواصل إضافي لمعرفة سبب عدم التطابق.
-    const skipWarning = res.skippedUnmatchedCount ? `<br>
-      ⚠️ ${res.skippedUnmatchedDistinctCount} موظفاً (${res.skippedUnmatchedCount} صفاً عبر الفترة) بسجل مدني غير مطابق لأي أحد في الروستر (${res.rosterCount} موظفاً).<br>
-      من الملف: ${(res.skippedUnmatchedCivils || []).map(escapeHtml).join('، ')}<br>
-      من الروستر: ${(res.rosterSampleCivils || []).map(escapeHtml).join('، ')}<br>
-      قارن الشكل (عدد الخانات، صفر بادئ...) — إن كان الفرق بسيطاً فربما يحتاج تصحيحاً بجدول المعلمين بالإعدادات؛ وإن كانت أشخاصاً فعلاً غير موجودين، أضفهم أولاً من هناك ثم أعد الاستيراد.`
-      : '';
-    msgEl.innerHTML = `<div class="msg ${res.attendanceWritten || res.absenceWritten ? 'ok' : 'warn'}">تم الاستيراد: ${res.datesProcessed} يوماً — ${res.attendanceWritten} سجل حضور، ${res.absenceWritten} سجل غياب${weekendSkipped ? `، واستُبعد ${weekendSkipped} صف عطلة أسبوع` : ''}.${skipWarning}</div>` + warnHtml;
-    document.getElementById('comprehensive-file-input').value = '';
-    refreshImportCalendar_();
-    if (document.getElementById('dash-date').value >= dates[0] && document.getElementById('dash-date').value <= dates[dates.length - 1]) refreshDashboard();
+    // دالة محلية تُنفَّذ أول مرة، ثم يُعاد تنفيذها تلقائياً بعد إضافة الموظفين الناقصين لجدول
+    // المعلمين (إن طلب المستخدم ذلك بالزر أدناه) — بنفس الصفوف المُحلَّلة من الملف أصلاً،
+    // بلا حاجة لإعادة رفعه من جديد.
+    async function doImport_() {
+      msgEl.innerHTML = `<div class="msg-loading">جارٍ استيراد ${rows.length} صفاً عبر ${dates.length} يوماً (${seenCivils.size} موظفاً)…</div>` + warnHtml;
+      const res = await callApi('importComprehensiveReport', { rows, fileName: file.name });
+
+      // تشخيص واضح عند عدم تطابق السجل المدني: نعرض عدد الموظفين المتأثرين الفعلي (لا عدد
+      // الصفوف، الذي يتكرر لنفس الموظف عبر كل يوم بالملف فيبدو مضخَّماً ومربكاً)، مع عيّنة من
+      // السجلات المدنية الموجودة فعلاً بالروستر — فيقارن المستخدم الشكل بنفسه (عدد الخانات،
+      // صفر بادئ...) فوراً — وزر لإضافتهم تلقائياً من الملف نفسه إن كانوا فعلاً غير موجودين
+      // (الحالة المعتادة لنسخة جديدة فارغة لم تُضف لها قائمة المعلمين بعد).
+      let addMissingHtml = '';
+      if (res.skippedUnmatchedCount) {
+        const sample = (res.skippedUnmatchedCivils || []).slice(0, 8).map(escapeHtml).join('، ');
+        addMissingHtml = `<br>
+          ⚠️ ${res.skippedUnmatchedDistinctCount} موظفاً (${res.skippedUnmatchedCount} صفاً عبر الفترة) بسجل مدني غير مطابق لأي أحد في الروستر (${res.rosterCount} موظفاً).<br>
+          من الملف: ${sample}<br>
+          من الروستر: ${(res.rosterSampleCivils || []).map(escapeHtml).join('، ') || '— لا يوجد معلمون مسجَّلون بعد —'}<br>
+          قارن الشكل (عدد الخانات، صفر بادئ...) إن كان لديك معلمون مسجَّلون أصلاً وتشك بوجود خطأ تنسيق؛ أو اضغط الزر أدناه إن كانوا فعلاً غير موجودين بعد (كما في نسخة جديدة فارغة):<br>
+          <button type="button" class="small" id="btn-add-missing-teachers" style="margin-top:6px">＋ إضافة هؤلاء الـ${res.skippedUnmatchedDistinctCount} موظفاً من الملف إلى جدول المعلمين، ثم إعادة الاستيراد</button>`;
+      }
+
+      msgEl.innerHTML = `<div class="msg ${res.attendanceWritten || res.absenceWritten ? 'ok' : 'warn'}">تم الاستيراد: ${res.datesProcessed} يوماً — ${res.attendanceWritten} سجل حضور، ${res.absenceWritten} سجل غياب${weekendSkipped ? `، واستُبعد ${weekendSkipped} صف عطلة أسبوع` : ''}.${addMissingHtml}</div>` + warnHtml;
+
+      const addBtn = document.getElementById('btn-add-missing-teachers');
+      if (addBtn) {
+        addBtn.addEventListener('click', async () => {
+          addBtn.disabled = true;
+          addBtn.textContent = 'جارٍ الإضافة…';
+          try {
+            const rosterRes = await callApi('getAllTeachers', {});
+            let nextNum = Math.max(0, ...rosterRes.teachers.map((t) => Number(t.num) || 0));
+            const missingCivils = res.skippedUnmatchedCivils || [];
+            const newTeachers = missingCivils.map((civil) => {
+              nextNum += 1;
+              return { civil, name: civilNameMap[civil] || civil, num: nextNum, active: true, role: 'معلم' };
+            });
+            const saveRes = await callApi('saveTeachers', { teachers: newTeachers });
+            teachersCache = null;
+            msgEl.innerHTML = `<div class="msg-loading">أُضيف ${saveRes.saved} موظفاً إلى جدول المعلمين — جارٍ إعادة الاستيراد…</div>`;
+            await doImport_();
+            refreshTeachersAdmin_(); // يحدّث جدول المعلمين بالإعدادات إن كان مفتوحاً
+          } catch (err) {
+            msgEl.innerHTML = `<div class="msg err">تعذّرت الإضافة: ${escapeHtml(err.message)}</div>`;
+          }
+        });
+      }
+
+      refreshImportCalendar_();
+      if (document.getElementById('dash-date').value >= dates[0] && document.getElementById('dash-date').value <= dates[dates.length - 1]) refreshDashboard();
+    }
+
+    await doImport_();
   } catch (err) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  } finally {
+    document.getElementById('comprehensive-file-input').value = '';
   }
 }
 document.getElementById('btn-pick-comprehensive-file').addEventListener('click', () => document.getElementById('comprehensive-file-input').click());
@@ -11616,8 +11750,12 @@ document.getElementById('btn-save-schedule').addEventListener('click', async () 
   try {
     await callApi('saveSettings', { settings: currentSettings });
     statusEl.textContent = 'تم الحفظ ✔';
-    const removedBefore = await reconcileStartDates_();
-    if (removedBefore) statusEl.textContent = `تم الحفظ ✔ — وحُذف ${removedBefore} يوم غياب كان مسجّلاً قبل تاريخ المباشرة.`;
+    const rec = await reconcileStartDates_();
+    const notes = [];
+    if (rec.beforeStart) notes.push(`${rec.beforeStart} يوم غياب كان مسجّلاً قبل تاريخ المباشرة`);
+    if (rec.nonWorking) notes.push(`${rec.nonWorking} سجل غياب كان مسجّلاً في أيام عطلة`);
+    if (notes.length) statusEl.textContent = `تم الحفظ ✔ — وحُذف ${notes.join('، و')}.`;
+    if (rec.nonWorking) refreshImportCalendar_().catch(() => {});
     // هل تغيّر حساب أيام مستوردة سابقاً بسبب هذا التعديل؟
     try {
       const pv = await callApi('previewRecalculate', { from: schoolYearFrom_(), to: todayISO() });

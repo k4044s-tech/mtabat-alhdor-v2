@@ -1,0 +1,196 @@
+// ========== إضافات/تحديثات ملف Code.gs في Apps Script (أحدث نسخة) ==========
+// استبدل أي نسخة سابقة من هذه الدوال الثلاث بالنسخة أدناه كاملة — التحديث الأهم هنا:
+// skippedUnmatchedCivils تُرجَع الآن كاملة بلا اقتصاص (كانت مقتصرة على 8)، لأن الواجهة
+// تحتاج القائمة الكاملة لبناء سجلات معلمين جدد منها عند الضغط على زر «إضافة الموظفين
+// غير المطابقين من الملف». الصق uniqueValues_ وbatchUpsertRows_ إن لم تكونا موجودتين
+// أصلاً من مرة سابقة.
+
+// يُرجع قيم المصفوفة بلا تكرار، بترتيب أول ظهور — تُستخدم لتلخيص عيّنات التشخيص (مثل
+// السجلات المدنية غير المطابقة) بلا الاعتماد على Set حتى يبقى الأسلوب موحَّداً مع بقية الملف.
+function uniqueValues_(arr) {
+  var seen = {}, out = [];
+  arr.forEach(function (v) {
+    var k = String(v);
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push(v);
+  });
+  return out;
+}
+
+// نسخة مُحسَّنة من upsertRows_ للكتابات الكبيرة (مئات/آلاف السجلات دفعة واحدة، كما في
+// استيراد التقرير الشامل لعدة أسابيع أو أشهر): تقرأ الشيت مرة واحدة، تدمج التحديثات
+// والإضافات في مصفوفة بالذاكرة، ثم تكتب الشيت كاملاً بنداء setValues واحد — بدل
+// upsertRows_ التي تفتح نطاقاً (Range) منفصلاً لكل صف (وأخرى لكل عمود نصي بذلك الصف)،
+// فتصبح بطيئة جداً (آلاف نداءات API) مع آلاف السجلات دفعة واحدة.
+function batchUpsertRows_(sheet, idColName, records) {
+  if (!records.length) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf(idColName);
+  if (idCol === -1) throw new Error('id column not found: ' + idColName);
+
+  var idToRow = {}; // id -> فهرس الصف داخل data (0-based، يشمل صف العناوين)
+  for (var i = 1; i < data.length; i++) idToRow[normalizeDate_(data[i][idCol])] = i;
+
+  records.forEach(function (rec) {
+    var id = normalizeDate_(rec[idColName]);
+    var rowArr = headers.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(rec, h) ? rec[h] : '';
+    });
+    if (Object.prototype.hasOwnProperty.call(idToRow, id)) {
+      data[idToRow[id]] = rowArr;
+    } else {
+      data.push(rowArr);
+      idToRow[id] = data.length - 1;
+    }
+  });
+
+  // نص عادي إجبارياً لكل الأعمدة الحسّاسة قبل الكتابة (نفس حماية upsertRows_ من حقن الصيغ) —
+  // عمود كامل بنداء واحد بدل خلية بخلية، فهي أيضاً أسرع بكثير على هذا الحجم من البيانات.
+  var textColIndexes = [];
+  headers.forEach(function (h, idx) { if (FORCE_TEXT_COLUMNS[h]) textColIndexes.push(idx + 1); });
+  textColIndexes.forEach(function (colIdx) {
+    sheet.getRange(1, colIdx, data.length, 1).setNumberFormat('@');
+  });
+  sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+}
+
+// ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين دفعة واحدة) ====================
+// ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يغطي أسابيع أو أشهر في ملف
+// واحد، بخلاف importDay الذي يستورد يوماً واحداً فقط. الواجهة تُحلّل الملف وترسل صفوفاً
+// منظَّفة مسبقاً بالشكل {civil, date, kind, checkIn?, checkOut?, noCheckout?, reason?} حيث
+// kind هو present أو absent أو absent_excused (الشرح الكامل في الواجهة عند قراءة الملف).
+// التأخير/الانصراف المبكر يُحسبان هنا من البصمة الفعلية ودوام ذلك التاريخ وفق الإعدادات
+// الحالية — لا من أي عمود جاهز بالملف — بنفس منطق importDay تماماً، فتبقى الأرقام متسقة
+// مهما كان مصدر الاستيراد. تستخدم batchUpsertRows_ (كتابة دفعة واحدة) بدل upsertRows_
+// (صف بصف) لأن حجم البيانات هنا قد يبلغ آلاف الصفوف عبر عشرات الأيام دفعة واحدة.
+function handleImportComprehensiveReport_(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var rows = payload.rows || [];
+    if (!rows.length) return { ok: true, datesProcessed: 0, attendanceWritten: 0, absenceWritten: 0, skippedUnmatchedCount: 0 };
+
+    var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS));
+    var teacherByCivil = {};
+    teachers.forEach(function (t) { teacherByCivil[String(t.civil)] = t; });
+
+    var settings = getSettingsObj_();
+
+    var dateSet = {};
+    rows.forEach(function (r) { dateSet[String(r.date)] = true; });
+    var dateList = Object.keys(dateSet).sort();
+    var from = dateList[0], to = dateList[dateList.length - 1];
+    // نفس آلية importDay: استئذان "مقبول" ليوم كامل يُصنَّف الغياب "بعذر" بسببه تلقائياً
+    var permsByKey = (from && to) ? buildPermissionsByCivilDate_(from, to) : {};
+
+    // نحتفظ بتصنيف/سبب/ملاحظة الغياب اليدوية الموجودة مسبقاً لهذه الأيام عند إعادة الاستيراد
+    var existingAbsenceByKey = {};
+    if (from && to) {
+      getRowsForDateRange_(getSheet_(SHEET_ABSENCE), from, to).forEach(function (a) {
+        existingAbsenceByKey[normalizeDate_(a.date) + '__' + String(a.civil)] = a;
+      });
+    }
+
+    var now = Date.now();
+    var attendanceRecords = [];
+    var absenceRecords = [];
+    var skippedUnmatched = [];
+    var schedCache = {};
+    function scheduleFor(date) {
+      if (!schedCache[date]) schedCache[date] = resolveScheduleForDate_(date, settings);
+      return schedCache[date];
+    }
+
+    rows.forEach(function (r) {
+      var civil = String(r.civil);
+      var date = String(r.date);
+      var t = teacherByCivil[civil];
+      if (!t) { skippedUnmatched.push(civil); return; }
+      if (isNonWorkingDay_(date, settings)) return; // حماية ثانية: عطلة حسب الإعدادات الحالية
+      if (beforeStart_(t, date, settings)) return; // لم يباشر بعد بهذا التاريخ
+
+      var sched = scheduleFor(date);
+      var schedStartMin = parseTimeToMinutes_(sched.workStart);
+      var schedEndMin = parseTimeToMinutes_(sched.workEnd);
+
+      if (r.kind === 'present') {
+        var checkInMin = r.checkIn ? parseTimeToMinutes_(r.checkIn) : null;
+        var noCheckout = !!r.noCheckout || !r.checkOut;
+        var checkOutMin = noCheckout ? null : parseTimeToMinutes_(r.checkOut);
+        var lateMinutes = checkInMin != null && schedStartMin != null ? Math.max(0, checkInMin - schedStartMin) : 0;
+        var earlyMinutes = checkOutMin != null && schedEndMin != null ? Math.max(0, schedEndMin - checkOutMin) : 0;
+        var hoursRaw = checkInMin != null && checkOutMin != null ? formatMinutesAsHM_(checkOutMin - checkInMin) : '';
+        attendanceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          checkIn: r.checkIn || '', checkOut: noCheckout ? '' : (r.checkOut || ''),
+          hoursRaw: hoursRaw, lateMinutes: lateMinutes, earlyMinutes: earlyMinutes, noCheckout: noCheckout,
+          schedStart: sched.workStart, schedEnd: sched.workEnd, schedTolerance: 0,
+          schedLabel: sched.label, schedId: sched.id, updatedAt: now,
+        });
+      } else {
+        var existing = existingAbsenceByKey[date + '__' + civil];
+        var classification = existing ? existing.classification : '';
+        var reason = existing ? existing.reason : '';
+        if (!classification) {
+          if (r.kind === 'absent_excused') {
+            classification = 'بعذر';
+            reason = r.reason || 'إجازة';
+          } else {
+            var fullDay = acceptedFullDayPermission_(permsByKey, civil, date);
+            if (fullDay) { classification = 'بعذر'; reason = mapPermissionTypeToReason_(fullDay.type); }
+          }
+        }
+        absenceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          classification: classification, reason: reason, note: existing ? existing.note : '', updatedAt: now,
+        });
+      }
+    });
+
+    batchUpsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
+    batchUpsertRows_(getSheet_(SHEET_ABSENCE), 'id', absenceRecords);
+
+    // سجل الاستيرادات: صف واحد لكل تاريخ مشمول فعلياً بالملف، بعدد الحاضرين/الغائبين الحقيقي
+    var presentCountByDate = {}, absentCountByDate = {};
+    attendanceRecords.forEach(function (r) { presentCountByDate[r.date] = (presentCountByDate[r.date] || 0) + 1; });
+    absenceRecords.forEach(function (r) { absentCountByDate[r.date] = (absentCountByDate[r.date] || 0) + 1; });
+    var importsSheet_ = getSheet_(SHEET_IMPORTS);
+    ensureHeaders_(importsSheet_, ['presentCount', 'absentCount']);
+    var importRecords = dateList.filter(function (d) { return presentCountByDate[d] || absentCountByDate[d]; }).map(function (d) {
+      var sched = scheduleFor(d);
+      return {
+        date: d, importedAt: new Date().toISOString(), fileName: payload.fileName || 'تقرير شامل',
+        schedStart: sched.workStart, schedEnd: sched.workEnd, schedLabel: sched.label,
+        presentCount: presentCountByDate[d] || 0, absentCount: absentCountByDate[d] || 0, updatedAt: now,
+      };
+    });
+    batchUpsertRows_(importsSheet_, 'date', importRecords);
+
+    return {
+      ok: true,
+      datesProcessed: importRecords.length,
+      attendanceWritten: attendanceRecords.length,
+      absenceWritten: absenceRecords.length,
+      skippedUnmatchedCount: skippedUnmatched.length,
+      skippedUnmatchedDistinctCount: uniqueValues_(skippedUnmatched).length,
+      // القائمة كاملة بلا اقتصاص — الواجهة تعرض عيّنة منها فقط، لكنها تحتاج الكاملة لبناء
+      // سجلات معلمين جدد منها عند الطلب (زر "إضافة الموظفين غير المطابقين").
+      skippedUnmatchedCivils: uniqueValues_(skippedUnmatched),
+      // عيّنة من السجلات المدنية الفعلية بالروستر — تُعرض بالواجهة بجانب الأرقام غير المطابقة
+      // حتى يقارن المستخدم الشكل (عدد الخانات، وجود أصفار بادئة...) بنفسه دون تخمين من هنا.
+      rosterSampleCivils: teachers.slice(0, 5).map(function (t) { return String(t.civil); }),
+      rosterCount: teachers.length,
+    };
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+}
+
+// وتأكّد أن هذا السطر موجود داخل switch (payload.action) بدالة handleRequest_،
+// مباشرة بعد case 'importPermissions': ... break;
+//   case 'importComprehensiveReport':
+//     out = handleImportComprehensiveReport_(payload);
+//     break;

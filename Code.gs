@@ -26,7 +26,11 @@ var DEFAULT_SETTINGS = {
   defaultPeriodId: 'summer',
   weekendDays: [5, 6],
   holidays: [],
+  // تاريخ مباشرة الدوام لكل فئة: لا يُسجَّل غياب لأي موظف قبل تاريخ مباشرته (المعلمون عادةً
+  // يباشرون بعد الإداريين). يمكن تجاوزه لموظف بعينه بعمود startDate في شيت المعلمين.
+  roleStartDates: { 'معلم': '', 'إداري': '' },
 };
+var STAFF_ROLES = ['معلم', 'إداري'];
 var WEEKDAY_AR_ = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function doPost(e) {
@@ -73,11 +77,11 @@ function handleRequest_(payload) {
         case 'importDay':
           out = handleImportDay_(payload);
           break;
-        case 'importComprehensiveReport':
-          out = handleImportComprehensiveReport_(payload);
-          break;
         case 'importPermissions':
           out = handleImportPermissions_(payload);
+          break;
+        case 'importComprehensiveReport':
+          out = handleImportComprehensiveReport_(payload);
           break;
         case 'getPermissionsRange':
           out = handleGetPermissionsRange_(payload);
@@ -142,6 +146,57 @@ function handleRequest_(payload) {
         case 'getActionStatuses':
           out = handleGetActionStatuses_();
           break;
+        case 'getAllTeachers':
+          out = handleGetAllTeachers_();
+          break;
+        case 'saveTeachers':
+          out = handleSaveTeachers_(payload);
+          break;
+        case 'deleteTeacher':
+          out = handleDeleteTeacher_(payload);
+          break;
+        case 'reapplyPermissions':
+          out = handleReapplyPermissions_(payload);
+          break;
+        case 'getFieldNotes':
+          out = handleGetFieldNotes_(payload);
+          break;
+        case 'saveFieldNote':
+          out = handleSaveFieldNote_(payload);
+          break;
+        case 'deleteFieldNote':
+          out = handleDeleteFieldNote_(payload);
+          break;
+        case 'authInfo':
+          out = handleAuthInfo_();
+          break;
+        case 'register':
+          out = handleRegister_(payload);
+          break;
+        case 'login':
+          out = handleLogin_(payload);
+          break;
+        case 'verifySession':
+          out = handleVerifySession_(payload);
+          break;
+        case 'forgotPassword':
+          out = handleForgotPassword_(payload);
+          break;
+        case 'resetPassword':
+          out = handleResetPassword_(payload);
+          break;
+        case 'changePassword':
+          out = handleChangePassword_(payload);
+          break;
+        case 'listUsers':
+          out = handleListUsers_(payload);
+          break;
+        case 'updateUser':
+          out = handleUpdateUser_(payload);
+          break;
+        case 'exportAll':
+          out = handleExportAll_();
+          break;
         default:
           out = { ok: false, error: 'unknown action: ' + payload.action };
       }
@@ -152,9 +207,25 @@ function handleRequest_(payload) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// عناوين الشيتات الأساسية — يُنشأ أي شيت ناقص تلقائياً بها، فيكفي لصق هذا الكود في شيت
+// جديد فارغ تماماً ليعمل التطبيق (أو لتُعاد عليه عمليات نسخة محلية جديدة عند المزامنة).
+function defaultHeadersFor_(name) {
+  var m = {};
+  m[SHEET_TEACHERS] = ['civil', 'num', 'name', 'active', 'role', 'startDate'];
+  m[SHEET_ATTENDANCE] = ['id', 'date', 'civil', 'num', 'name', 'checkIn', 'checkOut', 'hoursRaw', 'lateMinutes', 'earlyMinutes', 'noCheckout', 'schedStart', 'schedEnd', 'schedTolerance', 'schedLabel', 'schedId', 'updatedAt'];
+  m[SHEET_ABSENCE] = ['id', 'date', 'civil', 'num', 'name', 'classification', 'reason', 'note', 'updatedAt'];
+  m[SHEET_IMPORTS] = ['date', 'importedAt', 'fileName', 'schedStart', 'schedEnd', 'schedLabel', 'presentCount', 'absentCount', 'updatedAt'];
+  m[SHEET_SETTINGS] = ['key', 'value', 'updatedAt'];
+  return m[name] || null;
+}
+
 function getSheet_(name) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
-  if (!sheet) throw new Error('sheet not found: ' + name);
+  if (!sheet) {
+    var headers = defaultHeadersFor_(name);
+    if (headers) return getOrCreateSheet_(name, headers);
+    throw new Error('sheet not found: ' + name);
+  }
   return sheet;
 }
 
@@ -293,6 +364,19 @@ function normalizeDate_(v) {
   return String(v);
 }
 
+// يُرجع قيم المصفوفة بلا تكرار، بترتيب أول ظهور — تُستخدم لتلخيص عيّنات التشخيص (مثل
+// السجلات المدنية غير المطابقة) بلا الاعتماد على Set حتى يبقى الأسلوب موحَّداً مع بقية الملف.
+function uniqueValues_(arr) {
+  var seen = {}, out = [];
+  arr.forEach(function (v) {
+    var k = String(v);
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push(v);
+  });
+  return out;
+}
+
 function isActive_(v) {
   return v === true || String(v).toLowerCase() === 'true';
 }
@@ -327,7 +411,9 @@ var FORCE_TEXT_COLUMNS = {
   schedStart: 1, schedEnd: 1, schedLabel: 1, schedId: 1,
   classification: 1, reason: 1, note: 1, fileName: 1,
   requestId: 1, fromDate: 1, toDate: 1, fromTime: 1, toTime: 1, type: 1, status: 1,
-  name: 1, civil: 1,
+  name: 1, civil: 1, startDate: 1, role: 1,
+  username: 1, email: 1, salt: 1, hash: 1, resetHash: 1,
+  location: 1, verifiedBy: 1, witness: 1, createdBy: 1, punchKind: 1, kind: 1,
 };
 
 // upsert بمطابقة عمود المعرّف (idColName) — يحدّث الصف الموجود أو يضيف صفاً جديداً
@@ -339,38 +425,6 @@ function ensureHeaders_(sheet, names) {
   var missing = names.filter(function (n) { return headers.indexOf(n) === -1; });
   if (!missing.length) return;
   sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
-}
-
-// نسخة دفعية من upsertRows_ — تكتب الشيت كاملاً بنداء واحد بدل نداء منفصل لكل سجل. ضرورية
-// للاستيراد الشامل الذي قد يحمل آلاف الصفوف دفعة واحدة؛ upsertRows_ العادية (صف بصف) تبقى
-// مناسبة للاستيراد اليومي العادي (عشرات الصفوف فقط).
-function batchUpsertRows_(sheet, idColName, records) {
-  if (!records.length) return;
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var idCol = headers.indexOf(idColName);
-  if (idCol === -1) throw new Error('id column not found: ' + idColName);
-
-  var idToRowIdx = {};
-  for (var i = 1; i < data.length; i++) idToRowIdx[normalizeDate_(data[i][idCol])] = i;
-
-  records.forEach(function (rec) {
-    var id = normalizeDate_(rec[idColName]);
-    var rowArr = headers.map(function (h) {
-      return Object.prototype.hasOwnProperty.call(rec, h) ? rec[h] : '';
-    });
-    if (Object.prototype.hasOwnProperty.call(idToRowIdx, id)) {
-      data[idToRowIdx[id]] = rowArr;
-    } else {
-      data.push(rowArr);
-      idToRowIdx[id] = data.length - 1;
-    }
-  });
-
-  sheet.getRange(1, 1, data.length, headers.length).setValues(data);
-  headers.forEach(function (h, idx) {
-    if (FORCE_TEXT_COLUMNS[h]) sheet.getRange(2, idx + 1, data.length - 1, 1).setNumberFormat('@');
-  });
 }
 
 function upsertRows_(sheet, idColName, records) {
@@ -405,6 +459,66 @@ function upsertRows_(sheet, idColName, records) {
     });
     sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowArr]);
   });
+}
+
+// نسخة مُحسَّنة من upsertRows_ للكتابات الكبيرة (مئات/آلاف السجلات دفعة واحدة، كما في
+// استيراد التقرير الشامل لعدة أسابيع أو أشهر): تقرأ الشيت مرة واحدة، تدمج التحديثات
+// والإضافات في مصفوفة بالذاكرة، ثم تكتب الشيت كاملاً بنداء setValues واحد — بدل
+// upsertRows_ التي تفتح نطاقاً (Range) منفصلاً لكل صف (وأخرى لكل عمود نصي بذلك الصف)،
+// فتصبح بطيئة جداً (آلاف نداءات API) مع آلاف السجلات دفعة واحدة.
+function batchUpsertRows_(sheet, idColName, records) {
+  if (!records.length) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf(idColName);
+  if (idCol === -1) throw new Error('id column not found: ' + idColName);
+
+  var idToRow = {}; // id -> فهرس الصف داخل data (0-based، يشمل صف العناوين)
+  for (var i = 1; i < data.length; i++) idToRow[normalizeDate_(data[i][idCol])] = i;
+
+  records.forEach(function (rec) {
+    var id = normalizeDate_(rec[idColName]);
+    var rowArr = headers.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(rec, h) ? rec[h] : '';
+    });
+    if (Object.prototype.hasOwnProperty.call(idToRow, id)) {
+      data[idToRow[id]] = rowArr;
+    } else {
+      data.push(rowArr);
+      idToRow[id] = data.length - 1;
+    }
+  });
+
+  // نص عادي إجبارياً لكل الأعمدة الحسّاسة قبل الكتابة (نفس حماية upsertRows_ من حقن الصيغ) —
+  // عمود كامل بنداء واحد بدل خلية بخلية، فهي أيضاً أسرع بكثير على هذا الحجم من البيانات.
+  var textColIndexes = [];
+  headers.forEach(function (h, idx) { if (FORCE_TEXT_COLUMNS[h]) textColIndexes.push(idx + 1); });
+  // صفوف قديمة حوّلتها Sheets سابقاً إلى خلايا Date تُقرأ هنا كائنات Date — نعيدها نصاً
+  // بصيغتها الصحيحة قبل كتابتها في عمود "نص"، وإلا قد تُخزَّن كنص طويل مثل
+  // "Sun Aug 16 2026 00:00:00 GMT+0300" فلا تطابق صيغة yyyy-MM-dd عند الفلترة لاحقاً.
+  for (var r = 1; r < data.length; r++) {
+    textColIndexes.forEach(function (c) {
+      var v = data[r][c - 1];
+      if (isDateValue_(v)) data[r][c - 1] = formatCellForOutput_(headers[c - 1], v);
+    });
+  }
+  textColIndexes.forEach(function (colIdx) {
+    sheet.getRange(1, colIdx, data.length, 1).setNumberFormat('@');
+  });
+  sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+}
+
+// حذف دفعي لصفوف بمعرّفاتها (idSet: كائن id -> true) — قراءة واحدة، تصفية، ثم كتابة واحدة،
+// بدل deleteRow() لكل صف (deleteRowsByIds_) التي تبطؤ جداً مع مئات الصفوف في الاستيراد الشامل.
+function batchDeleteIds_(sheet, idSet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return;
+  var idCol = data[0].indexOf('id');
+  if (idCol === -1) return;
+  var kept = data.filter(function (row, i) { return i === 0 || !idSet[normalizeDate_(row[idCol])]; });
+  if (kept.length === data.length) return;
+  sheet.getRange(1, 1, data.length, data[0].length).clearContent();
+  sheet.getRange(1, 1, kept.length, data[0].length).setValues(kept);
 }
 
 function deleteRowsByIds_(sheet, ids) {
@@ -499,11 +613,15 @@ function handleImportDay_(payload) {
     var presentCivils = {};
     var attendanceRecords = [];
     var skippedUnmatched = []; // صفوف بسجل مدني لا يطابق أي معلّم بالروستر — نُبلّغ عنها بدل إسقاطها بصمت
+    var noFingerprintCivils = []; // معلمون وردوا بالملف بلا أي بصمة — يُعامَلون غائبين
 
     rows.forEach(function (r) {
       var civil = String(r.civil);
       var t = teacherByCivil[civil];
       if (!t) { skippedUnmatched.push(civil); return; }
+      // صف بلا أي بصمة (لا حضور ولا انصراف) ليس حضوراً: تقرير البصمة يسرد أحياناً كل الموظفين
+      // ومنهم الغائب والمجاز بخانات فارغة — كان يُحسب "حاضراً" فلا يُسجَّل غيابه ولا تُربط إجازته.
+      if (!hasFingerprint_(r)) { noFingerprintCivils.push(civil); return; }
       presentCivils[civil] = true;
 
       var checkInMin = parseTimeToMinutes_(r.checkIn);
@@ -540,22 +658,34 @@ function handleImportDay_(payload) {
       });
     });
 
-    var skipAbsenceMarking = isNonWorkingDay_(date, getSettingsObj_());
+    var daySettings = getSettingsObj_();
+    var skipAbsenceMarking = isNonWorkingDay_(date, daySettings);
+    // استئذانات اليوم: غياب يغطيه استئذان "مقبول" ليوم كامل يُصنَّف "بعذر" فوراً عند الاستيراد —
+    // بدون هذا كان الربط يحدث فقط لحظة استيراد ملف الاستئذانات، فأي يوم يُستورد بعده يبقى
+    // "لم يُدخل عذر" رغم وجود إجازته المعتمدة.
+    var dayPermsByKey = buildPermissionsByCivilDate_(date, date);
     var absenceRecords = [];
     teachers.forEach(function (t) {
       if (!isActive_(t.active)) return;
       var civil = String(t.civil);
       if (presentCivils[civil]) return;
       if (skipAbsenceMarking) return; // يوم عطلة/نهاية أسبوع: لا نُسجّل غياباً لمن لم يظهر بالملف
+      if (beforeStart_(t, date, daySettings)) return; // لم يباشر بعد (ما زال في إجازته قبل تاريخ مباشرته)
       var existing = existingAbsenceByCivil[civil];
+      var classification = existing ? existing.classification : '';
+      var reason = existing ? existing.reason : '';
+      if (!classification) {
+        var fullDay = acceptedFullDayPermission_(dayPermsByKey, civil, date);
+        if (fullDay) { classification = 'بعذر'; reason = mapPermissionTypeToReason_(fullDay.type); }
+      }
       absenceRecords.push({
         id: date + '__' + civil,
         date: date,
         civil: civil,
         num: t.num,
         name: t.name,
-        classification: existing ? existing.classification : '',
-        reason: existing ? existing.reason : '',
+        classification: classification,
+        reason: reason,
         note: existing ? existing.note : '',
         updatedAt: now,
       });
@@ -571,6 +701,14 @@ function handleImportDay_(payload) {
       .filter(function (c) { return !absentCivilsNow[c]; })
       .map(function (c) { return date + '__' + c; });
     deleteRowsByIds_(getSheet_(SHEET_ABSENCE), staleAbsenceIds);
+    // وبالمثل: معلّم كان "حاضراً" في استيراد سابق لنفس اليوم ولم يعد موجوداً في الملف الجديد
+    // يُحذف سجل حضوره القديم — وإلا بقي حاضراً وغائباً معاً فتُحسب له أيام حضور زائدة
+    // (ويُضاف تأخيره/انصرافه القديم) في الملخص والتحليلات والتقارير.
+    var existingAttendance = getRowsForDate_(getSheet_(SHEET_ATTENDANCE), date);
+    var staleAttendanceIds = existingAttendance
+      .filter(function (r) { return !presentCivils[String(r.civil)]; })
+      .map(function (r) { return date + '__' + String(r.civil); });
+    deleteRowsByIds_(getSheet_(SHEET_ATTENDANCE), staleAttendanceIds);
     var importsSheet_ = getSheet_(SHEET_IMPORTS);
     ensureHeaders_(importsSheet_, ['presentCount', 'absentCount']);
     upsertRows_(importsSheet_, 'date', [
@@ -592,7 +730,7 @@ function handleImportDay_(payload) {
       date: date,
       presentCount: attendanceRecords.length,
       absentCount: absenceRecords.length,
-      skippedUnmatchedCount: skippedUnmatched.length,
+      noFingerprintCount: noFingerprintCivils.length, skippedUnmatchedCount: skippedUnmatched.length,
       skippedUnmatchedCivils: skippedUnmatched.slice(0, 20), // عيّنة كافية للتشخيص بلا إثقال الاستجابة
     };
   } finally {
@@ -601,106 +739,141 @@ function handleImportDay_(payload) {
   }
 }
 
-// ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين، ملف واحد) ====================
-// العميل يُرسل صفوفاً مُطبَّعة مسبقاً: {civil, date (yyyy-MM-dd), kind, checkIn, checkOut, statusLabel}
-// kind: 'present' (حضور فعلي، ولو جزئياً أو بلا بصمة انصراف) | 'absent' (غياب عادي) | 'absent_excused'
-// (إجازة رسمية من النظام المصدر — تُصنَّف "بعذر" تلقائياً بسبب هو نص الحالة نفسه من الملف).
-// أيام العطل تُستبعد هنا أيضاً دفاعياً (دعم isNonWorkingDay_) حتى لو تضمّنها الملف، تماماً كما
-// يتجاهل الاستيراد اليومي العادي تسجيل غياب لمن لم يظهر بالملف في يوم عطلة.
-// الحساب (تأخير/انصراف مبكر) يُعاد من الصفر هنا وفق فترات الدوام الحالية بالإعدادات — لا تُستخدم
-// أعمدة "تأخير حضور"/"انصراف مبكر" الجاهزة من الملف المصدر إطلاقاً، لضمان نفس المنطق المستخدم
-// بكل استيراد آخر بالتطبيق (قرار صريح من المستخدم).
+// ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين دفعة واحدة) ====================
+// ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يغطي أسابيع أو أشهر في ملف
+// واحد، بخلاف importDay الذي يستورد يوماً واحداً فقط. الواجهة تُحلّل الملف وترسل صفوفاً
+// منظَّفة مسبقاً بالشكل {civil, date, kind, checkIn?, checkOut?, noCheckout?, reason?} حيث
+// kind هو present أو absent أو absent_excused (الشرح الكامل في الواجهة عند قراءة الملف).
+// التأخير/الانصراف المبكر يُحسبان هنا من البصمة الفعلية ودوام ذلك التاريخ وفق الإعدادات
+// الحالية — لا من أي عمود جاهز بالملف — بنفس منطق importDay تماماً، فتبقى الأرقام متسقة
+// مهما كان مصدر الاستيراد. تستخدم batchUpsertRows_ (كتابة دفعة واحدة) بدل upsertRows_
+// (صف بصف) لأن حجم البيانات هنا قد يبلغ آلاف الصفوف عبر عشرات الأيام دفعة واحدة.
 function handleImportComprehensiveReport_(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     var rows = payload.rows || [];
-    var settings = getSettingsObj_();
+    if (!rows.length) return { ok: true, datesProcessed: 0, attendanceWritten: 0, absenceWritten: 0, skippedUnmatchedCount: 0 };
+
     var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS));
     var teacherByCivil = {};
     teachers.forEach(function (t) { teacherByCivil[String(t.civil)] = t; });
 
-    var byDate = {};
-    rows.forEach(function (r) {
-      var d = normalizeDate_(r.date);
-      (byDate[d] || (byDate[d] = [])).push(r);
-    });
+    var settings = getSettingsObj_();
 
-    var absSheet = getSheet_(SHEET_ABSENCE);
-    var existingAbsenceByCivilDate = {};
-    sheetToObjects_(absSheet).forEach(function (a) {
-      existingAbsenceByCivilDate[normalizeDate_(a.date) + '__' + String(a.civil)] = a;
-    });
+    var dateSet = {};
+    rows.forEach(function (r) { dateSet[String(r.date)] = true; });
+    var dateList = Object.keys(dateSet).sort();
+    var from = dateList[0], to = dateList[dateList.length - 1];
+    // نفس آلية importDay: استئذان "مقبول" ليوم كامل يُصنَّف الغياب "بعذر" بسببه تلقائياً
+    var permsByKey = (from && to) ? buildPermissionsByCivilDate_(from, to) : {};
+
+    // نحتفظ بتصنيف/سبب/ملاحظة الغياب اليدوية الموجودة مسبقاً لهذه الأيام عند إعادة الاستيراد
+    var existingAbsenceByKey = {};
+    if (from && to) {
+      getRowsForDateRange_(getSheet_(SHEET_ABSENCE), from, to).forEach(function (a) {
+        existingAbsenceByKey[normalizeDate_(a.date) + '__' + String(a.civil)] = a;
+      });
+    }
 
     var now = Date.now();
-    var attendanceRecords = [], absenceRecords = [], importRecords = [];
-    var skippedUnmatched = [], skippedWeekendDates = [], datesProcessed = 0;
+    var attendanceRecords = [];
+    var absenceRecords = [];
+    var skippedUnmatched = [];
+    var schedCache = {};
+    function scheduleFor(date) {
+      if (!schedCache[date]) schedCache[date] = resolveScheduleForDate_(date, settings);
+      return schedCache[date];
+    }
 
-    Object.keys(byDate).sort().forEach(function (date) {
-      if (isNonWorkingDay_(date, settings)) { skippedWeekendDates.push(date); return; }
-      var sched = resolveScheduleForDate_(date, settings);
+    rows.forEach(function (r) {
+      var civil = String(r.civil);
+      var date = String(r.date);
+      var t = teacherByCivil[civil];
+      if (!t) { skippedUnmatched.push(civil); return; }
+      if (isNonWorkingDay_(date, settings)) return; // حماية ثانية: عطلة حسب الإعدادات الحالية
+      if (beforeStart_(t, date, settings)) return; // لم يباشر بعد بهذا التاريخ
+
+      var sched = scheduleFor(date);
       var schedStartMin = parseTimeToMinutes_(sched.workStart);
       var schedEndMin = parseTimeToMinutes_(sched.workEnd);
-      var presentCount = 0, absentCount = 0;
 
-      byDate[date].forEach(function (r) {
-        var civil = String(r.civil);
-        var t = teacherByCivil[civil];
-        if (!t) { skippedUnmatched.push(civil); return; }
-
-        if (r.kind === 'present') {
-          presentCount++;
-          var checkInMin = r.checkIn ? parseTimeToMinutes_(r.checkIn) : null;
-          var checkOutMin = r.checkOut ? parseTimeToMinutes_(r.checkOut) : null;
-          var lateMinutes = checkInMin != null && schedStartMin != null ? Math.max(0, checkInMin - schedStartMin) : 0;
-          var earlyMinutes = checkOutMin != null && schedEndMin != null ? Math.max(0, schedEndMin - checkOutMin) : 0;
-          var noCheckout = checkOutMin == null;
-          var hoursRaw = checkInMin != null && checkOutMin != null ? formatMinutesAsHM_(checkOutMin - checkInMin) : '';
-          attendanceRecords.push({
-            id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
-            checkIn: r.checkIn || '', checkOut: r.checkOut || '', hoursRaw: hoursRaw,
-            lateMinutes: lateMinutes, earlyMinutes: earlyMinutes, noCheckout: noCheckout,
-            schedStart: sched.workStart, schedEnd: sched.workEnd, schedTolerance: 0,
-            schedLabel: sched.label, schedId: sched.id, updatedAt: now,
-          });
-        } else {
-          absentCount++;
-          var existing = existingAbsenceByCivilDate[date + '__' + civil];
-          absenceRecords.push({
-            id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
-            classification: r.kind === 'absent_excused' ? 'بعذر' : (existing ? existing.classification : ''),
-            reason: r.kind === 'absent_excused' ? (r.statusLabel || 'إجازة') : (existing ? existing.reason : ''),
-            note: existing ? existing.note : '',
-            updatedAt: now,
-          });
+      if (r.kind === 'present') {
+        var checkInMin = r.checkIn ? parseTimeToMinutes_(r.checkIn) : null;
+        var noCheckout = !!r.noCheckout || !r.checkOut;
+        var checkOutMin = noCheckout ? null : parseTimeToMinutes_(r.checkOut);
+        var lateMinutes = checkInMin != null && schedStartMin != null ? Math.max(0, checkInMin - schedStartMin) : 0;
+        var earlyMinutes = checkOutMin != null && schedEndMin != null ? Math.max(0, schedEndMin - checkOutMin) : 0;
+        var hoursRaw = checkInMin != null && checkOutMin != null ? formatMinutesAsHM_(checkOutMin - checkInMin) : '';
+        attendanceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          checkIn: r.checkIn || '', checkOut: noCheckout ? '' : (r.checkOut || ''),
+          hoursRaw: hoursRaw, lateMinutes: lateMinutes, earlyMinutes: earlyMinutes, noCheckout: noCheckout,
+          schedStart: sched.workStart, schedEnd: sched.workEnd, schedTolerance: 0,
+          schedLabel: sched.label, schedId: sched.id, updatedAt: now,
+        });
+      } else {
+        var existing = existingAbsenceByKey[date + '__' + civil];
+        var classification = existing ? existing.classification : '';
+        var reason = existing ? existing.reason : '';
+        if (!classification) {
+          if (r.kind === 'absent_excused') {
+            classification = 'بعذر';
+            reason = r.reason || 'إجازة';
+          } else {
+            var fullDay = acceptedFullDayPermission_(permsByKey, civil, date);
+            if (fullDay) { classification = 'بعذر'; reason = mapPermissionTypeToReason_(fullDay.type); }
+          }
         }
-      });
-
-      importRecords.push({
-        date: date, importedAt: new Date().toISOString(), fileName: payload.fileName || '',
-        schedStart: sched.workStart, schedEnd: sched.workEnd, schedLabel: sched.label,
-        presentCount: presentCount, absentCount: absentCount, updatedAt: now,
-      });
-      datesProcessed++;
+        absenceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          classification: classification, reason: reason, note: existing ? existing.note : '', updatedAt: now,
+        });
+      }
     });
 
-    batchUpsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
-    batchUpsertRows_(absSheet, 'id', absenceRecords);
-    var importsSheet2_ = getSheet_(SHEET_IMPORTS);
-    ensureHeaders_(importsSheet2_, ['presentCount', 'absentCount']);
-    batchUpsertRows_(importsSheet2_, 'date', importRecords);
+    // من صار حاضراً بالملف يُحذف سجل غيابه القديم لنفس اليوم، ومن صار غائباً يُحذف حضوره —
+    // نفس ما يفعله importDay، وإلا بقي الشخص حاضراً وغائباً معاً فتتضخم أرقامه بالتقارير.
+    // يقتصر على (التاريخ + السجل المدني) الواردين بالملف فقط؛ لا يمسّ أي سجل آخر.
+    var presentIds = {}, absentIds = {};
+    attendanceRecords.forEach(function (r) { presentIds[r.id] = true; });
+    absenceRecords.forEach(function (r) { absentIds[r.id] = true; });
+    batchDeleteIds_(getSheet_(SHEET_ABSENCE), presentIds);
+    batchDeleteIds_(getSheet_(SHEET_ATTENDANCE), absentIds);
 
-    var uniqueUnmatched = [];
-    skippedUnmatched.forEach(function (c) { if (uniqueUnmatched.indexOf(c) === -1) uniqueUnmatched.push(c); });
+    batchUpsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
+    batchUpsertRows_(getSheet_(SHEET_ABSENCE), 'id', absenceRecords);
+
+    // سجل الاستيرادات: صف واحد لكل تاريخ مشمول فعلياً بالملف، بعدد الحاضرين/الغائبين الحقيقي
+    var presentCountByDate = {}, absentCountByDate = {};
+    attendanceRecords.forEach(function (r) { presentCountByDate[r.date] = (presentCountByDate[r.date] || 0) + 1; });
+    absenceRecords.forEach(function (r) { absentCountByDate[r.date] = (absentCountByDate[r.date] || 0) + 1; });
+    var importsSheet_ = getSheet_(SHEET_IMPORTS);
+    ensureHeaders_(importsSheet_, ['presentCount', 'absentCount']);
+    var importRecords = dateList.filter(function (d) { return presentCountByDate[d] || absentCountByDate[d]; }).map(function (d) {
+      var sched = scheduleFor(d);
+      return {
+        date: d, importedAt: new Date().toISOString(), fileName: payload.fileName || 'تقرير شامل',
+        schedStart: sched.workStart, schedEnd: sched.workEnd, schedLabel: sched.label,
+        presentCount: presentCountByDate[d] || 0, absentCount: absentCountByDate[d] || 0, updatedAt: now,
+      };
+    });
+    batchUpsertRows_(importsSheet_, 'date', importRecords);
 
     return {
       ok: true,
-      datesProcessed: datesProcessed,
+      datesProcessed: importRecords.length,
       attendanceWritten: attendanceRecords.length,
       absenceWritten: absenceRecords.length,
-      skippedWeekendDatesCount: skippedWeekendDates.length,
       skippedUnmatchedCount: skippedUnmatched.length,
-      skippedUnmatchedCivils: uniqueUnmatched.slice(0, 20),
+      skippedUnmatchedDistinctCount: uniqueValues_(skippedUnmatched).length,
+      // القائمة كاملة بلا اقتصاص — الواجهة تعرض عيّنة منها فقط، لكنها تحتاج الكاملة لبناء
+      // سجلات معلمين جدد منها عند الطلب (زر "إضافة الموظفين غير المطابقين").
+      skippedUnmatchedCivils: uniqueValues_(skippedUnmatched),
+      // عيّنة من السجلات المدنية الفعلية بالروستر — تُعرض بالواجهة بجانب الأرقام غير المطابقة
+      // حتى يقارن المستخدم الشكل (عدد الخانات، وجود أصفار بادئة...) بنفسه دون تخمين من هنا.
+      rosterSampleCivils: teachers.slice(0, 5).map(function (t) { return String(t.civil); }),
+      rosterCount: teachers.length,
     };
   } finally {
     bumpCacheGen_();
@@ -765,8 +938,9 @@ function handleImportPermissions_(payload) {
     var malformedDatePermissions = []; // طلبات "مقبول" بتاريخ غير قياسي (yyyy-MM-dd) — لا تُصنَّف صامتة
     var isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
     records.forEach(function (r) {
-      if (r.status !== 'مقبول') return;
-      if (r.fromTime || r.toTime) return; // استئذان جزئي بوقت محدد — ليس غياب يوم كامل
+      if (String(r.status).trim() !== 'مقبول') return;
+      if (isPersonalPermission_(r.type)) return; // الشخصي لا يُعتمد ليوم كامل
+      if (String(r.fromTime || '').trim() || String(r.toTime || '').trim()) return; // استئذان جزئي بوقت محدد — ليس غياب يوم كامل
       if (!r.fromDate || !r.toDate) return;
       if (!isoDateRe.test(r.fromDate) || !isoDateRe.test(r.toDate)) { malformedDatePermissions.push(r.requestId); return; }
       var reason = mapPermissionTypeToReason_(r.type);
@@ -817,6 +991,189 @@ function buildPermissionsByCivilDate_(from, to) {
     }
   });
   return map;
+}
+
+// ==================== ربط الغياب بالبصمة والاستئذانات (مصدر واحد للحقيقة) ====================
+// القاعدة: المعلّم "حاضر" في يوم عمل فقط إن كانت له بصمة (حضور أو انصراف). غير ذلك "غائب".
+// والغائب الذي يغطيه استئذان "مقبول" ليوم كامل (إجازة/مهمة/تدريب…) يُصنَّف "بعذر" بسببه
+// تلقائياً — أياً كان ترتيب استيراد ملفات البصمة وملف الاستئذانات.
+// تاريخ مباشرة الموظف الفعلي: تاريخه الخاص إن وُجد، وإلا تاريخ مباشرة فئته من الإعدادات
+function staffRole_(t) {
+  var r = String((t && t.role) || '').trim();
+  return r === 'إداري' ? 'إداري' : 'معلم';
+}
+function staffStartDate_(t, settings) {
+  var own = t && t.startDate ? normalizeDate_(t.startDate) : '';
+  if (own && /^\d{4}-\d{2}-\d{2}$/.test(own)) return own;
+  var map = (settings && settings.roleStartDates) || {};
+  var d = map[staffRole_(t)] || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+function beforeStart_(t, date, settings) {
+  var st = staffStartDate_(t, settings);
+  return !!(st && date < st);
+}
+
+function hasFingerprint_(r) {
+  return !!(String(r.checkIn || '').trim() || String(r.checkOut || '').trim());
+}
+
+// الاستئذان الشخصي (طبي/طارئ) لا يُعتمد ليوم كامل حسب الآليات المنظمة لحضوري (رابعاً/٢) —
+// فلا يُعذر به غياب يوم كامل تلقائياً حتى لو ظهر "مقبول"؛ يبقى للمراجعة اليدوية.
+function isPersonalPermission_(type) {
+  return /^\s*شخص/.test(String(type || ''));
+}
+
+// استئذان "مقبول" بلا وقت محدد (إجازة/مهمة ليوم كامل أو أكثر) يغطي (السجل المدني، التاريخ)
+function acceptedFullDayPermission_(permsByKey, civil, date) {
+  var perms = permsByKey[String(civil) + '|' + date] || [];
+  for (var i = 0; i < perms.length; i++) {
+    var p = perms[i];
+    if (String(p.status).trim() === 'مقبول' && !String(p.fromTime || '').trim() && !String(p.toTime || '').trim()
+        && !isPersonalPermission_(p.type)) return p;
+  }
+  return null;
+}
+
+// إعادة ربط الاستئذانات بالغياب لفترة: كل يوم غياب "غير مصنّف" يغطيه استئذان مقبول ليوم
+// كامل يُصنَّف "بعذر" بسببه. لا يلمس أي يوم صنّفه المستخدم يدوياً.
+function handleReapplyPermissions_(payload) {
+  var from = payload.from || '0000-01-01';
+  var to = payload.to || '9999-12-31';
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    // (أ) إصلاح بيانات قديمة: سجلات "حضور" بلا أي بصمة تُحوَّل إلى غياب
+    var converted = convertEmptyAttendanceToAbsence_(from, to);
+    // (ب) حذف غياب مسجّل قبل تاريخ مباشرة الموظف (يحدث عند تحديد/تعديل تاريخ المباشرة لاحقاً)
+    var removedBeforeStart = removeAbsencesBeforeStart_(from, to);
+    // (ج) حذف غياب مسجّل في يوم صار عطلة (إجازة أُضيفت للتقويم بعد استيراد ذلك اليوم)
+    var removedNonWorking = removeAbsencesOnNonWorkingDays_(from, to);
+    var permsByKey = buildPermissionsByCivilDate_(from, to);
+    var absSheet = getSheet_(SHEET_ABSENCE);
+    var data = absSheet.getDataRange().getValues();
+    var h = data[0];
+    var dateCol = h.indexOf('date'), civilCol = h.indexOf('civil'), classCol = h.indexOf('classification');
+    var reasonCol = h.indexOf('reason'), updatedAtCol = h.indexOf('updatedAt');
+    var now = Date.now();
+    var fixed = 0;
+    for (var i = 1; i < data.length; i++) {
+      var d = normalizeDate_(data[i][dateCol]);
+      if (!d || d < from || d > to) continue;
+      if (String(data[i][classCol] || '').trim()) continue;
+      var p = acceptedFullDayPermission_(permsByKey, data[i][civilCol], d);
+      if (!p) continue;
+      absSheet.getRange(i + 1, classCol + 1).setNumberFormat('@').setValue('بعذر');
+      absSheet.getRange(i + 1, reasonCol + 1).setNumberFormat('@').setValue(mapPermissionTypeToReason_(p.type));
+      if (updatedAtCol >= 0) absSheet.getRange(i + 1, updatedAtCol + 1).setValue(now);
+      fixed++;
+    }
+    return { ok: true, classifiedDays: fixed, convertedToAbsence: converted, removedBeforeStart: removedBeforeStart, removedNonWorking: removedNonWorking };
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+}
+
+// يحذف سجلات الحضور الفارغة (بلا حضور ولا انصراف) في الفترة ويُنشئ مكانها سجل غياب — إن كان
+// يوم عمل وللمعلّم سجل نشط ولا يوجد له غياب مسجّل لنفس اليوم. يُرجع عدد ما حُوِّل.
+function convertEmptyAttendanceToAbsence_(from, to) {
+  var attSheet = getSheet_(SHEET_ATTENDANCE);
+  var empty = getRowsForDateRange_(attSheet, from, to).filter(function (r) { return !hasFingerprint_(r); });
+  if (!empty.length) return 0;
+  var settings = getSettingsObj_();
+  var teacherByCivil = {};
+  sheetToObjects_(getSheet_(SHEET_TEACHERS)).forEach(function (t) { teacherByCivil[String(t.civil)] = t; });
+  var absSheet = getSheet_(SHEET_ABSENCE);
+  var existingAbs = {};
+  getRowsForDateRange_(absSheet, from, to).forEach(function (a) { existingAbs[normalizeDate_(a.date) + '__' + String(a.civil)] = true; });
+  var now = Date.now();
+  var newAbs = [];
+  var dropIds = [];
+  empty.forEach(function (r) {
+    var d = normalizeDate_(r.date);
+    var civil = String(r.civil);
+    dropIds.push(d + '__' + civil);
+    var t = teacherByCivil[civil];
+    if (!t || !isActive_(t.active) || isNonWorkingDay_(d, settings)) return;
+    if (beforeStart_(t, d, settings)) return;
+    if (existingAbs[d + '__' + civil]) return;
+    newAbs.push({ id: d + '__' + civil, date: d, civil: civil, num: t.num, name: t.name,
+      classification: '', reason: '', note: '', updatedAt: now });
+  });
+  deleteRowsByIds_(attSheet, dropIds);
+  if (newAbs.length) upsertRows_(absSheet, 'id', newAbs);
+  // تحديث أعداد الحضور/الغياب في سجل الاستيرادات للأيام المتأثرة
+  var days = {};
+  empty.forEach(function (r) { days[normalizeDate_(r.date)] = true; });
+  Object.keys(days).forEach(function (d) { refreshImportCounts_(d); });
+  return newAbs.length;
+}
+
+// الاستيراد اليومي والشامل لا يسجّلان غياباً في يوم عطلة أصلاً، لكن إجازة تُضاف للتقويم بعد
+// استيراد أيامها (مثل اليوم الوطني) تترك غياب كل الموظفين فيها قائماً. هنا نحذفه بأثر رجعي.
+// سجلات الحضور الفعلي (من بصم فعلاً يوم العطلة) لا تُمسّ. إن لم يبقَ لليوم أي حضور يُحذف سجل
+// استيراده أيضاً فيظهر بالتقويم "عطلة" لا "مستورد"، وإلا تُحدَّث أعداده فقط.
+function removeAbsencesOnNonWorkingDays_(from, to) {
+  var settings = getSettingsObj_();
+  var absSheet = getSheet_(SHEET_ABSENCE);
+  var idSet = {}, days = {}, count = 0;
+  getRowsForDateRange_(absSheet, from, to).forEach(function (a) {
+    var d = normalizeDate_(a.date);
+    if (!isNonWorkingDay_(d, settings)) return;
+    idSet[d + '__' + String(a.civil)] = true; days[d] = true; count++;
+  });
+  if (!count) return 0;
+  batchDeleteIds_(absSheet, idSet);
+
+  var attSheet = getSheet_(SHEET_ATTENDANCE);
+  var emptyDays = {};
+  Object.keys(days).forEach(function (d) {
+    if (getRowsForDate_(attSheet, d).length) refreshImportCounts_(d);
+    else emptyDays[d] = true;
+  });
+  if (Object.keys(emptyDays).length) {
+    var impSheet = getSheet_(SHEET_IMPORTS);
+    var data = impSheet.getDataRange().getValues();
+    var dCol = data[0].indexOf('date');
+    var kept = data.filter(function (row, i) { return i === 0 || !emptyDays[normalizeDate_(row[dCol])]; });
+    if (kept.length !== data.length) {
+      impSheet.getRange(1, 1, data.length, data[0].length).clearContent();
+      impSheet.getRange(1, 1, kept.length, data[0].length).setValues(kept);
+    }
+  }
+  return count;
+}
+
+function removeAbsencesBeforeStart_(from, to) {
+  var settings = getSettingsObj_();
+  var teacherByCivil = {};
+  sheetToObjects_(getSheet_(SHEET_TEACHERS)).forEach(function (t) { teacherByCivil[String(t.civil)] = t; });
+  var absSheet = getSheet_(SHEET_ABSENCE);
+  var ids = [];
+  var days = {};
+  getRowsForDateRange_(absSheet, from, to).forEach(function (a) {
+    var t = teacherByCivil[String(a.civil)];
+    var d = normalizeDate_(a.date);
+    if (t && beforeStart_(t, d, settings)) { ids.push(d + '__' + String(a.civil)); days[d] = true; }
+  });
+  if (!ids.length) return 0;
+  deleteRowsByIds_(absSheet, ids);
+  Object.keys(days).forEach(function (d) { refreshImportCounts_(d); });
+  return ids.length;
+}
+
+function refreshImportCounts_(date) {
+  var impSheet = getSheet_(SHEET_IMPORTS);
+  var data = impSheet.getDataRange().getValues();
+  var h = data[0];
+  var dCol = h.indexOf('date'), pCol = h.indexOf('presentCount'), aCol = h.indexOf('absentCount');
+  if (dCol < 0 || pCol < 0 || aCol < 0) return;
+  for (var i = 1; i < data.length; i++) {
+    if (normalizeDate_(data[i][dCol]) !== date) continue;
+    impSheet.getRange(i + 1, pCol + 1).setValue(getRowsForDate_(getSheet_(SHEET_ATTENDANCE), date).length);
+    impSheet.getRange(i + 1, aCol + 1).setValue(getRowsForDate_(getSheet_(SHEET_ABSENCE), date).length);
+  }
 }
 
 // عند وجود أكثر من طلب لنفس اليوم (نادر)، نُبرز "مقبول" أولاً، ثم "تحت الإجراء"، ثم "مرفوض" —
@@ -941,6 +1298,8 @@ function annotatePermissionBadgeOnly_(rows, from, to) {
     for (var k in r) copy[k] = r[k];
     copy.permissionStatus = primary.status;
     copy.permissionType = primary.type;
+    // علامة للواجهة: يوجد استئذان مقبول ليوم كامل يغطي هذا الغياب
+    if (acceptedFullDayPermission_(permsByKey, r.civil, normalizeDate_(r.date))) copy.permissionFullDay = true;
     return copy;
   });
 }
@@ -1071,9 +1430,20 @@ function handleGetMonthlySummary_(payload) {
 
   var list = Object.keys(byCivil).map(function (k) { return byCivil[k]; });
   var workDaysCount = imports.length;
+  var sumSettings = getSettingsObj_();
+  var teacherByCivilSum = {};
+  teachers.forEach(function (t) { teacherByCivilSum[String(t.civil)] = t; });
+  var importDates = imports.map(function (im) { return normalizeDate_(im.date); });
   list.forEach(function (e) {
-    e.violations = e.absenceDays + e.lateDays + e.earlyDays;
-    e.attendanceRate = workDaysCount > 0 ? e.presentDays / workDaysCount : null;
+    // أيام العمل المحسوبة لكل موظف تبدأ من تاريخ مباشرته — لا تُخفّض نسبة حضوره أيامٌ قبلها
+    var t = teacherByCivilSum[String(e.civil)];
+    var st = t ? staffStartDate_(t, sumSettings) : '';
+    var myWorkDays = st ? importDates.filter(function (d) { return d >= st; }).length : workDaysCount;
+    e.workDays = myWorkDays;
+    e.startDate = st;
+    // الغياب بعذر (إجازة معتمدة) ليس مخالفة — المخالفات: غياب بدون عذر أو غير مصنّف + أيام تأخر + أيام انصراف مبكر
+    e.violations = e.unexcused + e.unclassified + e.lateDays + e.earlyDays;
+    e.attendanceRate = myWorkDays > 0 ? Math.min(1, e.presentDays / myWorkDays) : null;
   });
   list.sort(function (a, b) { return (b.violations - a.violations) || ((a.num || 0) - (b.num || 0)); });
 
@@ -1226,61 +1596,62 @@ function handleListImports_() {
   });
 }
 
-// تقرير الغياب والتأخر والانصراف المبكر — لموظف واحد (civil) أو لجميع الموظفين (civil فارغ)
-// جدول التدرج الرسمي (مرفق ٦ — بيان بعدد دقائق التأخير) لوزارة التعليم:
-// كل حد تراكمي لدقائق التأخير خلال العام يقابله إجراء تصعيدي، ومن حد ٤٢٠ دقيقة
-// فأعلى يعادل عدد أيام غياب تُحسم (بمعدّل يوم واحد لكل ٤٢٠ دقيقة تراكمية).
-// وفق النموذج الرسمي "مرفق ٦" الصادر عن الإدارة العامة للتعليم — إدارة الموارد البشرية:
-// "بيان بعدد دقائق التأخير التي تم رصدها على الموظفين والإجراء المتخذ بشأنها". كل درجة
-// تحمل: action (نوع الإجراء المختصر، يظهر في الجداول) وactionText (نص الإجراء المتخذ الكامل
-// كما ورد في النموذج الرسمي حرفياً، يظهر في مستند الإجراء المطبوع).
-// ملاحظة: الدرجتان ٧ و٨ في النموذج الرسمي تحملان نفس حد الدقائق (١٦٨٠) لكنهما تمثلان
-// إحالة أولى مقابل إحالة متكررة لنفس الموظف — وهو تمييز يعتمد على تاريخ إحالات سابقة لا
-// نملكه في البيانات، فتُطبَّق الدرجة ٧ تلقائياً عند بلوغ ١٦٨٠ دقيقة، وتبقى الدرجة ٨ (إرفاق
-// كافة الإجراءات السابقة وصورة من النموذج) إجراءً يدوياً يُراعيه معدّ البيان عند تكرار الإحالة.
+// ==================== سلّم إجراءات التأخير (مرفق ٦) ====================
+// "بيان بعدد دقائق التأخير التي تم رصدها على الموظفين والإجراء المتخذ بشأنها" — الإدارة العامة
+// للتعليم / إدارة الموارد البشرية. ثماني درجات متسلسلة بنصوصها كما وردت في النموذج:
+//   step         رقم الدرجة (م) في النموذج
+//   minMinutes   الحد التراكمي لدقائق التأخير
+//   threshold    نص عمود "عدد دقائق التأخير" كما في النموذج
+//   action       نوع الإجراء (يُستخدم أيضاً مفتاحاً لحفظ "تم/لم يتم" — لا تغيّر نصوص ١-٧
+//                حتى لا تضيع حالات التنفيذ المسجّلة سابقاً)
+//   actionText   الإجراء المتخذ (نص النموذج)
+//   deductionDays أيام الحسم المعادلة التي ينص عليها النموذج عند هذه الدرجة
+// الحسم يتبع النموذج حرفياً: ٤٢٠ د = يوم، ٨٤٠ د = يومان، ١٦٨٠ د = ٤ أيام (فأكثر: يوم لكل ٤٢٠ د).
+// ما بين حدّين يبقى على حسم الدرجة الأدنى — فمثلاً ٦٩٠ دقيقة = يوم واحد لا يومان.
+// الدرجة ٨ (repeat) لها نفس حد الدرجة ٧ لكنها للإحالة المتكررة: تُستحق فقط بعد تنفيذ الدرجة ٧
+// واستمرار التأخر بعدها (تراكم دقائق جديدة بعد تاريخ الرفع الأول).
+var EARLY_DEDUCT_ACTION = 'رفع حسم الانصراف المبكر';
 var LATE_ACTION_TIERS = [
-  {
-    minMinutes: 1680, action: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين)',
-    actionText: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين) بما تم من إجراءات سابقة، مع إرفاق صورة من مساءلة التأخير، ورفع الغياب للحسم.',
-    note: 'بما يعادل ٤ أيام للحسم — عند تكرار الإحالة لنفس الموظف: يُرفق أيضاً كافة الإجراءات السابقة وصورة من هذا النموذج (الدرجة ٨).',
-  },
-  {
-    minMinutes: 840, action: 'مساءلة ولفت نظر',
-    actionText: 'مساءلة الموظف/ـة خطياً من قبل مدير/ة الجهة، والرفع للمكتب المختص لِيُلفت نظره/ها، مع رفع الغياب للحسم.',
-    note: 'بما يعادل يومان للحسم',
-  },
-  {
-    minMinutes: 420, action: 'لفت نظر',
-    actionText: 'يُوجَّه لفت نظر لتكرار التأخر، علماً أنه سبق تنبيهك وأخذ تعهد عليك، مع رفع الغياب للحسم.',
-    note: 'بما يعادل يوم للحسم',
-  },
-  {
-    minMinutes: 240, action: 'تعهد خطي (٢)',
-    actionText: 'أتعهد للمرة الثانية بعدم التأخر، وإذا تكرر أتحمل ما يترتب على تأخيري من إجراءات.',
-    note: 'للمرة الثانية',
-  },
-  {
-    minMinutes: 120, action: 'تعهد خطي (١)',
-    actionText: 'أتعهد بعدم التأخر، وإذا تكرر أتحمل ما يترتب على تأخيري من إجراءات.',
-    note: '',
-  },
-  {
-    minMinutes: 60, action: 'تعهد خطي',
-    actionText: 'نظراً لتأخرك لذا وجب تنبيهك خطياً.',
-    note: '',
-  },
-  {
-    minMinutes: 30, action: 'تنبيه شفوي',
-    actionText: 'نظراً لتأخرك لذا وجب تنبيهك شفوياً.',
-    note: '',
-  },
+  { step: 1, minMinutes: 30, threshold: '٣٠ دقيقة', action: 'تنبيه شفوي',
+    actionText: 'نظراً لتأخرك لذا وجب تنبيهك شفوياً', deductionDays: 0 },
+  { step: 2, minMinutes: 60, threshold: '٦٠ دقيقة', action: 'تعهد خطي',
+    actionText: 'نظراً لتأخرك لذا وجب تنبيهك خطياً', deductionDays: 0 },
+  { step: 3, minMinutes: 120, threshold: '١٢٠ دقيقة', action: 'تعهد خطي (١)',
+    actionText: 'أتعهد بعدم التأخر وإذا تكرر أتحمل ما يترتب على تأخيري من إجراءات', deductionDays: 0 },
+  { step: 4, minMinutes: 240, threshold: '٢٤٠ دقيقة', action: 'تعهد خطي (٢)',
+    actionText: 'أتعهد للمرة الثانية بعدم التأخر وإذا تكرر أتحمل ما يترتب على تأخيري من إجراءات', deductionDays: 0 },
+  { step: 5, minMinutes: 420, threshold: '٤٢٠ دقيقة بما يعادل يوم', action: 'لفت نظر',
+    actionText: 'نلفت نظرك لتكرار تأخرك علماً أنه سبق تنبيهك وأخذ تعهد عليك مع رفع الغياب للحسم', deductionDays: 1 },
+  { step: 6, minMinutes: 840, threshold: '٨٤٠ دقيقة بما يعادل يومان', action: 'مساءلة ولفت نظر',
+    actionText: 'مساءلة الموظف/ـة خطياً من قبل مدير/ة الجهة والرفع للمكتب المختص ليلفت نظره/ها مع رفع الغياب للحسم', deductionDays: 2 },
+  { step: 7, minMinutes: 1680, threshold: '١٦٨٠ دقيقة بما يعادل ٤ أيام', action: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين)',
+    actionText: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين) بما تم من إجراءات سابقة مع إرفاق صورة من مساءلة التأخير ورفع الغياب للحسم', deductionDays: 4 },
+  { step: 8, minMinutes: 1680, threshold: '١٦٨٠ دقيقة بما يعادل ٤ أيام فأكثر', action: 'الرفع لإدارة الموارد البشرية مع إرفاق كافة الإجراءات',
+    actionText: 'الرفع لإدارة الموارد البشرية (وحدة متابعة دوام الموظفين) مع إرفاق كافة الإجراءات التي سبق اتخاذها أعلاه مع إرفاق صورة من هذا النموذج ورفع الغياب للحسم', deductionDays: 4, repeat: true },
 ];
 
+// أعلى درجة "بحد الدقائق" بلغها التراكم (الدرجات ١-٧؛ الدرجة ٨ تُحسم بسجل التنفيذ)
+// بداية السنة المالية للتاريخ المعطى — أساس تراكم دقائق التأخير والانصراف المبكر وترحيلها
+// حسب "الآليات والإجراءات المنظمة لتطبيق حضوري": من ٣١ ديسمبر إلى ٣٠ ديسمبر من السنة التالية.
+function fiscalYearStart_(iso) {
+  var y = Number(iso.slice(0, 4));
+  var start = y + '-12-31';
+  return iso >= start ? start : (y - 1) + '-12-31';
+}
+// إبقاء الاسم القديم متوافقاً
+function schoolYearStart_(iso) { return fiscalYearStart_(iso); }
+
 function lateActionTier_(cumulativeMinutes) {
-  for (var i = 0; i < LATE_ACTION_TIERS.length; i++) {
-    if (cumulativeMinutes >= LATE_ACTION_TIERS[i].minMinutes) return LATE_ACTION_TIERS[i];
-  }
-  return null;
+  var best = null;
+  LATE_ACTION_TIERS.forEach(function (t) {
+    if (!t.repeat && cumulativeMinutes >= t.minMinutes) best = t;
+  });
+  return best;
+}
+
+// أيام الحسم: يوم عن كل ٤٢٠ دقيقة (٧ ساعات) أو مضاعفاتها — وما دون ذلك يُرحَّل ضمن السنة المالية
+function lateDeductionDays_(cumulativeMinutes) {
+  return Math.floor((Number(cumulativeMinutes) || 0) / 420);
 }
 
 function addDaysISO_(iso, delta) {
@@ -1302,7 +1673,7 @@ function nextLateTier_(cumulativeMinutes) {
   var next = null;
   for (var i = 0; i < LATE_ACTION_TIERS.length; i++) {
     var tier = LATE_ACTION_TIERS[i];
-    if (tier.minMinutes > cumulativeMinutes) {
+    if (!tier.repeat && tier.minMinutes > cumulativeMinutes) {
       if (!next || tier.minMinutes < next.minMinutes) next = tier;
     }
   }
@@ -1364,10 +1735,13 @@ function handleGetAlerts_() {
     })
     .sort(function (a, b) { return b.count - a.count; });
 
-  var daily30 = getRowsForDateRange_(getSheet_(SHEET_ATTENDANCE), from30, today);
-  daily30 = annotateWithPermissions_(daily30, from30, today);
+  // "اقترب من إجراء" يجب أن يُحسب على نفس أساس سلّم الإجراءات: التراكم منذ بداية العام
+  // الدراسي — لا آخر ٣٠ يوماً — وإلا ظهر معلّم تجاوز الدرجة فعلاً على أنه "يقترب" منها.
+  var yearFrom = schoolYearStart_(today);
+  var dailyYear = getRowsForDateRange_(getSheet_(SHEET_ATTENDANCE), yearFrom, today);
+  dailyYear = annotateWithPermissions_(dailyYear, yearFrom, today);
   var lateByCivil = {};
-  daily30.forEach(function (r) {
+  dailyYear.forEach(function (r) {
     var mins = Number(r.lateMinutes) || 0;
     if (mins <= 0) return;
     var c = String(r.civil);
@@ -1402,6 +1776,8 @@ function handleGetAlerts_() {
     missingImportDate: missingImportDate,
     unclassifiedAbsences: unclassifiedAbsences,
     repeatedAbsence: repeatedAbsence,
+    interruptionCases: computeInterruptionCases_(today, settings, teacherByCivil),
+    fieldPending: pendingFieldNotes_(today, teacherByCivil),
     approachingPenalty: approachingPenalty,
     noCheckoutLastImport: { date: lastImportDate, list: noCheckoutLast },
   };
@@ -1411,7 +1787,7 @@ function handleGetAlerts_() {
 // كشف الجزاءات السنوية: تراكم دقائق التأخير لكل معلّم خلال فترة، والإجراء الرسمي المقابل
 // (المرفق رقم ٦ الصادر عن الإدارة العامة للتعليم) + أيام الحسم المعادلة
 var SHEET_ACTIONS = 'إجراءات_التأخير';
-var SHEET_ACTIONS_HEADERS = ['key', 'civil', 'action', 'done', 'doneAt', 'updatedAt'];
+var SHEET_ACTIONS_HEADERS = ['key', 'civil', 'action', 'done', 'doneAt', 'minutes', 'updatedAt'];
 
 // ينشئ الشيت تلقائياً بعناوينه إن لم يكن موجوداً بعد — لا حاجة لإعداد يدوي من المستخدم
 function getOrCreateSheet_(name, headers) {
@@ -1436,9 +1812,13 @@ function handleMarkActionDone_(payload) {
   var action = payload.tierAction ? String(payload.tierAction) : '';
   var key = payload.key ? String(payload.key) : (civil + '||' + action);
   var sheet = getOrCreateSheet_(SHEET_ACTIONS, SHEET_ACTIONS_HEADERS);
+  ensureHeaders_(sheet, SHEET_ACTIONS_HEADERS); // شيتات قديمة بلا عمود minutes
+  // minutes = تراكم دقائق التأخير لحظة التنفيذ — تحتاجه الدرجة ٨ لمعرفة هل استمر التأخر بعد الرفع
+  var minutes = payload.minutes === undefined || payload.minutes === null || payload.minutes === '' ? '' : Number(payload.minutes);
   upsertRows_(sheet, 'key', [{
     key: key, civil: civil, action: action, done: done,
-    doneAt: done ? new Date().toISOString() : '', updatedAt: Date.now(),
+    doneAt: done ? (payload.doneAt ? String(payload.doneAt) : new Date().toISOString()) : '',
+    minutes: done ? minutes : '', updatedAt: Date.now(),
   }]);
   bumpCacheGen_();
   return { ok: true };
@@ -1467,39 +1847,114 @@ function handleGetAnnualPenalties_(payload) {
   daily = annotateWithPermissions_(daily, from, to);
 
   var lateByCivil = {};
+  var earlyByCivil = {}; // الانصراف المبكر بدون إذن — يُجمع ويُحسم منفصلاً عن التأخير
+  var earlyDaysByCivil = {};
   daily.forEach(function (r) {
     var civil = String(r.civil);
     var mins = Number(r.lateMinutes) || 0;
-    if (mins <= 0) return; // lateMinutes صافية بالفعل بعد annotateWithPermissions_
-    lateByCivil[civil] = (lateByCivil[civil] || 0) + mins;
+    if (mins > 0) lateByCivil[civil] = (lateByCivil[civil] || 0) + mins; // صافية بعد الاستئذانات
+    var em = Number(r.earlyMinutes) || 0;
+    if (em > 0) { earlyByCivil[civil] = (earlyByCivil[civil] || 0) + em; earlyDaysByCivil[civil] = (earlyDaysByCivil[civil] || 0) + 1; }
   });
 
   var doneMap = {};
   sheetToObjects_(getOrCreateSheet_(SHEET_ACTIONS, SHEET_ACTIONS_HEADERS)).forEach(function (r) {
-    if (String(r.done) === 'true') doneMap[r.key] = r.doneAt;
+    if (String(r.done) === 'true') doneMap[r.key] = { at: r.doneAt || '', minutes: r.minutes === '' || r.minutes == null ? null : Number(r.minutes) };
   });
 
   var list = teachers.map(function (t) {
     var civil = String(t.civil);
-    var totalLateMinutes = lateByCivil[civil] || 0;
-    var tier = lateActionTier_(totalLateMinutes);
-    var action = tier ? tier.action : '—';
-    var key = civil + '||' + action;
+    var total = lateByCivil[civil] || 0;
+    var step7 = LATE_ACTION_TIERS[6];
+    var step7Done = doneMap[civil + '||' + step7.action];
+
+    // كل درجات النموذج لهذا المعلّم: مبلوغة؟ منفّذة؟ — السلّم متسلسل، فكل درجة مبلوغة
+    // لم تُنفَّذ تبقى مستحقة حتى لو تجاوزها التراكم (نص لفت النظر يفترض سبق التنبيه والتعهد).
+    var steps = LATE_ACTION_TIERS.map(function (tier) {
+      var key = civil + '||' + tier.action;
+      var done = doneMap[key];
+      var reached;
+      if (tier.repeat) {
+        // الإحالة المتكررة: بعد تنفيذ الدرجة ٧ واستمرار التأخر بعدها
+        var base = step7Done ? (step7Done.minutes != null ? step7Done.minutes : step7.minMinutes) : null;
+        reached = !!done || (base != null && total > base);
+      } else {
+        reached = total >= tier.minMinutes || !!done;
+      }
+      return {
+        step: tier.step, action: tier.action, actionText: tier.actionText, threshold: tier.threshold,
+        minMinutes: tier.minMinutes, deductionDays: tier.deductionDays,
+        reached: reached, done: !!done, doneAt: done ? done.at : '', doneMinutes: done ? done.minutes : null,
+      };
+    });
+    var reachedSteps = steps.filter(function (x) { return x.reached; });
+    if (!reachedSteps.length) return null; // لم يبلغ ٣٠ دقيقة
+    var current = reachedSteps[reachedSteps.length - 1];            // أعلى درجة مبلوغة
+    var pending = reachedSteps.filter(function (x) { return !x.done; });
+    var next = pending.length ? pending[0] : null;                  // الإجراء التالي بالتسلسل
+
+    var deductionDays = lateDeductionDays_(total);
+    var raisedDays = 0; // أيام رُفعت للحسم فعلاً مع الدرجات المنفّذة
+    steps.forEach(function (x) {
+      if (!x.done || !x.deductionDays) return;
+      var d = x.doneMinutes != null ? Math.floor(x.doneMinutes / 420) : x.deductionDays;
+      if (d > raisedDays) raisedDays = d;
+    });
+
     return {
       civil: civil, num: t.num, name: t.name,
-      totalLateMinutes: totalLateMinutes,
-      action: action,
-      actionText: tier ? tier.actionText : '',
-      note: tier ? tier.note : '',
-      deductionDays: totalLateMinutes >= 420 ? Math.round(totalLateMinutes / 420) : 0,
-      actionDone: !!doneMap[key],
-      actionDoneAt: doneMap[key] || '',
+      totalLateMinutes: total,
+      step: current.step,
+      action: current.action,
+      actionText: current.actionText,
+      note: current.threshold,
+      steps: steps,
+      pendingCount: pending.length,
+      nextStep: next ? next.step : null,
+      nextAction: next ? next.action : '',
+      deductionDays: deductionDays,
+      raisedDays: Math.min(raisedDays, deductionDays),
+      daysToRaise: Math.max(0, deductionDays - raisedDays),
+      actionDone: pending.length === 0,
+      actionDoneAt: current.done ? current.doneAt : '',
     };
-  }).filter(function (e) { return e.action !== '—'; }); // فقط من بلغ حد إجراء فعلي (٣٠ دقيقة فأكثر)
+  }).filter(Boolean);
 
   list.sort(function (a, b) { return b.totalLateMinutes - a.totalLateMinutes; });
 
-  return { ok: true, from: from, to: to, list: list };
+  // الانصراف المبكر بدون إذن: تراكم وحسم منفصلان — يوم عن كل ٤٢٠ دقيقة، والباقي يُرحَّل
+  // عدم التواجد أثناء الدوام (خروج بلا بصمة ثم عودة) من سجل المتابعة الميدانية = خروج بدون إذن،
+  // فيُضاف لنفس وعاء الانصراف المبكر ويُحسم معه كل ٤٢٠ دقيقة
+  var outByCivil = {}, outCountByCivil = {};
+  fieldNotesInRange_(from, to).forEach(function (n) {
+    if (n.kind !== 'absent_during') return;
+    var m = Number(n.minutes) || 0;
+    if (m <= 0) return;
+    var c = String(n.civil);
+    outByCivil[c] = (outByCivil[c] || 0) + m;
+    outCountByCivil[c] = (outCountByCivil[c] || 0) + 1;
+    earlyByCivil[c] = (earlyByCivil[c] || 0) + m;
+  });
+  var tnByCivil = {};
+  teachers.forEach(function (t) { tnByCivil[String(t.civil)] = t; });
+  var earlyList = Object.keys(earlyByCivil).filter(function (c) { return tnByCivil[c]; }).map(function (c) {
+    var t = tnByCivil[c];
+    var total = earlyByCivil[c];
+    var done = doneMap[c + '||' + EARLY_DEDUCT_ACTION];
+    var raised = done && done.minutes != null ? Math.floor(done.minutes / 420) : 0;
+    var ded = Math.floor(total / 420);
+    return {
+      civil: c, num: t.num, name: t.name,
+      totalEarlyMinutes: total, earlyDays: earlyDaysByCivil[c] || 0,
+      outMinutes: outByCivil[c] || 0, outCount: outCountByCivil[c] || 0,
+      fingerprintEarlyMinutes: total - (outByCivil[c] || 0),
+      deductionDays: ded, raisedDays: Math.min(raised, ded), daysToRaise: Math.max(0, ded - raised),
+      toNextDeduction: 420 - (total % 420),
+      raisedAt: done ? done.at : '',
+    };
+  }).sort(function (a, b) { return b.totalEarlyMinutes - a.totalEarlyMinutes; });
+
+  return { ok: true, from: from, to: to, list: list, earlyList: earlyList };
   });
 }
 
@@ -1790,4 +2245,467 @@ function isNonWorkingDay_(dateISO, settings) {
 function isoToWeekday_(dateISO) {
   var parts = dateISO.split('-').map(Number);
   return new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+}
+
+// ==================== تنزيل نسخة كاملة للعمل المحلي (بدون مزامنة) ====================
+// تُستخدم عند إيقاف المزامنة في الواجهة: تنزّل الواجهة نسخة من كل الشيتات وتشغّل نفس هذا
+// الكود داخل المتصفح عليها. القيم تُنسَّق بنفس formatCellForOutput_ حتى تصل التواريخ والأوقات
+// نصوصاً كما يراها التطبيق عادةً، لا كائنات Date.
+function handleExportAll_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var names = [SHEET_TEACHERS, SHEET_ATTENDANCE, SHEET_ABSENCE, SHEET_IMPORTS, SHEET_SETTINGS, SHEET_PERMISSIONS, SHEET_ACTIONS, SHEET_USERS, SHEET_FIELD];
+  var sheets = {};
+  names.forEach(function (name) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet) return;
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0] || [];
+    // أعمدة كلمات المرور/الاستعادة لا تُنسخ إلى المتصفح إطلاقاً
+    var secretCols = name === SHEET_USERS ? { salt: 1, hash: 1, resetHash: 1, resetExpires: 1, resetTries: 1 } : {};
+    sheets[name] = values.map(function (row, i) {
+      if (i === 0) return row;
+      return row.map(function (v, j) { return secretCols[headers[j]] ? '' : formatCellForOutput_(headers[j], v); });
+    });
+  });
+  return { ok: true, sheets: sheets, exportedAt: Date.now() };
+}
+
+// ==================== إدارة المعلمين من التطبيق ====================
+// كل المعلمين (النشطون وغير النشطين) — لشاشة إدارة المعلمين بالإعدادات.
+function handleGetAllTeachers_() {
+  var rows = sheetToObjects_(getSheet_(SHEET_TEACHERS))
+    .filter(function (t) { return String(t.civil || '').trim(); })
+    .map(function (t) {
+      return { civil: String(t.civil).trim(), num: t.num, name: t.name, active: isActive_(t.active),
+        role: staffRole_(t), startDate: t.startDate ? normalizeDate_(t.startDate) : '' };
+    });
+  rows.sort(function (a, b) {
+    var na = Number(a.num), nb = Number(b.num);
+    if (!isNaN(na) && !isNaN(nb) && a.num !== '' && b.num !== '') return na - nb;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
+  return { ok: true, teachers: rows };
+}
+
+// إضافة/تعديل معلّم أو أكثر (مطابقة بالسجل المدني). تُدمج القيم مع الصف الموجود حتى لا
+// تُمسح أي أعمدة إضافية يضيفها المستخدم يدوياً في شيت المعلمين.
+function handleSaveTeachers_(payload) {
+  var list = payload.teachers || [];
+  var clean = [];
+  var skipped = 0;
+  list.forEach(function (t) {
+    var civil = String(t.civil == null ? '' : t.civil).trim();
+    var name = String(t.name == null ? '' : t.name).trim();
+    if (!civil || !name) { skipped++; return; }
+    var numRaw = t.num == null ? '' : String(t.num).trim();
+    var num = numRaw !== '' && !isNaN(Number(numRaw)) ? Number(numRaw) : numRaw;
+    var active = t.active === undefined ? true : isActive_(t.active);
+    var rec = { civil: civil, name: name, num: num, active: active };
+    if (t.role !== undefined) rec.role = String(t.role).trim() === 'إداري' ? 'إداري' : 'معلم';
+    if (t.startDate !== undefined) {
+      var sd = String(t.startDate || '').trim();
+      rec.startDate = /^\d{4}-\d{2}-\d{2}$/.test(sd) ? sd : '';
+    }
+    clean.push(rec);
+  });
+  if (!clean.length) return { ok: true, saved: 0, skipped: skipped };
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheet_(SHEET_TEACHERS);
+    ensureHeaders_(sheet, defaultHeadersFor_(SHEET_TEACHERS));
+    var existing = {};
+    sheetToObjects_(sheet).forEach(function (r) { existing[String(r.civil).trim()] = r; });
+    var records = clean.map(function (t) {
+      return Object.assign({}, existing[t.civil] || {}, t);
+    });
+    upsertRows_(sheet, 'civil', records);
+    return { ok: true, saved: records.length, skipped: skipped };
+  } finally {
+    CacheService.getScriptCache().remove('teachers_v1');
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+}
+
+// حذف معلّم من الروستر. سجلات حضوره وغيابه السابقة تبقى كما هي (تحمل اسمه).
+function handleDeleteTeacher_(payload) {
+  var civil = String(payload.civil || '').trim();
+  if (!civil) return { ok: false, error: 'السجل المدني مطلوب' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sheet = getSheet_(SHEET_TEACHERS);
+    var data = sheet.getDataRange().getValues();
+    var idCol = data[0].indexOf('civil');
+    var deleted = 0;
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(normalizeDate_(data[i][idCol])).trim() === civil) { sheet.deleteRow(i + 1); deleted++; }
+    }
+    return { ok: true, deleted: deleted };
+  } finally {
+    CacheService.getScriptCache().remove('teachers_v1');
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+}
+
+// ==================== الحسابات وتسجيل الدخول ====================
+// كلمات المرور لا تُحفظ نصاً أبداً: تُحفظ بصمة SHA-256 مملّحة ومكرّرة. "نسيت كلمة المرور" لا
+// يرسل كلمة المرور (لا يمكن استرجاعها أصلاً) بل رمز تحقق من ٦ أرقام صالح ١٥ دقيقة يُرسل للبريد.
+// أول حساب يُنشأ يصبح "مديراً" مفعّلاً؛ أي تسجيل بعده يبقى "بانتظار التفعيل" حتى يفعّله مدير —
+// حتى لا يستطيع أي شخص يصل للصفحة إنشاء حساب والدخول لبيانات المدرسة.
+var SHEET_USERS = 'المستخدمون';
+var SHEET_USERS_HEADERS = ['username', 'email', 'salt', 'hash', 'role', 'status', 'createdAt', 'lastLoginAt', 'resetHash', 'resetExpires', 'resetTries'];
+var SESSION_DAYS = 7;
+
+function sha256Hex_(str) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { var v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? '0' + v : v; }).join('');
+}
+function hashPassword_(password, salt) {
+  var h = salt + '|' + password;
+  for (var i = 0; i < 300; i++) h = sha256Hex_(h + '|' + salt);
+  return h;
+}
+function randomToken_() {
+  return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+}
+// سرّ توقيع الجلسات — يُنشأ مرة ويُحفظ في شيت الإعدادات (يعمل كذلك في الوضع المحلي)
+function authSecret_() {
+  var sheet = getSheet_(SHEET_SETTINGS);
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) if (data[i][0] === 'auth_secret' && data[i][1]) return String(data[i][1]);
+  var secret = randomToken_();
+  sheet.appendRow(['auth_secret', secret, Date.now()]);
+  return secret;
+}
+function usersSheet_() {
+  var sh = getOrCreateSheet_(SHEET_USERS, SHEET_USERS_HEADERS);
+  ensureHeaders_(sh, SHEET_USERS_HEADERS);
+  return sh;
+}
+function normUser_(u) { return String(u || '').trim().toLowerCase(); }
+function findUser_(key) {
+  var k = normUser_(key);
+  if (!k) return null;
+  var list = sheetToObjects_(usersSheet_());
+  for (var i = 0; i < list.length; i++) {
+    if (normUser_(list[i].username) === k || normUser_(list[i].email) === k) return list[i];
+  }
+  return null;
+}
+function saveUser_(u) { upsertRows_(usersSheet_(), 'username', [u]); }
+function publicUser_(u) { return { username: u.username, email: u.email, role: u.role || 'user', status: u.status || 'active' }; }
+
+function makeSession_(username) {
+  var exp = Date.now() + SESSION_DAYS * 86400000;
+  var payload = username + '|' + exp;
+  return payload + '|' + sha256Hex_(authSecret_() + '|' + payload);
+}
+function sessionUser_(session) {
+  var parts = String(session || '').split('|');
+  if (parts.length !== 3) return null;
+  var payload = parts[0] + '|' + parts[1];
+  if (sha256Hex_(authSecret_() + '|' + payload) !== parts[2]) return null;
+  if (Number(parts[1]) < Date.now()) return null;
+  var u = findUser_(parts[0]);
+  if (!u || u.status !== 'active') return null;
+  return u;
+}
+
+function handleAuthInfo_() {
+  return { ok: true, hasUsers: sheetToObjects_(usersSheet_()).length > 0 };
+}
+
+function validEmail_(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || '').trim()); }
+
+function handleRegister_(payload) {
+  var username = String(payload.username || '').trim();
+  var email = String(payload.email || '').trim();
+  var password = String(payload.password || '');
+  if (!/^[\u0600-\u06FFA-Za-z0-9_.\- ]{3,40}$/.test(username)) return { ok: false, error: 'اسم المستخدم يجب أن يكون من ٣ إلى ٤٠ حرفاً (حروف أو أرقام).' };
+  if (!validEmail_(email)) return { ok: false, error: 'البريد الإلكتروني غير صحيح.' };
+  if (password.length < 6) return { ok: false, error: 'كلمة المرور يجب ألا تقل عن ٦ أحرف.' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (findUser_(username)) return { ok: false, error: 'اسم المستخدم مستخدم مسبقاً.' };
+    if (findUser_(email)) return { ok: false, error: 'هذا البريد مسجّل بحساب آخر.' };
+    var first = sheetToObjects_(usersSheet_()).length === 0;
+    var salt = randomToken_().slice(0, 24);
+    var user = {
+      username: username, email: email, salt: salt, hash: hashPassword_(password, salt),
+      role: first ? 'admin' : 'user', status: first ? 'active' : 'pending',
+      createdAt: new Date().toISOString(), lastLoginAt: '', resetHash: '', resetExpires: '',
+    };
+    saveUser_(user);
+    if (first) return { ok: true, pending: false, session: makeSession_(username), user: publicUser_(user) };
+    return { ok: true, pending: true, message: 'تم إنشاء الحساب، وهو بانتظار تفعيله من مدير النظام.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleLogin_(payload) {
+  var u = findUser_(payload.username);
+  if (!u || hashPassword_(String(payload.password || ''), u.salt) !== u.hash) {
+    return { ok: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة.' };
+  }
+  if (u.status === 'pending') return { ok: false, error: 'الحساب بانتظار التفعيل من مدير النظام.' };
+  if (u.status !== 'active') return { ok: false, error: 'هذا الحساب موقوف.' };
+  u.lastLoginAt = new Date().toISOString();
+  saveUser_(u);
+  return { ok: true, session: makeSession_(u.username), user: publicUser_(u) };
+}
+
+function handleVerifySession_(payload) {
+  var u = sessionUser_(payload.session);
+  if (!u) return { ok: false, error: 'انتهت الجلسة — سجّل الدخول من جديد.' };
+  return { ok: true, user: publicUser_(u) };
+}
+
+function handleForgotPassword_(payload) {
+  var u = findUser_(payload.username);
+  // الرد نفسه سواء وُجد الحساب أم لا — حتى لا تُستخدم الشاشة لمعرفة الحسابات المسجّلة
+  var generic = { ok: true, message: 'إن كان الحساب مسجّلاً فسيصل رمز التحقق إلى بريده خلال دقائق.' };
+  if (!u || !u.email) return generic;
+  var code = String(Math.floor(100000 + Math.random() * 900000));
+  u.resetHash = sha256Hex_(u.salt + '|reset|' + code);
+  u.resetExpires = Date.now() + 15 * 60000;
+  u.resetTries = 0;
+  saveUser_(u);
+  try {
+  MailApp.sendEmail({
+    to: u.email,
+    subject: 'رمز استعادة كلمة المرور — متابعة الحضور',
+    htmlBody: '<div dir="rtl" style="font-family:Tahoma,Arial;font-size:15px;line-height:1.9">'
+      + 'مرحباً ' + u.username + '،<br>طلبتَ استعادة كلمة المرور لنظام متابعة الحضور.<br>'
+      + 'رمز التحقق: <b style="font-size:22px;letter-spacing:4px">' + code + '</b><br>'
+      + 'الرمز صالح لمدة ١٥ دقيقة. إن لم تطلب ذلك فتجاهل هذه الرسالة.</div>',
+  });
+  } catch (mailErr) {
+    return { ok: false, error: String(mailErr && mailErr.message || mailErr).replace(/^Error:\s*/, '') };
+  }
+  return generic;
+}
+
+function handleResetPassword_(payload) {
+  var u = findUser_(payload.username);
+  var code = String(payload.code || '').trim();
+  if (!u || !u.resetHash || !u.resetExpires || Number(u.resetExpires) < Date.now()) {
+    return { ok: false, error: 'رمز التحقق غير صحيح أو منتهي الصلاحية.' };
+  }
+  if (sha256Hex_(u.salt + '|reset|' + code) !== u.resetHash) {
+    // ٥ محاولات خاطئة تُبطل الرمز — يمنع تخمين الرمز المكوّن من ٦ أرقام
+    u.resetTries = (Number(u.resetTries) || 0) + 1;
+    if (u.resetTries >= 5) { u.resetHash = ''; u.resetExpires = ''; }
+    saveUser_(u);
+    return { ok: false, error: u.resetTries >= 5 ? 'تجاوزت عدد المحاولات — اطلب رمزاً جديداً.' : 'رمز التحقق غير صحيح أو منتهي الصلاحية.' };
+  }
+  var pw = String(payload.newPassword || '');
+  if (pw.length < 6) return { ok: false, error: 'كلمة المرور يجب ألا تقل عن ٦ أحرف.' };
+  u.salt = randomToken_().slice(0, 24);
+  u.hash = hashPassword_(pw, u.salt);
+  u.resetHash = ''; u.resetExpires = '';
+  saveUser_(u);
+  return { ok: true, message: 'تم تغيير كلمة المرور، يمكنك الدخول الآن.' };
+}
+
+function handleChangePassword_(payload) {
+  var u = sessionUser_(payload.session);
+  if (!u) return { ok: false, error: 'انتهت الجلسة — سجّل الدخول من جديد.' };
+  if (hashPassword_(String(payload.oldPassword || ''), u.salt) !== u.hash) return { ok: false, error: 'كلمة المرور الحالية غير صحيحة.' };
+  var pw = String(payload.newPassword || '');
+  if (pw.length < 6) return { ok: false, error: 'كلمة المرور الجديدة يجب ألا تقل عن ٦ أحرف.' };
+  u.salt = randomToken_().slice(0, 24);
+  u.hash = hashPassword_(pw, u.salt);
+  if (payload.email !== undefined && validEmail_(payload.email)) u.email = String(payload.email).trim();
+  saveUser_(u);
+  return { ok: true };
+}
+
+function handleListUsers_(payload) {
+  var me = sessionUser_(payload.session);
+  if (!me) return { ok: false, error: 'انتهت الجلسة — سجّل الدخول من جديد.' };
+  var list = sheetToObjects_(usersSheet_()).map(function (u) {
+    var p = publicUser_(u); p.createdAt = u.createdAt || ''; p.lastLoginAt = u.lastLoginAt || ''; return p;
+  });
+  return { ok: true, me: publicUser_(me), users: me.role === 'admin' ? list : [publicUser_(me)] };
+}
+
+// المدير فقط: تفعيل/إيقاف/ترقية/حذف حساب (ولا يستطيع إيقاف أو حذف نفسه)
+function handleUpdateUser_(payload) {
+  var me = sessionUser_(payload.session);
+  if (!me) return { ok: false, error: 'انتهت الجلسة — سجّل الدخول من جديد.' };
+  if (me.role !== 'admin') return { ok: false, error: 'هذا الإجراء للمدير فقط.' };
+  var u = findUser_(payload.username);
+  if (!u) return { ok: false, error: 'الحساب غير موجود.' };
+  if (normUser_(u.username) === normUser_(me.username)) return { ok: false, error: 'لا يمكنك تعديل حسابك من هنا.' };
+  var sheet = usersSheet_();
+  if (payload.op === 'delete') {
+    var data = sheet.getDataRange().getValues();
+    var col = data[0].indexOf('username');
+    for (var i = data.length - 1; i >= 1; i--) if (normUser_(data[i][col]) === normUser_(u.username)) sheet.deleteRow(i + 1);
+    return { ok: true };
+  }
+  if (payload.op === 'activate') u.status = 'active';
+  else if (payload.op === 'suspend') u.status = 'suspended';
+  else if (payload.op === 'makeAdmin') u.role = 'admin';
+  else if (payload.op === 'makeUser') u.role = 'user';
+  else if (payload.op === 'setPassword') {
+    var np = String(payload.newPassword || '');
+    if (np.length < 6) return { ok: false, error: 'كلمة المرور يجب ألا تقل عن ٦ أحرف.' };
+    u.salt = randomToken_().slice(0, 24);
+    u.hash = hashPassword_(np, u.salt);
+    u.resetHash = ''; u.resetExpires = '';
+  }
+  else return { ok: false, error: 'إجراء غير معروف' };
+  saveUser_(u);
+  return { ok: true };
+}
+
+// ==================== محضر الانقطاع عن العمل (نموذج ٩) ====================
+// الآليات المنظمة (خامساً/٤): يُعدّ محضر انقطاع إذا بلغ غياب الموظف بدون عذر ١٥ يوماً متصلة أو
+// ٣٠ يوماً متفرقة خلال السنة. ومع ملحوظة مساءلة الغياب: غياب قبل عطلة (نهاية أسبوع/إجازة) وبعدها
+// تُحتسب العطلة ضمن مدة الغياب. غير المصنّف يُعامل كبدون عذر حتى يُصنَّف (مع التنبيه لذلك).
+function absenceStreaks_(dates, settings) {
+  // dates: تواريخ غياب مرتبة؛ تُدمج في فترات إن فصلت بينها أيام عطلة فقط
+  var streaks = [];
+  dates.forEach(function (d) {
+    var last = streaks[streaks.length - 1];
+    if (last) {
+      var gap = [];
+      var x = addDaysISO_(last.to, 1);
+      var bridged = true;
+      while (x < d) {
+        if (!isNonWorkingDay_(x, settings)) { bridged = false; break; }
+        gap.push(x);
+        x = addDaysISO_(x, 1);
+      }
+      if (bridged) { last.to = d; last.days += gap.length + 1; last.bridged += gap.length; return; }
+    }
+    streaks.push({ from: d, to: d, days: 1, bridged: 0 });
+  });
+  return streaks;
+}
+function computeInterruptionCases_(today, settings, teacherByCivil) {
+  var from = fiscalYearStart_(today);
+  var byCivil = {};
+  getRowsForDateRange_(getSheet_(SHEET_ABSENCE), from, today).forEach(function (a) {
+    var c = String(a.civil);
+    if (!teacherByCivil[c]) return;
+    var cls = String(a.classification || '');
+    if (cls === 'بعذر') return;
+    (byCivil[c] || (byCivil[c] = { dates: [], unclassified: 0 })).dates.push(normalizeDate_(a.date));
+    if (!cls) byCivil[c].unclassified++;
+  });
+  var out = [];
+  Object.keys(byCivil).forEach(function (c) {
+    var info = byCivil[c];
+    var dates = info.dates.sort();
+    var streaks = absenceStreaks_(dates, settings);
+    var longest = streaks.reduce(function (b, s) { return s.days > b.days ? s : b; }, { days: 0 });
+    var totalWithBridges = streaks.reduce(function (a, s) { return a + s.days; }, 0);
+    var reached = longest.days >= 15 ? 'consecutive' : totalWithBridges >= 30 ? 'scattered' : '';
+    var near = !reached && (longest.days >= 10 || totalWithBridges >= 20);
+    if (!reached && !near) return;
+    var t = teacherByCivil[c];
+    out.push({
+      civil: c, name: t.name, num: t.num,
+      longestStreak: longest.days, longestFrom: longest.from || '', longestTo: longest.to || '',
+      totalDays: totalWithBridges, absenceDays: dates.length, unclassified: info.unclassified,
+      reached: reached, near: near, dates: dates,
+    });
+  });
+  out.sort(function (a, b) { return (b.reached ? 1 : 0) - (a.reached ? 1 : 0) || b.totalDays - a.totalDays; });
+  return out;
+}
+
+// ==================== سجل المتابعة الميدانية ====================
+// حالات لا تكشفها البصمة ويثبتها المدير/الوكيل بالمتابعة: عدم التواجد أثناء الدوام (خروج دون
+// بصمة ثم عودة) والحضور/الانصراف من موقع آخر. كل ملاحظة موثّقة بمن سجّلها ووقت التسجيل والشاهد.
+var SHEET_FIELD = 'المتابعة الميدانية';
+var SHEET_FIELD_HEADERS = ['id', 'date', 'civil', 'name', 'kind', 'fromTime', 'toTime', 'minutes', 'punchKind', 'location',
+  'verifiedBy', 'witness', 'note', 'createdBy', 'createdAt', 'updatedAt'];
+function fieldSheet_() {
+  var sh = getOrCreateSheet_(SHEET_FIELD, SHEET_FIELD_HEADERS);
+  ensureHeaders_(sh, SHEET_FIELD_HEADERS);
+  return sh;
+}
+function fieldNotesInRange_(from, to) {
+  return getRowsForDateRange_(fieldSheet_(), from, to);
+}
+function handleGetFieldNotes_(payload) {
+  var from = String(payload.from || '0000-01-01'), to = String(payload.to || '9999-12-31');
+  var rows = fieldNotesInRange_(from, to).map(function (r) {
+    r.date = normalizeDate_(r.date);
+    r.minutes = Number(r.minutes) || 0;
+    return r;
+  });
+  rows.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)); });
+  return { ok: true, rows: rows };
+}
+function handleSaveFieldNote_(payload) {
+  var n = payload.note || {};
+  var date = String(n.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'التاريخ غير صحيح.' };
+  var civil = String(n.civil || '').trim();
+  if (!civil) return { ok: false, error: 'اختر الموظف.' };
+  var kind = n.kind === 'other_location' ? 'other_location' : 'absent_during';
+  var minutes = 0;
+  if (kind === 'absent_during') {
+    var a = parseTimeToMinutes_(n.fromTime), b = parseTimeToMinutes_(n.toTime);
+    if (a == null || b == null || b <= a) return { ok: false, error: 'حدّد وقت الخروج ووقت العودة (العودة بعد الخروج).' };
+    minutes = b - a;
+  }
+  var teacher = sheetToObjects_(getSheet_(SHEET_TEACHERS)).filter(function (t) { return String(t.civil) === civil; })[0];
+  var now = new Date().toISOString();
+  var rec = {
+    id: n.id || ('fn_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)),
+    date: date, civil: civil, name: teacher ? teacher.name : String(n.name || ''), kind: kind,
+    fromTime: kind === 'absent_during' ? String(n.fromTime || '') : '',
+    toTime: kind === 'absent_during' ? String(n.toTime || '') : '',
+    minutes: minutes,
+    punchKind: kind === 'other_location' ? (n.punchKind === 'انصراف' ? 'انصراف' : n.punchKind === 'حضور وانصراف' ? 'حضور وانصراف' : 'حضور') : '',
+    location: kind === 'other_location' ? String(n.location || '') : '',
+    verifiedBy: String(n.verifiedBy || ''), witness: String(n.witness || ''), note: String(n.note || ''),
+    createdBy: String(n.createdBy || ''), createdAt: n.createdAt || now, updatedAt: Date.now(),
+  };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    upsertRows_(fieldSheet_(), 'id', [rec]);
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+  return { ok: true, note: rec };
+}
+function handleDeleteFieldNote_(payload) {
+  var id = String(payload.id || '');
+  if (!id) return { ok: false, error: 'معرّف غير صحيح' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    deleteRowsByIds_(fieldSheet_(), [id]);
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+function pendingFieldNotes_(today, teacherByCivil) {
+  var done = {};
+  sheetToObjects_(getOrCreateSheet_(SHEET_ACTIONS, SHEET_ACTIONS_HEADERS)).forEach(function (r) {
+    if (String(r.done) === 'true') done[r.key] = true;
+  });
+  return fieldNotesInRange_(fiscalYearStart_(today), today).filter(function (n) {
+    var d = normalizeDate_(n.date);
+    return teacherByCivil[String(n.civil)] && !done['day::field::' + n.civil + '::' + d + '#' + n.id];
+  }).map(function (n) {
+    return { id: n.id, civil: String(n.civil), name: n.name, date: normalizeDate_(n.date), kind: n.kind, minutes: Number(n.minutes) || 0 };
+  });
 }

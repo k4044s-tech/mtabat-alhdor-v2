@@ -2488,6 +2488,19 @@ function normalizeDate_(v) {
   return String(v);
 }
 
+// يُرجع قيم المصفوفة بلا تكرار، بترتيب أول ظهور — تُستخدم لتلخيص عيّنات التشخيص (مثل
+// السجلات المدنية غير المطابقة) بلا الاعتماد على Set حتى يبقى الأسلوب موحَّداً مع بقية الملف.
+function uniqueValues_(arr) {
+  var seen = {}, out = [];
+  arr.forEach(function (v) {
+    var k = String(v);
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push(v);
+  });
+  return out;
+}
+
 function isActive_(v) {
   return v === true || String(v).toLowerCase() === 'true';
 }
@@ -2946,7 +2959,12 @@ function handleImportComprehensiveReport_(payload) {
       attendanceWritten: attendanceRecords.length,
       absenceWritten: absenceRecords.length,
       skippedUnmatchedCount: skippedUnmatched.length,
-      skippedUnmatchedCivils: skippedUnmatched.slice(0, 20),
+      skippedUnmatchedDistinctCount: uniqueValues_(skippedUnmatched).length,
+      skippedUnmatchedCivils: uniqueValues_(skippedUnmatched).slice(0, 8),
+      // عيّنة من السجلات المدنية الفعلية بالروستر — تُعرض بالواجهة بجانب الأرقام غير المطابقة
+      // حتى يقارن المستخدم الشكل (عدد الخانات، وجود أصفار بادئة...) بنفسه دون تخمين من هنا.
+      rosterSampleCivils: teachers.slice(0, 5).map(function (t) { return String(t.civil); }),
+      rosterCount: teachers.length,
     };
   } finally {
     bumpCacheGen_();
@@ -6485,36 +6503,30 @@ async function processPermissionsFile_(file) {
 // ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين) ====================
 // ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يسرد كل موظف وكل يوم في
 // الفترة المختارة بصف واحد لكل (موظف × يوم)، بعمود "حالة التحضير" الذي يحدد نوع اليوم.
-// نحوّل كل قيمة معروفة من هذا العمود إلى تصنيف داخلي (present / absent / absent_excused)
-// ونُسقِط عطلة الأسبوع قبل الإرسال؛ أي نص غير معروف يُجمع ويُعرض تحذيراً بعد الاستيراد
-// بدل إسقاطه بصمت، حتى يُراجعه المستخدم ويضيفه هنا إن لزم.
-const COMPREHENSIVE_STATUS_MAP = {
-  'حاضر': 'present',
-  'منصرف': 'present',
-  'انصراف تلقائي': 'present_noCheckout',
-  'غير مكتمله': 'present_noCheckout',
-  'غير مكتملة': 'present_noCheckout',
-  'غائب': 'absent',
-  'غياب': 'absent',
-  'اجازه سنويه': 'absent_excused',
-  'اجازه مرضيه': 'absent_excused',
-  'اجازه اضطراريه': 'absent_excused',
-  'اجازه استثنائيه': 'absent_excused',
-  'اجازه وضع': 'absent_excused',
-  'اجازه امومه': 'absent_excused',
-  'اجازه ابوه': 'absent_excused',
-  'اجازه تعويض': 'absent_excused',
-  'مهمه عمل': 'absent_excused',
-  'انتداب': 'absent_excused',
-  'تدريب': 'absent_excused',
-  'عطله الاسبوع': 'weekend',
-  'عطله': 'weekend',
-};
-// يطابق حالة الملف بعد توحيد الهمزات/التاء المربوطة/الأرقام (عبر normalizeArabicKey_) —
-// يستوعب بذلك أي صياغة لنفس الحالة بلا حاجة لإدراج كل متغيّرات الهمزة يدوياً بالخريطة أعلاه.
+// هذا العمود ليس قيمة واحدة ثابتة؛ حضوري يُركّب نصوصاً مختلفة حسب الحالة (مثلاً "استئذان
+// طبي" أو "اجازة مهمة عمل") فلا يصحّ مطابقتها بمساواة تامة لقائمة محدودة — نصنّفها بدل ذلك
+// بالكلمة المفتاحية الموجودة داخل النص، بترتيب أولوية يحسم أي تداخل (مثلاً "استئذان تدريب"
+// يحوي كلمة "تدريب" التي تعني غياباً بعذر بمفردها، لكن وجود "استئذان" قبلها يعني أن الموظف
+// حاضر فعلياً بجزء من اليوم — فتُفحص "استئذان" أولاً). أي نص لا يطابق أي كلمة مفتاحية يُجمع
+// ويُعرض تحذيراً بعد الاستيراد بدل إسقاطه بصمت، حتى يُراجعه المستخدم ويضيفه هنا إن لزم.
 function mapComprehensiveStatus_(raw) {
-  const key = normalizeArabicKey_(raw).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
-  return COMPREHENSIVE_STATUS_MAP[key] || null;
+  const s = normalizeArabicKey_(raw).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  if (!s) return null;
+  // ١) عطلة الأسبوع — تُستثنى كلياً من الاستيراد (لا تُسجَّل حضوراً ولا غياباً)
+  if (/عطله/.test(s)) return 'weekend';
+  // ٢) حاضر بلا بصمة انصراف: "انصراف تلقائي" (أغلق النظام اليوم تلقائياً) أو "غير مكتملة"
+  // (بصمة واحدة فقط مسجّلة) — فحصها قبل البند التالي حتى لا يلتقطها شرط "مكتملة" الأوسع
+  if (/انصراف تلقائي|غير مكتمله/.test(s)) return 'present_noCheckout';
+  // ٣) استئذان (أي نوع: طبي، طارئ، تدريب…): الموظف حاضر فعلياً بجزء من اليوم على الأقل —
+  // يُعامَل حضوراً بالبصمة الفعلية المسجَّلة بالملف، لا غياباً، مهما كانت الكلمة التالية
+  if (/استئذان/.test(s)) return 'present';
+  // ٤) يوم حضور كامل طبيعي
+  if (/مكتمله|^حاضر$|منصرف/.test(s)) return 'present';
+  // ٥) إجازات ومهام رسمية (غياب معتمد بعذر ليوم كامل)
+  if (/اجازه|انتداب|تدريب|مهمه عمل|مهمه/.test(s)) return 'absent_excused';
+  // ٦) غياب بلا تصنيف مسبق من حضوري — يبقى للمراجعة اليدوية كبقية أنواع الغياب بالتطبيق
+  if (/غائب|غياب/.test(s)) return 'absent';
+  return null;
 }
 
 // "الثلاثاء 11-08-26" أو "11-08-26" أو "2026-08-11" ← "yyyy-MM-dd". صيغة الملف يوم-شهر-سنة
@@ -6606,10 +6618,17 @@ async function processComprehensiveReportFile_(file) {
     msgEl.innerHTML = `<div class="msg-loading">جارٍ استيراد ${rows.length} صفاً عبر ${dates.length} يوماً (${seenCivils.size} موظفاً)…</div>` + warnHtml;
 
     const res = await callApi('importComprehensiveReport', { rows, fileName: file.name });
-    const skipWarning = res.skippedUnmatchedCount
-      ? `<br><span style="color:var(--warn)">⚠️ تم تجاهل ${res.skippedUnmatchedCount} صفاً بسجل مدني غير مطابق لأي موظف بالروستر${res.skippedUnmatchedCivils && res.skippedUnmatchedCivils.length ? ' (مثال: ' + res.skippedUnmatchedCivils.slice(0, 5).map(escapeHtml).join('، ') + ')' : ''}.</span>`
+    // تشخيص واضح عند عدم تطابق السجل المدني: نعرض عدد الموظفين المتأثرين الفعلي (لا عدد
+    // الصفوف، الذي يتكرر لنفس الموظف عبر كل يوم بالملف فيبدو مضخَّماً ومربكاً)، مع عيّنة من
+    // السجلات المدنية الموجودة فعلاً بالروستر — فيقارن المستخدم الشكل بنفسه (عدد الخانات،
+    // صفر بادئ...) فوراً بلا حاجة لتواصل إضافي لمعرفة سبب عدم التطابق.
+    const skipWarning = res.skippedUnmatchedCount ? `<br>
+      ⚠️ ${res.skippedUnmatchedDistinctCount} موظفاً (${res.skippedUnmatchedCount} صفاً عبر الفترة) بسجل مدني غير مطابق لأي أحد في الروستر (${res.rosterCount} موظفاً).<br>
+      من الملف: ${(res.skippedUnmatchedCivils || []).map(escapeHtml).join('، ')}<br>
+      من الروستر: ${(res.rosterSampleCivils || []).map(escapeHtml).join('، ')}<br>
+      قارن الشكل (عدد الخانات، صفر بادئ...) — إن كان الفرق بسيطاً فربما يحتاج تصحيحاً بجدول المعلمين بالإعدادات؛ وإن كانت أشخاصاً فعلاً غير موجودين، أضفهم أولاً من هناك ثم أعد الاستيراد.`
       : '';
-    msgEl.innerHTML = `<div class="msg ok">تم الاستيراد: ${res.datesProcessed} يوماً — ${res.attendanceWritten} سجل حضور، ${res.absenceWritten} سجل غياب${weekendSkipped ? `، واستُبعد ${weekendSkipped} صف عطلة أسبوع` : ''}.${skipWarning}</div>` + warnHtml;
+    msgEl.innerHTML = `<div class="msg ${res.attendanceWritten || res.absenceWritten ? 'ok' : 'warn'}">تم الاستيراد: ${res.datesProcessed} يوماً — ${res.attendanceWritten} سجل حضور، ${res.absenceWritten} سجل غياب${weekendSkipped ? `، واستُبعد ${weekendSkipped} صف عطلة أسبوع` : ''}.${skipWarning}</div>` + warnHtml;
     document.getElementById('comprehensive-file-input').value = '';
     refreshImportCalendar_();
     if (document.getElementById('dash-date').value >= dates[0] && document.getElementById('dash-date').value <= dates[dates.length - 1]) refreshDashboard();
@@ -11863,10 +11882,10 @@ function renderUserBox_() {
   box.style.display = 'flex';
   box.innerHTML = `${avatarHtml_(currentUser_.username, 26)}<span class="ub-name">${escapeHtml(currentUser_.username)}<small>${currentUser_.role === 'admin' ? 'مدير النظام' : 'مستخدم'}</small></span><button type="button" id="btn-logout">خروج</button>`;
 }
-// البوابة: قبل ضبط رابط الاتصال (والمزامنة مفعّلة) لا يوجد مكان للحسابات بعد، فيُفتح التطبيق
-// للإعداد الأولي؛ غير ذلك يلزم جلسة صالحة
+// البوابة: شاشة الدخول مُعطَّلة نهائياً بناءً على طلب المستخدم — التطبيق يُفتح مباشرة دوماً.
+// إن وُجدت جلسة سابقة صالحة نستخدمها فقط لتعبئة اسم المستخدم (لأغراض مثل "سجّلها فلان" في
+// المتابعة الميدانية وبطاقة الحسابات بالإعدادات)، لكن غيابها لا يمنع الدخول أبداً.
 async function authGate_() {
-  if (isSyncEnabled_() && !loadConfig().url) { unlockApp_(null); return; }
   const sess = loadSession_();
   if (sess && sess.session) {
     try {
@@ -11879,7 +11898,7 @@ async function authGate_() {
       clearSession_();
     }
   }
-  showAuthScreen_();
+  unlockApp_(null);
 }
 
 document.getElementById('auth-screen').addEventListener('click', (ev) => {
@@ -11958,11 +11977,10 @@ document.getElementById('auth-reset').addEventListener('submit', (ev) => {
 });
 document.getElementById('user-box').addEventListener('click', async (ev) => {
   if (!ev.target.closest('#btn-logout')) return;
-  if (!await uiConfirm('ستحتاج لإدخال اسم المستخدم وكلمة المرور مرة أخرى للدخول.', { title: 'تسجيل الخروج؟', icon: '👋', okText: 'خروج' })) return;
+  if (!await uiConfirm('سيُنسى اسم المستخدم المسجَّل في هذا الجهاز (يُستخدم فقط لتوثيق من سجّل كل عملية). شاشة الدخول مُعطَّلة، فسيبقى التطبيق مفتوحاً دون طلب كلمة مرور.', { title: 'نسيان تسجيل الدخول؟', icon: '👋', okText: 'نسيان' })) return;
   clearSession_();
   currentUser_ = null;
   renderUserBox_();
-  showAuthScreen_();
 });
 
 // ---- بطاقة "الحسابات" في الإعدادات ----

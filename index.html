@@ -193,6 +193,7 @@
   .msg { padding: 10px 14px; border-radius: 6px; margin-top: 10px; font-size: 13.5px; border: 1px solid transparent; }
   .msg.ok { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
   .msg.err { background: var(--bad-soft); color: var(--bad); border-color: #fecaca; }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
   .msg-loading {
     display: inline-flex; align-items: center; gap: 8px; padding: 8px 2px; font-size: 13px; color: var(--muted);
   }
@@ -1255,6 +1256,19 @@
           </div>
           <div id="permissions-import-msg"></div>
         </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin-top:0">استيراد تقرير شامل (فترة طويلة، كل الموظفين)</h3>
+          <p class="muted">ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يغطي أسابيع أو أشهر دفعة واحدة بدل استيراد كل يوم على حدة من أعلى. يُحسب التأخير والانصراف المبكر من البصمة الفعلية وجدول الدوام الصحيح لكل تاريخ وفق إعداداتك الحالية، وتُستثنى أيام عطلة الأسبوع تلقائياً.</p>
+          <div class="dropzone" id="comprehensive-dropzone">
+            <div class="icon-circle"><span class="icon" data-icon="upload"></span></div>
+            <div style="font-weight:600">اختر ملف التقرير الشامل من الجهاز</div>
+            <div class="muted" style="font-size:11.5px">xlsx · xls</div>
+            <button class="primary" id="btn-pick-comprehensive-file" style="margin-top:10px">اختيار الملف</button>
+            <input type="file" id="comprehensive-file-input" accept=".xlsx,.xls" style="display:none">
+          </div>
+          <div id="comprehensive-import-msg"></div>
+        </div>
       </section>
 
       <section id="view-absence" style="display:none">
@@ -2190,6 +2204,9 @@ function handleRequest_(payload) {
         case 'importPermissions':
           out = handleImportPermissions_(payload);
           break;
+        case 'importComprehensiveReport':
+          out = handleImportComprehensiveReport_(payload);
+          break;
         case 'getPermissionsRange':
           out = handleGetPermissionsRange_(payload);
           break;
@@ -2555,6 +2572,44 @@ function upsertRows_(sheet, idColName, records) {
   });
 }
 
+// نسخة مُحسَّنة من upsertRows_ للكتابات الكبيرة (مئات/آلاف السجلات دفعة واحدة، كما في
+// استيراد التقرير الشامل لعدة أسابيع أو أشهر): تقرأ الشيت مرة واحدة، تدمج التحديثات
+// والإضافات في مصفوفة بالذاكرة، ثم تكتب الشيت كاملاً بنداء setValues واحد — بدل
+// upsertRows_ التي تفتح نطاقاً (Range) منفصلاً لكل صف (وأخرى لكل عمود نصي بذلك الصف)،
+// فتصبح بطيئة جداً (آلاف نداءات API) مع آلاف السجلات دفعة واحدة.
+function batchUpsertRows_(sheet, idColName, records) {
+  if (!records.length) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf(idColName);
+  if (idCol === -1) throw new Error('id column not found: ' + idColName);
+
+  var idToRow = {}; // id -> فهرس الصف داخل data (0-based، يشمل صف العناوين)
+  for (var i = 1; i < data.length; i++) idToRow[normalizeDate_(data[i][idCol])] = i;
+
+  records.forEach(function (rec) {
+    var id = normalizeDate_(rec[idColName]);
+    var rowArr = headers.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(rec, h) ? rec[h] : '';
+    });
+    if (Object.prototype.hasOwnProperty.call(idToRow, id)) {
+      data[idToRow[id]] = rowArr;
+    } else {
+      data.push(rowArr);
+      idToRow[id] = data.length - 1;
+    }
+  });
+
+  // نص عادي إجبارياً لكل الأعمدة الحسّاسة قبل الكتابة (نفس حماية upsertRows_ من حقن الصيغ) —
+  // عمود كامل بنداء واحد بدل خلية بخلية، فهي أيضاً أسرع بكثير على هذا الحجم من البيانات.
+  var textColIndexes = [];
+  headers.forEach(function (h, idx) { if (FORCE_TEXT_COLUMNS[h]) textColIndexes.push(idx + 1); });
+  textColIndexes.forEach(function (colIdx) {
+    sheet.getRange(1, colIdx, data.length, 1).setNumberFormat('@');
+  });
+  sheet.getRange(1, 1, data.length, headers.length).setValues(data);
+}
+
 function deleteRowsByIds_(sheet, ids) {
   if (!ids.length) return;
   var idSet = {};
@@ -2766,6 +2821,132 @@ function handleImportDay_(payload) {
       absentCount: absenceRecords.length,
       noFingerprintCount: noFingerprintCivils.length, skippedUnmatchedCount: skippedUnmatched.length,
       skippedUnmatchedCivils: skippedUnmatched.slice(0, 20), // عيّنة كافية للتشخيص بلا إثقال الاستجابة
+    };
+  } finally {
+    bumpCacheGen_();
+    lock.releaseLock();
+  }
+}
+
+// ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين دفعة واحدة) ====================
+// ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يغطي أسابيع أو أشهر في ملف
+// واحد، بخلاف importDay الذي يستورد يوماً واحداً فقط. الواجهة تُحلّل الملف وترسل صفوفاً
+// منظَّفة مسبقاً بالشكل {civil, date, kind, checkIn?, checkOut?, noCheckout?, reason?} حيث
+// kind هو present أو absent أو absent_excused (الشرح الكامل في الواجهة عند قراءة الملف).
+// التأخير/الانصراف المبكر يُحسبان هنا من البصمة الفعلية ودوام ذلك التاريخ وفق الإعدادات
+// الحالية — لا من أي عمود جاهز بالملف — بنفس منطق importDay تماماً، فتبقى الأرقام متسقة
+// مهما كان مصدر الاستيراد. تستخدم batchUpsertRows_ (كتابة دفعة واحدة) بدل upsertRows_
+// (صف بصف) لأن حجم البيانات هنا قد يبلغ آلاف الصفوف عبر عشرات الأيام دفعة واحدة.
+function handleImportComprehensiveReport_(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var rows = payload.rows || [];
+    if (!rows.length) return { ok: true, datesProcessed: 0, attendanceWritten: 0, absenceWritten: 0, skippedUnmatchedCount: 0 };
+
+    var teachers = sheetToObjects_(getSheet_(SHEET_TEACHERS));
+    var teacherByCivil = {};
+    teachers.forEach(function (t) { teacherByCivil[String(t.civil)] = t; });
+
+    var settings = getSettingsObj_();
+
+    var dateSet = {};
+    rows.forEach(function (r) { dateSet[String(r.date)] = true; });
+    var dateList = Object.keys(dateSet).sort();
+    var from = dateList[0], to = dateList[dateList.length - 1];
+    // نفس آلية importDay: استئذان "مقبول" ليوم كامل يُصنَّف الغياب "بعذر" بسببه تلقائياً
+    var permsByKey = (from && to) ? buildPermissionsByCivilDate_(from, to) : {};
+
+    // نحتفظ بتصنيف/سبب/ملاحظة الغياب اليدوية الموجودة مسبقاً لهذه الأيام عند إعادة الاستيراد
+    var existingAbsenceByKey = {};
+    if (from && to) {
+      getRowsForDateRange_(getSheet_(SHEET_ABSENCE), from, to).forEach(function (a) {
+        existingAbsenceByKey[normalizeDate_(a.date) + '__' + String(a.civil)] = a;
+      });
+    }
+
+    var now = Date.now();
+    var attendanceRecords = [];
+    var absenceRecords = [];
+    var skippedUnmatched = [];
+    var schedCache = {};
+    function scheduleFor(date) {
+      if (!schedCache[date]) schedCache[date] = resolveScheduleForDate_(date, settings);
+      return schedCache[date];
+    }
+
+    rows.forEach(function (r) {
+      var civil = String(r.civil);
+      var date = String(r.date);
+      var t = teacherByCivil[civil];
+      if (!t) { skippedUnmatched.push(civil); return; }
+      if (isNonWorkingDay_(date, settings)) return; // حماية ثانية: عطلة حسب الإعدادات الحالية
+      if (beforeStart_(t, date, settings)) return; // لم يباشر بعد بهذا التاريخ
+
+      var sched = scheduleFor(date);
+      var schedStartMin = parseTimeToMinutes_(sched.workStart);
+      var schedEndMin = parseTimeToMinutes_(sched.workEnd);
+
+      if (r.kind === 'present') {
+        var checkInMin = r.checkIn ? parseTimeToMinutes_(r.checkIn) : null;
+        var noCheckout = !!r.noCheckout || !r.checkOut;
+        var checkOutMin = noCheckout ? null : parseTimeToMinutes_(r.checkOut);
+        var lateMinutes = checkInMin != null && schedStartMin != null ? Math.max(0, checkInMin - schedStartMin) : 0;
+        var earlyMinutes = checkOutMin != null && schedEndMin != null ? Math.max(0, schedEndMin - checkOutMin) : 0;
+        var hoursRaw = checkInMin != null && checkOutMin != null ? formatMinutesAsHM_(checkOutMin - checkInMin) : '';
+        attendanceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          checkIn: r.checkIn || '', checkOut: noCheckout ? '' : (r.checkOut || ''),
+          hoursRaw: hoursRaw, lateMinutes: lateMinutes, earlyMinutes: earlyMinutes, noCheckout: noCheckout,
+          schedStart: sched.workStart, schedEnd: sched.workEnd, schedTolerance: 0,
+          schedLabel: sched.label, schedId: sched.id, updatedAt: now,
+        });
+      } else {
+        var existing = existingAbsenceByKey[date + '__' + civil];
+        var classification = existing ? existing.classification : '';
+        var reason = existing ? existing.reason : '';
+        if (!classification) {
+          if (r.kind === 'absent_excused') {
+            classification = 'بعذر';
+            reason = r.reason || 'إجازة';
+          } else {
+            var fullDay = acceptedFullDayPermission_(permsByKey, civil, date);
+            if (fullDay) { classification = 'بعذر'; reason = mapPermissionTypeToReason_(fullDay.type); }
+          }
+        }
+        absenceRecords.push({
+          id: date + '__' + civil, date: date, civil: civil, num: t.num, name: t.name,
+          classification: classification, reason: reason, note: existing ? existing.note : '', updatedAt: now,
+        });
+      }
+    });
+
+    batchUpsertRows_(getSheet_(SHEET_ATTENDANCE), 'id', attendanceRecords);
+    batchUpsertRows_(getSheet_(SHEET_ABSENCE), 'id', absenceRecords);
+
+    // سجل الاستيرادات: صف واحد لكل تاريخ مشمول فعلياً بالملف، بعدد الحاضرين/الغائبين الحقيقي
+    var presentCountByDate = {}, absentCountByDate = {};
+    attendanceRecords.forEach(function (r) { presentCountByDate[r.date] = (presentCountByDate[r.date] || 0) + 1; });
+    absenceRecords.forEach(function (r) { absentCountByDate[r.date] = (absentCountByDate[r.date] || 0) + 1; });
+    var importsSheet_ = getSheet_(SHEET_IMPORTS);
+    ensureHeaders_(importsSheet_, ['presentCount', 'absentCount']);
+    var importRecords = dateList.filter(function (d) { return presentCountByDate[d] || absentCountByDate[d]; }).map(function (d) {
+      var sched = scheduleFor(d);
+      return {
+        date: d, importedAt: new Date().toISOString(), fileName: payload.fileName || 'تقرير شامل',
+        schedStart: sched.workStart, schedEnd: sched.workEnd, schedLabel: sched.label,
+        presentCount: presentCountByDate[d] || 0, absentCount: absentCountByDate[d] || 0, updatedAt: now,
+      };
+    });
+    batchUpsertRows_(importsSheet_, 'date', importRecords);
+
+    return {
+      ok: true,
+      datesProcessed: importRecords.length,
+      attendanceWritten: attendanceRecords.length,
+      absenceWritten: absenceRecords.length,
+      skippedUnmatchedCount: skippedUnmatched.length,
+      skippedUnmatchedCivils: skippedUnmatched.slice(0, 20),
     };
   } finally {
     bumpCacheGen_();
@@ -4632,7 +4813,7 @@ const OFFLINE_CACHE_STORE = 'responses';
 const OFFLINE_QUEUE_STORE = 'syncQueue';
 const OFFLINE_META_STORE = 'meta';
 const OFFLINE_WRITE_ACTIONS = new Set([
-  'importDay', 'importPermissions', 'deleteDay', 'saveSettings', 'clearCache',
+  'importDay', 'importPermissions', 'importComprehensiveReport', 'deleteDay', 'saveSettings', 'clearCache',
   'applyRecalculate', 'updateAbsence', 'bulkUpdateAbsence', 'markActionDone',
   'saveTeachers', 'deleteTeacher', 'reapplyPermissions', 'saveFieldNote', 'deleteFieldNote'
 ]);
@@ -6300,6 +6481,148 @@ async function processPermissionsFile_(file) {
     msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
   }
 }
+
+// ==================== استيراد تقرير شامل (فترة طويلة، كل الموظفين) ====================
+// ملف "تقرير الحضور والانصراف لجميع الموظفين" من برنامج حضوري — يسرد كل موظف وكل يوم في
+// الفترة المختارة بصف واحد لكل (موظف × يوم)، بعمود "حالة التحضير" الذي يحدد نوع اليوم.
+// نحوّل كل قيمة معروفة من هذا العمود إلى تصنيف داخلي (present / absent / absent_excused)
+// ونُسقِط عطلة الأسبوع قبل الإرسال؛ أي نص غير معروف يُجمع ويُعرض تحذيراً بعد الاستيراد
+// بدل إسقاطه بصمت، حتى يُراجعه المستخدم ويضيفه هنا إن لزم.
+const COMPREHENSIVE_STATUS_MAP = {
+  'حاضر': 'present',
+  'منصرف': 'present',
+  'انصراف تلقائي': 'present_noCheckout',
+  'غير مكتمله': 'present_noCheckout',
+  'غير مكتملة': 'present_noCheckout',
+  'غائب': 'absent',
+  'غياب': 'absent',
+  'اجازه سنويه': 'absent_excused',
+  'اجازه مرضيه': 'absent_excused',
+  'اجازه اضطراريه': 'absent_excused',
+  'اجازه استثنائيه': 'absent_excused',
+  'اجازه وضع': 'absent_excused',
+  'اجازه امومه': 'absent_excused',
+  'اجازه ابوه': 'absent_excused',
+  'اجازه تعويض': 'absent_excused',
+  'مهمه عمل': 'absent_excused',
+  'انتداب': 'absent_excused',
+  'تدريب': 'absent_excused',
+  'عطله الاسبوع': 'weekend',
+  'عطله': 'weekend',
+};
+// يطابق حالة الملف بعد توحيد الهمزات/التاء المربوطة/الأرقام (عبر normalizeArabicKey_) —
+// يستوعب بذلك أي صياغة لنفس الحالة بلا حاجة لإدراج كل متغيّرات الهمزة يدوياً بالخريطة أعلاه.
+function mapComprehensiveStatus_(raw) {
+  const key = normalizeArabicKey_(raw).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  return COMPREHENSIVE_STATUS_MAP[key] || null;
+}
+
+// "الثلاثاء 11-08-26" أو "11-08-26" أو "2026-08-11" ← "yyyy-MM-dd". صيغة الملف يوم-شهر-سنة
+// (مطابقة ليوميات التقويم الهجري/الميلادي المختصر المعتاد في تصدير حضوري)؛ سنة من رقمين
+// تُفترض ٢٠xx.
+function parseComprehensiveDate_(v) {
+  const s = normalizeArabicKey_(v).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})/);
+  if (m) {
+    let y = m[3];
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  }
+  return '';
+}
+
+async function processComprehensiveReportFile_(file) {
+  const msgEl = document.getElementById('comprehensive-import-msg');
+  msgEl.innerHTML = '<div class="msg-loading">جارٍ قراءة الملف…</div>';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+    let headerRowIdx = -1, headers = [];
+    for (let i = 0; i < Math.min(grid.length, 15); i++) {
+      const row = grid[i].map(String);
+      if (row.some((c) => c.includes('حالة التحضير'))) { headerRowIdx = i; headers = row; break; }
+    }
+    if (headerRowIdx === -1) {
+      msgEl.innerHTML = '<div class="msg err">تعذّر إيجاد عمود "حالة التحضير" — تأكّد من أن هذا ملف "تقرير الحضور والانصراف لجميع الموظفين" الصحيح من برنامج حضوري.</div>';
+      return;
+    }
+    const civilCol = findCol(headers, 'السجل المدني');
+    const nameCol = findCol(headers, 'اسم');
+    const dateCol = findCol(headers, 'التاريخ');
+    const inCol = findCol(headers, 'حضور');
+    const outCol = findCol(headers, 'انصراف');
+    const statusCol = findCol(headers, 'حالة التحضير');
+    if ([civilCol, dateCol, statusCol].includes(-1)) {
+      msgEl.innerHTML = '<div class="msg err">تعذّر إيجاد أحد الأعمدة المطلوبة (السجل المدني/التاريخ/حالة التحضير) — تحقّق من أن أسماء الأعمدة لم تتغيّر في تصدير البرنامج.</div>';
+      return;
+    }
+
+    await ensureSettingsLoaded_(); // لتصنيف عطلة الأسبوع بدقة قبل الإرسال (isNonWorkingDayClient_)
+
+    const rows = [];
+    const unknownStatuses = new Set();
+    const seenCivils = new Set();
+    let weekendSkipped = 0;
+    for (let i = headerRowIdx + 1; i < grid.length; i++) {
+      const row = grid[i];
+      const civil = String(row[civilCol] || '').trim();
+      if (!/^\d{5,}$/.test(civil)) continue;
+      const date = parseComprehensiveDate_(row[dateCol]);
+      if (!date) continue;
+      const statusRaw = String(row[statusCol] || '').trim();
+      const mapped = mapComprehensiveStatus_(statusRaw);
+      if (mapped === 'weekend') { weekendSkipped++; continue; }
+      if (isNonWorkingDayClient_(date)) { weekendSkipped++; continue; } // حماية ثانية حتى لو لم يصرّح الملف بذلك
+      if (!mapped) { if (statusRaw) unknownStatuses.add(statusRaw); continue; }
+
+      seenCivils.add(civil);
+      const checkIn = inCol >= 0 ? normalizeTimeString(row[inCol]) : '';
+      const checkOut = outCol >= 0 ? normalizeTimeString(row[outCol]) : '';
+      if (mapped === 'present_noCheckout') {
+        rows.push({ civil, date, kind: 'present', checkIn, checkOut: '', noCheckout: true });
+      } else if (mapped === 'present') {
+        rows.push({ civil, date, kind: 'present', checkIn, checkOut, noCheckout: !checkOut });
+      } else if (mapped === 'absent_excused') {
+        rows.push({ civil, date, kind: 'absent_excused', reason: statusRaw });
+      } else {
+        rows.push({ civil, date, kind: 'absent' });
+      }
+    }
+
+    if (!rows.length) {
+      msgEl.innerHTML = '<div class="msg err">لم يُعثر على أي صف صالح بالملف (بعد استبعاد عطلة الأسبوع والحالات غير المعروفة).</div>';
+      return;
+    }
+
+    const dates = [...new Set(rows.map((r) => r.date))].sort();
+    const warnHtml = unknownStatuses.size
+      ? `<div class="msg warn">⚠️ حالات غير معروفة لم تُستورد (${[...unknownStatuses].length}): ${[...unknownStatuses].slice(0, 8).map(escapeHtml).join('، ')}</div>`
+      : '';
+    msgEl.innerHTML = `<div class="msg-loading">جارٍ استيراد ${rows.length} صفاً عبر ${dates.length} يوماً (${seenCivils.size} موظفاً)…</div>` + warnHtml;
+
+    const res = await callApi('importComprehensiveReport', { rows, fileName: file.name });
+    const skipWarning = res.skippedUnmatchedCount
+      ? `<br><span style="color:var(--warn)">⚠️ تم تجاهل ${res.skippedUnmatchedCount} صفاً بسجل مدني غير مطابق لأي موظف بالروستر${res.skippedUnmatchedCivils && res.skippedUnmatchedCivils.length ? ' (مثال: ' + res.skippedUnmatchedCivils.slice(0, 5).map(escapeHtml).join('، ') + ')' : ''}.</span>`
+      : '';
+    msgEl.innerHTML = `<div class="msg ok">تم الاستيراد: ${res.datesProcessed} يوماً — ${res.attendanceWritten} سجل حضور، ${res.absenceWritten} سجل غياب${weekendSkipped ? `، واستُبعد ${weekendSkipped} صف عطلة أسبوع` : ''}.${skipWarning}</div>` + warnHtml;
+    document.getElementById('comprehensive-file-input').value = '';
+    refreshImportCalendar_();
+    if (document.getElementById('dash-date').value >= dates[0] && document.getElementById('dash-date').value <= dates[dates.length - 1]) refreshDashboard();
+  } catch (err) {
+    msgEl.innerHTML = `<div class="msg err">خطأ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+document.getElementById('btn-pick-comprehensive-file').addEventListener('click', () => document.getElementById('comprehensive-file-input').click());
+document.getElementById('comprehensive-file-input').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (file) await processComprehensiveReportFile_(file);
+});
 
 document.getElementById('btn-confirm-import').addEventListener('click', async () => {
   const date = document.getElementById('imp-date').value.trim();
